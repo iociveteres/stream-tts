@@ -87,10 +87,12 @@ class Cosy:
             r.raise_for_status()
             return sorted(await r.json())
 
-    def _body(self, voice, text, ratio, stream, seed=None):
+    def _body(self, voice, text, ratio, stream, seed=None, chunk=None):
         body = dict(text=text, voice=voice, mode="zero-shot", response_format="wav", stream=stream)
         if ratio:
             body["max_token_text_ratio"] = ratio
+        if chunk:
+            body["chunk_tokens"] = chunk
         if seed is not None:
             body["seed"] = seed
         return body
@@ -103,9 +105,11 @@ class Cosy:
                 raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
             return audio.read_wav(await r.read())
 
-    async def stream(self, voice, text, ratio=None):
-        """Потоком: куски float32 по мере синтеза. Поток — это WAV-заголовок и дальше PCM16."""
-        async with self.session.post(f"{self.url}/tts", json=self._body(voice, text, ratio, True),
+    async def stream(self, voice, text, ratio=None, chunk=None):
+        """Потоком: куски float32 по мере синтеза. Поток — это WAV-заголовок и дальше PCM16.
+
+        chunk передаётся всегда: сервер запоминает chunk_tokens из прошлого запроса и не сбрасывает его."""
+        async with self.session.post(f"{self.url}/tts", json=self._body(voice, text, ratio, True, chunk=chunk),
                                      timeout=aiohttp.ClientTimeout(total=None, sock_read=60)) as r:
             if r.status != 200:
                 raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")

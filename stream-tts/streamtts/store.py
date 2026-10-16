@@ -18,6 +18,7 @@ DEFAULTS = {
     "streaming": True,
     "max_chars": 500,
     "token_ratio": 10.0,        # max_token_text_ratio для /tts
+    "chunk_tokens": 150,        # токенов в куске стриминга (по умолчанию в cosyvoice.cpp 28: заметно медленнее)
     "demo_phrase": "Привет, чат! Вот так звучит мой голос.",
     "guide_done": [],           # пройденные шаги гайда регистрации приложения
     "voices": {},               # имя -> {enabled, gain_db, calib_db, calib_phrase}

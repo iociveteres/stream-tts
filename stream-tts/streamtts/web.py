@@ -115,7 +115,7 @@ async def voices_zip(request):
 
 # --- состояние ---
 SETTINGS_KEYS = ("enabled", "access", "filter_links", "filter_profanity", "read_nick", "subtitles", "queue_limit",
-                 "streaming", "max_chars", "token_ratio", "demo_phrase", "guide_done")
+                 "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "guide_done")
 
 
 def state(ctx, full=True):
@@ -208,6 +208,8 @@ async def post_settings(request, ctx, data):
             v = max(1, int(v))
         elif k == "token_ratio":
             v = max(0.0, float(v))
+        elif k == "chunk_tokens":
+            v = min(1000, max(10, int(v)))
         elif k == "access" and v not in ("all", "subs", "vip", "mods"):
             continue
         s.data[k] = v

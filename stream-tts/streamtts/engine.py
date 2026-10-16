@@ -5,7 +5,8 @@ import numpy as np
 from aiohttp import WSMsgType, web
 
 from . import audio, filters
-from .config import SR, TARGET_LUFS, CHARS_PER_SEC, MAX_LEN_FACTOR, MAX_SECONDS, MIN_SECONDS
+from .config import (SR, TARGET_LUFS, CHARS_PER_SEC, MAX_LEN_FACTOR, MAX_SECONDS, MIN_SECONDS, TOKENS_PER_SEC,
+                     STREAM_MIN_CHUNKS)
 from .cosy import LIVE
 
 log = logging.getLogger("engine")
@@ -342,14 +343,16 @@ class Engine:
         ratio = self.s["token_ratio"]
         parts = item.speak.split(filters.BEEP)
         beep = audio.beep()
-        if self.s["streaming"] and not post:
+        chunk = int(self.s["chunk_tokens"])
+        long_enough = len(item.speak) / CHARS_PER_SEC * TOKENS_PER_SEC > STREAM_MIN_CHUNKS * chunk
+        if self.s["streaming"] and not post and long_enough:
             gain = audio.db(cfg.get("calib_db", 0.0) + cfg["gain_db"])
             for k, part in enumerate(parts):
                 if k and await self._push_limited(item, beep, limit_n):
                     return
                 if not filters.has_words(part):
                     continue
-                async with contextlib.aclosing(self.cosy.stream(item.voice, part.strip(), ratio)) as chunks:
+                async with contextlib.aclosing(self.cosy.stream(item.voice, part.strip(), ratio, chunk)) as chunks:
                     async for x in chunks:
                         if item.cancelled:
                             return   # /tts/stop уже вызван в cancel()
