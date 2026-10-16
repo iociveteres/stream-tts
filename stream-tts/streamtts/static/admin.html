@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream TTS</title>
+<link rel="stylesheet" href="/static/common.css">
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<header>
+  <div class="brand">Stream TTS <span id="channel" class="muted"></span></div>
+  <div class="row" id="pills"></div>
+  <label class="switch" title="Выключено: награда на паузе, очередь очищена">
+    <input type="checkbox" id="enabled"><span>Озвучка</span>
+  </label>
+</header>
+<nav id="tabs">
+  <button data-tab="queue" class="on">Очередь</button>
+  <button data-tab="twitch">Twitch</button>
+  <button data-tab="voices">Голоса</button>
+  <button data-tab="settings">Настройки</button>
+  <button data-tab="stats">Статистика</button>
+</nav>
+<div id="banner" hidden></div>
+<main>
+
+<!-- ============ Очередь ============ -->
+<section id="tab-queue" class="tab on">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <div class="row between">
+          <h2>Сейчас</h2>
+          <div class="row">
+            <button id="skip" title="Прервать текущую фразу и вернуть баллы">⏭ Пропустить</button>
+            <button id="clear" class="danger" title="Очистить очередь и вернуть баллы за всё в ней">Очистить</button>
+          </div>
+        </div>
+        <div id="now" class="now muted">Тишина</div>
+      </div>
+      <div class="card">
+        <h2>Очередь <span id="qcount" class="muted"></span></h2>
+        <div class="table-wrap"><table id="queue"><thead><tr>
+          <th>Зритель</th><th>Голос</th><th>Текст</th><th>Статус</th><th></th></tr></thead><tbody></tbody></table></div>
+        <p id="qempty" class="muted">Очередь пуста.</p>
+      </div>
+      <div class="card">
+        <h2>Тестовая активация</h2>
+        <p class="muted small">Проходит весь путь (фильтры, очередь, синтез, оверлей), только без Twitch и баллов.</p>
+        <form id="test" class="row end">
+          <label class="grow">Ник <input name="login" value="tester" maxlength="25"></label>
+          <label class="grow">Голос <select name="voice"></select></label>
+          <label style="flex-basis:100%">Текст <input name="text" required maxlength="500"
+            value="Привет, чат! Проверка озвучки."></label>
+          <button class="primary">Отправить</button>
+        </form>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Оверлей для OBS</h2>
+        <p id="ovstate"></p>
+        <div class="row"><code id="ovurl" class="grow"></code><button data-copy="ovurl">Копировать</button></div>
+        <p class="muted small">OBS → Источник → Браузер, адрес выше, ширина и высота как у сцены.
+          В обычной вкладке браузера нужен один клик «Включить звук». Играет только последний подключившийся оверлей.
+          <code>?subtitles=0</code> в адресе скрывает субтитры.</p>
+      </div>
+      <div class="card">
+        <h2>Страница голосов для зрителей</h2>
+        <div class="row"><code id="vurl" class="grow"></code><button data-copy="vurl">Копировать</button></div>
+        <p class="muted small">Дайте ссылку зрителям (команда бота, панель канала) или
+          <a href="/voices.zip">скачайте zip</a> и выложите на любой хостинг.</p>
+      </div>
+      <div class="card">
+        <h2>Журнал</h2>
+        <ul id="journal" class="journal"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Twitch ============ -->
+<section id="tab-twitch" class="tab">
+  <div class="card" id="login-card"></div>
+  <div class="card" id="reward-card" hidden>
+    <h2>Награда за баллы канала</h2>
+    <p class="muted small">Награду создаёт сервис: только у награды, созданной своим Client ID, можно отмечать активации
+      сыгранными и возвращать баллы. Текст от зрителя обязателен.</p>
+    <form id="reward" class="rgrid">
+      <label>Название <input name="title" maxlength="45" required></label>
+      <label>Цена, баллов <input name="cost" type="number" min="1" required></label>
+      <label>Кулдаун, с <input name="cooldown" type="number" min="0" max="604800"></label>
+      <label class="wide">Описание для зрителей <input name="prompt" maxlength="200"></label>
+      <div class="wide row">
+        <button class="primary" id="reward-save">Создать награду</button>
+        <button type="button" class="danger" id="reward-delete" hidden>Удалить награду</button>
+        <span id="reward-state" class="muted"></span>
+      </div>
+    </form>
+  </div>
+  <div class="card" id="guide-card">
+    <div class="row between"><h2>Регистрация приложения Twitch</h2>
+      <button id="guide-toggle" class="icon" type="button">Свернуть</button></div>
+    <p class="muted">Каждый, кто хостит сервис, регистрирует своё приложение: общего Client ID нет, иначе все
+      инсталляции зависели бы от одного приложения и делили его лимиты. Это бесплатно и занимает пару минут.</p>
+    <ol id="guide" class="guide"></ol>
+  </div>
+</section>
+
+<!-- ============ Голоса ============ -->
+<section id="tab-voices" class="tab">
+  <div class="card">
+    <div class="row">
+      <input type="search" id="vsearch" placeholder="Поиск" class="grow" aria-label="Поиск голоса">
+      <button id="vall-on">Включить все</button>
+      <button id="vall-off">Выключить все</button>
+    </div>
+    <p class="muted small">Выключенный голос нельзя выбрать командой, а зрители с ним получают новый голос по хешу ника.
+      Поправка громкости добавляется к выравниванию: без стриминга фраза доводится до −16 LUFS,
+      со стримингом — усилением, откалиброванным по примеру голоса.</p>
+    <div class="table-wrap"><table id="voices"><thead><tr><th></th><th>Голос</th><th>Пример</th>
+      <th>Поправка, дБ</th><th class="num" title="Усиление для стриминга, по примеру">Калибровка</th></tr></thead>
+      <tbody></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Примеры звучания</h2>
+    <form id="demo-form" class="row end">
+      <label class="grow">Фраза примера <input name="demo_phrase" maxlength="200"></label>
+      <button>Сохранить</button>
+      <button type="button" id="demo-rebuild">Пересинтезировать все</button>
+    </form>
+    <p id="demo-progress" class="muted small"></p>
+  </div>
+</section>
+
+<!-- ============ Настройки ============ -->
+<section id="tab-settings" class="tab">
+  <div class="grid2">
+    <div>
+      <form class="card" id="settings">
+        <h2>Озвучка</h2>
+        <label>Кто может озвучивать
+          <select name="access">
+            <option value="all">все</option><option value="subs">сабы, VIP и модеры</option>
+            <option value="vip">VIP и модеры</option><option value="mods">только модеры</option>
+          </select></label>
+        <p class="muted small">Twitch к наградам такого ограничения не применяет: проверка идёт по бейджам из чата,
+          поэтому зритель должен хоть раз написать в чат. Остальным баллы возвращаются.</p>
+        <label class="check"><input type="checkbox" name="read_nick"> Читать ник: «&lt;ник&gt; говорит: …»</label>
+        <label class="check"><input type="checkbox" name="subtitles"> Субтитры в оверлее</label>
+        <div class="row">
+          <label class="grow">Лимит очереди <input type="number" name="queue_limit" min="1" max="500"></label>
+          <label class="grow">Предел текста, символов <input type="number" name="max_chars" min="1" max="500"></label>
+        </div>
+        <h2 class="mt">Синтез</h2>
+        <label class="check"><input type="checkbox" name="streaming"> Стриминг: первый звук примерно через 0,5 с</label>
+        <p class="muted small" id="stream-note">На CPU синтез медленнее реального времени, и стриминг там будет заикаться:
+          выключите его. Голоса с эффектом (post) всегда синтезируются целиком.</p>
+        <label>max_token_text_ratio <input type="number" name="token_ratio" min="0" step="0.5"></label>
+        <p class="muted small">Длину фразы ещё жёстко ограничивает обрезка: не больше 1,8× расчётной длины
+          (12 символов в секунду) и не больше 60 с.</p>
+        <h2 class="mt">Фильтры</h2>
+        <label class="check"><input type="checkbox" name="filter_links"> Вырезать ссылки</label>
+        <label class="check"><input type="checkbox" name="filter_profanity"> Запикивать мат (вместо слова — короткий тихий писк)</label>
+      </form>
+      <div class="card">
+        <h2>Баны</h2>
+        <form id="ban" class="row"><input name="login" placeholder="ник" class="grow" required>
+          <button>Запретить</button></form>
+        <ul id="bans" class="chips"></ul>
+        <p class="muted small">Модеры в чате: <code>!ttsban ник</code>, <code>!ttsunban ник</code>.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Корни мата</h2>
+        <p class="muted small">Файл <code>profanity.txt</code> в папке данных. Синтаксис описан в начале файла.</p>
+        <textarea id="prof" spellcheck="false"></textarea>
+        <div class="row mt">
+          <input id="prof-sample" class="grow" placeholder="проверить фразу" value="Ну ты и мудак, х.у.й тебе!">
+          <button id="prof-save" class="primary">Сохранить и проверить</button>
+        </div>
+        <p id="prof-out" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Сервер</h2>
+        <p id="server-info" class="muted small"></p>
+        <p class="small"><a href="/logout" id="logout-link">Выйти из админки</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Статистика ============ -->
+<section id="tab-stats" class="tab">
+  <div class="card">
+    <h2>Сейчас</h2>
+    <div class="tiles" id="live"></div>
+  </div>
+  <div class="card">
+    <div class="row between">
+      <h2>За период</h2>
+      <div class="row">
+        <select id="period"><option value="24">24 часа</option><option value="168">7 дней</option>
+          <option value="720">30 дней</option></select>
+        <label class="check small"><input type="checkbox" id="with-test"> с тестовыми</label>
+      </div>
+    </div>
+    <div class="tiles" id="kpi"></div>
+    <h3 class="mt">Активации по часам</h3>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>сыграно</span>
+      <span><i style="background:var(--series-2)"></i>возврат</span></div>
+    <div id="hours" class="chart"></div>
+    <details><summary class="muted small">Таблицей</summary><div class="table-wrap" id="hours-table"></div></details>
+    <div class="grid3 mt">
+      <div><h3>Голоса</h3><div id="top-voices" class="bars"></div></div>
+      <div><h3>Зрители</h3><div id="top-viewers" class="bars"></div></div>
+      <div><h3>Возвраты по причинам</h3><div id="reasons" class="bars"></div></div>
+    </div>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+<div id="tip" class="tip" hidden></div>
+<script src="/static/admin.js"></script>
+</body>
+</html>

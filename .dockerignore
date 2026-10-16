@@ -1,0 +1,14 @@
+models/
+voices/
+.env
+.git
+samples/
+voice-origs/
+voice-refs/
+voice-clips/
+cut-clips.py
+extract-subtitles.py
+review.py
+review.html
+.claude/
+.venv/

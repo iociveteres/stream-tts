@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Регистрирует голоса из папки с образцами и сохраняет их в ./voices/<имя>.gguf.
+# Использование: ./import-voices.sh <папка> [--force]
+#   В папке лежат пары <имя>.wav + <имя>.txt (точная расшифровка образца).
+#   Уже сохранённые голоса пропускаются, если не указан --force.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+DIR="${1:?Укажите папку с образцами, например voice-refs/wc3}"
+FORCE=0
+[ "${2:-}" = "--force" ] && FORCE=1
+URL="http://localhost:${PORT:-8080}"
+
+curl -fs -o /dev/null "$URL/ping" || { echo "Сервер $URL не отвечает (docker compose up -d)" >&2; exit 1; }
+
+# python3 на Linux, python на Windows (там python3 бывает заглушкой Microsoft Store, поэтому проверяем запуск)
+PY=""
+for p in python3 python; do
+    if "$p" -c '' >/dev/null 2>&1; then PY="$p"; break; fi
+done
+[ -n "$PY" ] || { echo "Не найден Python (python3 или python)" >&2; exit 1; }
+
+json_escape() { "$PY" -c 'import json,sys; print(json.dumps(sys.stdin.read().strip(), ensure_ascii=False))'; }
+
+ok=0; skip=0; fail=0
+for wav in "$DIR"/*.wav; do
+    name="$(basename "$wav" .wav)"
+    txt="$DIR/$name.txt"
+    [ -f "$txt" ] || { echo "Нет расшифровки: $txt" >&2; fail=$((fail+1)); continue; }
+    if [ -f "voices/$name.gguf" ] && [ "$FORCE" -ne 1 ]; then
+        skip=$((skip+1)); continue
+    fi
+    echo "==> $name"
+    # сервер не регистрирует имя повторно (409): сначала выгружаем голос из памяти
+    [ "$FORCE" -eq 1 ] && curl -fs -o /dev/null -X DELETE "$URL/speaker/$name" || true
+    if ! curl -fsS -X POST "$URL/speaker?type=extract" \
+            -F "name=$name" -F "text=$(cat "$txt")" -F "audio=@$wav" >/dev/null; then
+        fail=$((fail+1)); continue
+    fi
+    body="{\"name\":$(printf '%s' "$name" | json_escape),\"path\":$(printf '/voices/%s.gguf' "$name" | json_escape)}"
+    if curl -fsS -X POST "$URL/speaker/save" -H 'Content-Type: application/json' -d "$body" >/dev/null; then
+        ok=$((ok+1))
+    else
+        fail=$((fail+1))
+    fi
+done
+echo "Готово: добавлено $ok, пропущено $skip, ошибок $fail"
+[ "$fail" -eq 0 ]

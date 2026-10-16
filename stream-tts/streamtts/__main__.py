@@ -1,0 +1,101 @@
+"""Точка входа: python -m streamtts"""
+import asyncio, contextlib, logging, os, shutil, sys
+
+from aiohttp import web
+
+from . import config, filters, stats, store, web as webapp
+from .cosy import Cosy
+from .engine import Engine
+from .twitch import Twitch
+from .voices import Voices
+
+log = logging.getLogger("stream-tts")
+
+
+class Ctx:
+    admins = 0
+
+
+async def cosy_monitor(ctx):
+    """Доступность cosyvoice и список голосов."""
+    last_list = 0
+    while True:
+        was = ctx.cosy.ok
+        await ctx.cosy.status()
+        if ctx.cosy.ok and (not was or asyncio.get_running_loop().time() - last_list > 60):
+            try:
+                await ctx.voices.refresh()
+                last_list = asyncio.get_running_loop().time()
+                ctx.voices.wake.set()
+            except Exception as e:
+                log.warning("список голосов: %s", e)
+        if was is not ctx.cosy.ok:
+            log.info("cosyvoice %s", "доступен" if ctx.cosy.ok else f"недоступен: {ctx.cosy.error}")
+            ctx.engine.dirty.set()
+        await asyncio.sleep(5)
+
+
+async def gpu_monitor(ctx):
+    while True:
+        if ctx.admins:
+            await ctx.gpu.poll()
+        await asyncio.sleep(2)
+
+
+async def housekeeping(ctx):
+    while True:
+        ctx.db.purge()
+        await asyncio.sleep(3600)
+
+
+async def on_startup(app):
+    ctx = app["ctx"]
+    await ctx.cosy.start()
+    await ctx.twitch.start()
+    ctx.tasks = [asyncio.create_task(c) for c in (
+        ctx.engine.synth_worker(), ctx.engine.player(), ctx.voices.demo_worker(),
+        cosy_monitor(ctx), gpu_monitor(ctx), housekeeping(ctx))]
+
+
+async def on_cleanup(app):
+    ctx = app["ctx"]
+    await ctx.twitch.stop()
+    for t in ctx.tasks:
+        t.cancel()
+    await asyncio.gather(*ctx.tasks, return_exceptions=True)
+    await ctx.cosy.close()
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S")
+    logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
+    if config.BIND not in config.LOCAL_BINDS and not config.PASSWORD:
+        log.error("STREAM_TTS_BIND=%s открывает админку в сеть: задайте STREAM_TTS_PASSWORD в .env", config.BIND)
+        sys.exit(1)
+    os.makedirs(config.DATA, exist_ok=True)
+    prof = os.path.join(config.DATA, "profanity.txt")
+    if not os.path.exists(prof):
+        shutil.copy(filters.default_profanity_file(), prof)
+
+    ctx = Ctx()
+    ctx.settings = store.Settings(os.path.join(config.DATA, "settings.json"))
+    ctx.db = store.DB(os.path.join(config.DATA, "stream-tts.sqlite"))
+    ctx.profanity = filters.Profanity(prof)
+    ctx.cosy = Cosy(config.COSYVOICE_URL, config.COSYVOICE_API_KEY)
+    ctx.voices = Voices(ctx.settings, ctx.cosy)
+    ctx.engine = Engine(ctx.settings, ctx.db, ctx.cosy, ctx.voices, ctx.profanity)
+    ctx.voices.engine = ctx.engine
+    ctx.twitch = Twitch(ctx.settings, ctx.engine)
+    ctx.engine.twitch = ctx.twitch
+    ctx.gpu = stats.GPU()
+
+    app = webapp.make_app(ctx)
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+    log.info("интерфейс: http://%s:%d  оверлей: /overlay  cosyvoice: %s",
+             config.BIND if config.BIND != "0.0.0.0" else "<адрес>", config.PORT, config.COSYVOICE_URL)
+    web.run_app(app, host=config.LISTEN_HOST, port=config.LISTEN_PORT, print=None, shutdown_timeout=5)
+
+
+if __name__ == "__main__":
+    main()

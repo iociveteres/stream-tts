@@ -1,0 +1,116 @@
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 12px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+.brand { font-weight: 700; font-size: 17px; margin-right: auto; }
+.brand span { font-weight: 400; font-size: 14px; margin-left: 6px; }
+nav { display: flex; gap: 4px; padding: 10px 16px 0; overflow-x: auto; }
+nav button { border: 0; background: none; border-radius: 8px 8px 0 0; padding: 8px 14px; color: var(--muted);
+  border-bottom: 2px solid transparent; }
+nav button.on { color: var(--ink); border-bottom-color: var(--accent); }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+.tab { display: none; }
+.tab.on { display: block; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; align-items: start; }
+.grid2 > div > .card + .card { margin-top: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+.between { justify-content: space-between; }
+.mt { margin-top: 16px; }
+#banner { margin: 12px 16px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, var(--surface)); }
+
+.switch { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.switch input { appearance: none; width: 42px; height: 24px; border-radius: 12px; background: var(--line);
+  position: relative; cursor: pointer; transition: background .15s; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+  border-radius: 50%; background: #fff; transition: left .15s; }
+.switch input:checked { background: var(--good); }
+.switch input:checked::after { left: 21px; }
+
+.now { font-size: 17px; min-height: 26px; }
+.now b { color: var(--accent); }
+.state { font-size: 13px; color: var(--muted); }
+.state.playing { color: var(--good); font-weight: 600; }
+.state.synth { color: var(--warn); }
+td.text { max-width: 360px; overflow-wrap: anywhere; }
+.journal { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow: auto; font-size: 13px; }
+.journal li { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.journal time { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chips li { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 4px 2px 12px; }
+.chips button { border: 0; background: none; padding: 2px 8px; }
+#settings { display: grid; gap: 10px; }
+
+/* Вход и гайд */
+.code { font: 700 34px/1 Consolas, monospace; letter-spacing: 4px; padding: 14px 18px; background: var(--surface-2);
+  border-radius: 10px; display: inline-block; margin: 6px 0; }
+.guide { padding: 0; list-style: none; counter-reset: step; display: grid; gap: 14px; margin: 0; }
+.guide > li { counter-increment: step; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.guide > li.done { opacity: .7; }
+.guide h3::before { content: counter(step) ". "; color: var(--accent); }
+.guide > li.done h3::after { content: " ✓"; color: var(--good); }
+.guide ul { margin: 6px 0; padding-left: 20px; }
+@media (max-width: 900px) { .guide > li { grid-template-columns: 1fr; } }
+.rgrid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+.rgrid .wide { grid-column: 1 / -1; }
+@media (max-width: 700px) { .rgrid { grid-template-columns: 1fr; } }
+
+/* Схемы-иллюстрации: нарисованы, а не скриншоты, чтобы не устаревать с каждым редизайном Twitch */
+.mock { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface);
+  font-size: 13px; align-self: start; }
+.mock .bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2);
+  border-bottom: 1px solid var(--line); color: var(--muted); }
+.mock .bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.mock .bar span { margin-left: 8px; background: var(--bg); border-radius: 6px; padding: 1px 10px; flex: 1; }
+.mock .body { padding: 12px; display: grid; gap: 8px; }
+.mock .field { display: grid; gap: 3px; }
+.mock .field b { font-weight: 600; font-size: 12px; color: var(--ink-2); }
+.mock .input { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--bg); }
+.mock .hl { outline: 2px solid var(--warn); outline-offset: 2px; border-radius: 6px; }
+.mock .btnm { display: inline-block; padding: 4px 10px; border-radius: 6px; background: #9147ff; color: #fff; }
+.mock .side { display: grid; grid-template-columns: 120px 1fr; }
+.mock .side > div:first-child { border-right: 1px solid var(--line); padding: 10px; display: grid; gap: 6px;
+  align-content: start; color: var(--muted); }
+.mock .radio::before { content: "○ "; }
+.mock .radio.on::before { content: "◉ "; color: #9147ff; }
+.mock .toggle { display: inline-block; width: 28px; height: 16px; border-radius: 8px; background: #9147ff;
+  vertical-align: middle; position: relative; }
+.mock .toggle::after { content: ""; position: absolute; right: 2px; top: 2px; width: 12px; height: 12px;
+  border-radius: 50%; background: #fff; }
+
+/* Голоса */
+#voices td { padding: 5px 8px; }
+#voices .gain { display: flex; align-items: center; gap: 8px; }
+#voices .gain input { width: 140px; }
+#voices .gain output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+#voices tr.off td:nth-child(n+2) { opacity: .5; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted);
+  margin-left: 6px; }
+
+/* Статистика */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.tile { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.tile .k { color: var(--muted); font-size: 13px; }
+.tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tile .s { color: var(--muted); font-size: 12px; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.chart svg { display: block; width: 100%; height: 220px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 11px; }
+.bars { display: grid; gap: 6px; font-size: 13px; }
+.bars .b { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
+.bars .b .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bars .b .n { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.bars .b .track { grid-column: 1 / -1; height: 6px; }
+.bars .b .fill { height: 6px; border-radius: 0 4px 4px 0; background: var(--series-1); min-width: 2px; }
+.tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 10px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+#toast { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 30; max-width: min(420px, 90vw); }
+#toast div { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  border-radius: 8px; padding: 10px 14px; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+#toast div.bad { border-left-color: var(--bad); }
+
+code.grow { overflow-wrap: anywhere; padding: 6px 8px; }

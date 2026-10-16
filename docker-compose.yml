@@ -1,0 +1,38 @@
+services:
+  cosyvoice:
+    build: .
+    image: cosyvoice-server:cpu
+    init: true
+    ports:
+      # Только localhost; для доступа из сети уберите "127.0.0.1:"
+      - "127.0.0.1:${PORT:-8080}:8080"
+    volumes:
+      - ./models:/models:ro
+      - ./voices:/voices
+    environment:
+      MODEL: "${MODEL:-}"
+    restart: unless-stopped
+
+  # Озвучка наград Twitch (docs/stream-tts.md). Стартует параллельно cosyvoice и ходит к нему по docker-сети.
+  stream-tts:
+    build: ./stream-tts
+    image: stream-tts
+    init: true
+    ports:
+      # STREAM_TTS_BIND=0.0.0.0 открывает интерфейс и оверлей в сеть (для OBS на другом ПК),
+      # тогда обязателен STREAM_TTS_PASSWORD
+      - "${STREAM_TTS_BIND:-127.0.0.1}:${STREAM_TTS_PORT:-8090}:8090"
+    volumes:
+      - ./stream-tts-data:/data                       # настройки, токены, SQLite, примеры голосов
+      - ./voice-refs:/project/voice-refs:ro           # manifest.json с эффектами post
+      - ./villager-fx.py:/project/villager-fx.py:ro   # скрипт эффекта; режим cut звуков жителя не читает
+      # Остальным режимам villager-fx.py нужны звуки жителя:
+      # - ./voice-origs/minecraft-villager:/project/voice-origs/minecraft-villager:ro
+    environment:
+      STREAM_TTS_BIND: "${STREAM_TTS_BIND:-127.0.0.1}"
+      STREAM_TTS_PORT: "${STREAM_TTS_PORT:-8090}"
+      STREAM_TTS_PASSWORD: "${STREAM_TTS_PASSWORD:-}"
+      COSYVOICE_URL: "${COSYVOICE_URL:-http://cosyvoice:8080}"
+      COSYVOICE_API_KEY: "${COSYVOICE_API_KEY:-}"
+      TWITCH_CLIENT_ID: "${TWITCH_CLIENT_ID:-}"
+    restart: unless-stopped

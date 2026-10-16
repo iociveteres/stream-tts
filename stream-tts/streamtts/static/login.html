@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream TTS — вход</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body class="center">
+<form method="post" action="/login" class="card login">
+  <h1>Stream TTS</h1>
+  <label>Пароль админки <input type="password" name="password" autofocus required></label>
+  <p class="bad" id="bad" hidden>Неверный пароль.</p>
+  <button class="primary">Войти</button>
+  <p class="muted small">Пароль задаётся переменной <code>STREAM_TTS_PASSWORD</code> в <code>.env</code>.
+    Оверлей и страница голосов открыты без пароля.</p>
+</form>
+<script>if (location.search.includes("bad")) document.getElementById("bad").hidden = false;</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Выбор образцов</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #e3e1dc;
+  --accent: #2f6fdf; --accent-soft: #e6eefc; --warn: #a35f00; --warn-soft: #fdf1df;
+  --ok: #2c7a3f; --ok-soft: #e4f3e7; --bad: #b3261e; --chip: #efede8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a; --panel: #212226; --fg: #e9e9e9; --muted: #9a9a9a; --line: #34353a;
+    --accent: #7aa7ff; --accent-soft: #24304a; --warn: #f0b35a; --warn-soft: #3a2f1e;
+    --ok: #74c58a; --ok-soft: #1f3326; --bad: #ff8a80; --chip: #2c2d31;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button { font: inherit; color: inherit; }
+header {
+  position: sticky; top: 0; z-index: 5; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.progress { color: var(--muted); font-size: 13px; }
+.bar { width: 140px; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+main { padding: 16px; max-width: 1060px; margin: 0 auto; }
+h2 { font-size: 15px; margin: 22px 0 4px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.card.decided { border-color: var(--ok); }
+.head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.head b { font-size: 17px; }
+.vid { color: var(--muted); font-size: 13px; }
+.reason { font-size: 13px; padding: 1px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+.reason.auto { background: var(--chip); color: var(--muted); }
+.grid { display: grid; grid-template-columns: minmax(220px, 1.4fr) repeat(var(--cols), minmax(70px, 1fr)); gap: 6px 10px; align-items: center; margin-top: 10px; }
+.colhead { font-size: 12px; color: var(--muted); line-height: 1.25; }
+.cand { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; }
+.cand.picked { background: var(--accent-soft); }
+.cand .id { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cand .meta { font-size: 12px; color: var(--muted); }
+.cand .meta .w { color: var(--warn); }
+.cand .txt { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cand .txt:hover { -webkit-line-clamp: unset; }
+.play {
+  width: 100%; height: 34px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; cursor: pointer;
+}
+.play:hover { border-color: var(--accent); }
+.play.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.take { align-self: flex-start; margin-top: 4px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 1px 12px; cursor: pointer; font-size: 13px; }
+.take.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.foot { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; font-size: 13px; }
+.foot .take { margin: 0; }
+.status { color: var(--ok); }
+.status.none { color: var(--bad); }
+details.card > summary { cursor: pointer; list-style: none; }
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary::before { content: "▸ "; color: var(--muted); }
+details.card[open] > summary::before { content: "▾ "; }
+@media (max-width: 700px) {
+  .grid { grid-template-columns: repeat(var(--cols), 1fr); }
+  .cand { grid-column: 1 / -1; }
+  .corner { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Выбор образцов</h1>
+  <span class="progress" id="progress"></span>
+  <div class="bar"><i id="bar"></i></div>
+</header>
+<main id="main"><p class="hint">Загрузка…</p></main>
+<script>
+let S = null;
+const player = new Audio();
+let playing = null;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function play(btn) {
+  if (playing === btn) { player.pause(); return; }
+  if (playing) playing.classList.remove("on");
+  player.src = btn.dataset.src;
+  player.play();
+  playing = btn;
+  btn.classList.add("on");
+}
+player.addEventListener("pause", () => { if (playing) playing.classList.remove("on"); playing = null; });
+player.addEventListener("ended", () => { if (playing) playing.classList.remove("on"); playing = null; });
+
+function current(v) { return v.choice || (v.auto ? v.pick : null); }
+
+function card(v) {
+  const n = S.phrases.length;
+  const chosen = v.choice;
+  const status = chosen === "none" ? `<span class="status none">ни один не годится</span>`
+    : chosen ? `<span class="status">выбран ${esc(chosen.split(".").pop())}</span>` : "";
+  const cols = [`<div class="colhead corner"></div>`, `<div class="colhead">сам образец</div>`]
+    .concat(S.phrases.map((p, i) => `<div class="colhead" title="${esc(p)}">${i + 1}. ${esc(p.length > 34 ? p.slice(0, 32) + "…" : p)}</div>`));
+  const rows = v.cands.map(c => {
+    const short = c.id.split(".").pop();
+    const picked = (chosen || v.pick) === c.id;
+    const warn = c.cer > 0.05 ? ` <span class="w">cer ${c.cer.toFixed(2)}</span>` : ` cer ${c.cer.toFixed(2)}`;
+    const cells = [`<div class="play-cell"><button class="play" data-src="/clip/${esc(v.voice)}/${esc(c.id)}.wav" title="образец, ${c.dur.toFixed(1)} с">▶</button></div>`];
+    for (let i = 1; i <= n; i++) cells.push(`<div><button class="play" data-src="/ab/${esc(c.id)}.${i}.wav" title="${esc(S.phrases[i - 1])}">▶</button></div>`);
+    return `<div class="cand ${picked ? "picked" : ""}">
+        <span><span class="id">${esc(short)}</span> <span class="meta">${esc(c.tag)} · ${c.dur.toFixed(1)} с</span></span>
+        <span class="meta">sim ${c.sim.toFixed(3)} ·${warn}${c.check ? ' · <span class="w">⚠ сверить текст</span>' : ""}${short !== "S00" && v.pick === c.id ? " · лучший по A/B" : ""}</span>
+        <span class="txt" title="${esc(c.text)}">${esc(c.text)}</span>
+        <button class="take ${chosen === c.id ? "on" : ""}" data-voice="${esc(v.voice)}" data-id="${esc(c.id)}">${short === "S00" ? "Оставить текущий" : "Беру"}</button>
+      </div>` + cells.join("");
+  });
+  const body = `<div class="grid" style="--cols:${n + 1}">${cols.join("")}${rows.join("")}</div>
+    <div class="foot">
+      <button class="take ${chosen === "none" ? "on" : ""}" data-voice="${esc(v.voice)}" data-id="none">Ни один не годится</button>
+      ${chosen ? `<button class="take" data-voice="${esc(v.voice)}" data-id="">Сбросить выбор</button>` : ""}
+      ${status}
+    </div>`;
+  const head = `<div class="head"><b>${esc(v.title)}</b><span class="vid">${esc(v.voice)}</span>
+    <span class="reason ${v.auto ? "auto" : ""}">${esc(v.reason)}</span></div>`;
+  if (v.auto) {
+    const pick = current(v).split(".").pop();
+    return `<details class="card ${chosen ? "decided" : ""}"><summary><b>${esc(v.title)}</b> <span class="vid">${esc(v.voice)}</span> — ${esc(pick)} <span class="vid">(${esc(v.reason)})</span> ${status}</summary>${body}</details>`;
+  }
+  return `<section class="card ${chosen ? "decided" : ""}">${head}${body}</section>`;
+}
+
+function render() {
+  const open = new Set([...document.querySelectorAll("details[open]")].map(d => d.querySelector(".vid")?.textContent));
+  const disputed = S.voices.filter(v => !v.auto), auto = S.voices.filter(v => v.auto);
+  const done = disputed.filter(v => v.choice).length;
+  document.getElementById("progress").textContent = `${S.batch}: спорных решено ${done} из ${disputed.length}, автоматически ${auto.length}`;
+  document.getElementById("bar").style.width = (disputed.length ? 100 * done / disputed.length : 100) + "%";
+  const replaced = auto.filter(v => !current(v).endsWith(".S00")).length;
+  document.getElementById("main").innerHTML = `
+    <h2>Спорное — послушать (${disputed.length})</h2>
+    <p class="hint">Строки — кандидаты, столбцы — сам образец и синтез одних и тех же фраз. Выберите кандидата, который звучит как персонаж, или «Ни один не годится».</p>
+    ${disputed.map(card).join("") || '<p class="hint">Спорного нет.</p>'}
+    <h2>Решено автоматически (${auto.length}, из них замен ${replaced})</h2>
+    <p class="hint">Слушать не обязательно. Раскройте голос, если хотите проверить или переиграть решение.</p>
+    ${auto.map(card).join("")}`;
+  document.querySelectorAll("details").forEach(d => { if (open.has(d.querySelector(".vid")?.textContent)) d.open = true; });
+}
+
+document.addEventListener("click", async e => {
+  const p = e.target.closest(".play");
+  if (p) return play(p);
+  const t = e.target.closest(".take");
+  if (!t) return;
+  const voice = t.dataset.voice, id = t.dataset.id;
+  const r = await fetch("/api/pick", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voice, id: id || null }) });
+  const j = await r.json();
+  if (j.ok) { S.voices.find(v => v.voice === voice).choice = j.choice || null; render(); }
+});
+
+fetch("/api/state").then(r => r.json()).then(s => { S = s; render(); });
+</script>
+</body>
+</html>
