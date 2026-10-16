@@ -1,6 +1,6 @@
 """Локальный интерфейс отслушивания партии: слушать, оценивать и править текст в одном месте.
 
-usage: python review.py [партия] [--port 8765]
+usage: python tools/wc3/review.py [партия] [--port 8765]
   Без партии берётся последняя из voice-clips/wc3/. Открыть http://localhost:8765.
 
 Оценки сразу пишутся в <партия>/ratings.txt, правки текста — в voice-clips/wc3/text-fixes.json
@@ -14,8 +14,9 @@ from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("cut_clips", os.path.join(ROOT, "cut-clips.py"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
+spec = importlib.util.spec_from_file_location("cut_clips", os.path.join(HERE, "cut-clips.py"))
 cc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cc)
 
@@ -203,7 +204,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/":
-            return self.send_file(os.path.join(ROOT, "review.html"), "text/html; charset=utf-8")
+            return self.send_file(os.path.join(HERE, "review.html"), "text/html; charset=utf-8")
         if path == "/api/state":
             return self.send_json(self.batch.state())
         if path.startswith(("/clip/", "/src/")):
@@ -236,7 +237,7 @@ def main():
         del args[i:i + 2]
     batches = sorted(d for d in os.listdir(cc.CLIPS) if os.path.isfile(os.path.join(cc.CLIPS, d, "clips.json")))
     if not batches:
-        sys.exit("Нет партий: сначала python cut-clips.py b01")
+        sys.exit("Нет партий: сначала python tools/wc3/cut-clips.py b01")
     name = args[0] if args else batches[-1]
     if name not in batches:
         sys.exit(f"Нет партии {name}. Есть: {' '.join(batches)}")

@@ -1,6 +1,6 @@
 """Достаёт русские субтитры диалогов из карт кампаний WC3 1.31: {путь к звуку: текст}.
 
-usage: python extract-subtitles.py <папка с картами> [out.json]
+usage: python tools/wc3/extract-subtitles.py <папка с картами> [out.json]
   Карты (*.w3m, *.w3x) извлекаются из CASC так же, как звуки: маска war3.w3mod:campaign*.
   По умолчанию результат пишется в voice-clips/wc3/subtitles.json, его читает cut-clips.py.
 
@@ -14,7 +14,8 @@ import mpyq
 from mpyq import (MPQ_FILE_COMPRESS, MPQ_FILE_ENCRYPTED, MPQ_FILE_EXISTS, MPQ_FILE_FIX_KEY,
                   MPQ_FILE_SECTOR_CRC, MPQ_FILE_SINGLE_UNIT)
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
 
 
 def decompress(data):

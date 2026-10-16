@@ -5,7 +5,7 @@
       "name": "review",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "review.py",
+        "tools/wc3/review.py",
         "b01"
       ],
       "port": 8765
@@ -14,7 +14,7 @@
       "name": "pick",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "pick.py",
+        "tools/wc3/pick.py",
         "b02"
       ],
       "port": 8766
@@ -23,7 +23,7 @@
       "name": "meme",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "meme-pick.py"
+        "tools/meme/meme-pick.py"
       ],
       "port": 8767
     },

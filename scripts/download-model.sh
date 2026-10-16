@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Использование: ./download-model.sh [КВАНТ] [--frontend int8|full|none] [--list] [--force]
+# Использование: scripts/download-model.sh [КВАНТ] [--frontend int8|full|none] [--list] [--force]
 #   КВАНТ       по умолчанию Q8_0 (рекомендация автора)
 #   --frontend  ONNX-модели для клонирования голоса: int8 (~250 МБ, по умолчанию),
 #               full (~1 ГБ), none
 set -euo pipefail
+cd "$(dirname "$0")/.."  # models/ — от корня проекта
 
 REPO="Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF"
 BASE="https://huggingface.co/${REPO}/resolve/main"
@@ -31,7 +32,7 @@ done
 
 case " $(echo $QUANTS) " in
     *" ${QUANT}:"*) ;;
-    *) echo "Неизвестный квант: $QUANT (см. ./download-model.sh --list)" >&2; exit 1 ;;
+    *) echo "Неизвестный квант: $QUANT (см. scripts/download-model.sh --list)" >&2; exit 1 ;;
 esac
 
 # fetch <путь в репо> <локальный файл>: качает в .part с докачкой, переименовывает по успеху

@@ -1,7 +1,7 @@
 """Похожесть каждой фразы из lines.json на эталонный голос (эмбеддинги CAM++, как в synth-ab.py).
 
 Использование (venv проекта: numpy, onnxruntime):
-    .venv/Scripts/python.exe score-speaker.py <папка-с-lines.json> <эталон.wav|mp3> [ещё эталоны...]
+    .venv/Scripts/python.exe tools/meme/score-speaker.py <папка-с-lines.json> <эталон.wav|mp3> [ещё эталоны...]
         [--iterate]
 
 Пишет в каждую запись lines.json поле sim (косинус к среднему эмбеддингу эталонов).
@@ -16,8 +16,9 @@ import os
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("synth_ab", os.path.join(ROOT, "synth-ab.py"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
+spec = importlib.util.spec_from_file_location("synth_ab", os.path.join(ROOT, "tools", "wc3", "synth-ab.py"))
 ab = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ab)
 

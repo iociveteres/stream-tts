@@ -1,7 +1,7 @@
 """Эффект «житель Minecraft»: синтез речи частично заменяется звуками жителя из игры.
 
-usage: python villager-fx.py <вход.wav> <выход.wav> [--mode hum|half|mumble] [--seed N]
-       python villager-fx.py <вход.wav> <выход.wav> --mode cut --text "<фраза>"
+usage: python effects/villager-fx.py <вход.wav> <выход.wav> [--mode hum|half|mumble] [--seed N]
+       python effects/villager-fx.py <вход.wav> <выход.wav> --mode cut --text "<фраза>"
 
 Речь делится на слоги и слова по огибающей громкости: границы идут по паузам и по провалам
 огибающей. Дальше в зависимости от режима:
@@ -20,7 +20,8 @@ import argparse, glob, os, subprocess, zlib
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)  # effects/ -> корень проекта
 SOUNDS = os.path.join(ROOT, "voice-origs", "minecraft-villager")
 SR = 24000
 HOP = 240                      # 10 мс

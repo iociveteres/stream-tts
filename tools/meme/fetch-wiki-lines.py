@@ -1,7 +1,7 @@
 """Скачивает реплики персонажа со страницы MediaWiki (fandom, theportalwiki и т. п.).
 
 Использование:
-    python fetch-wiki-lines.py <api.php> <страница> <папка> [--filter РЕГЭКСП]
+    python tools/meme/fetch-wiki-lines.py <api.php> <страница> <папка> [--filter РЕГЭКСП]
 
 Берёт каждый <li>, где есть аудиофайл, и сохраняет его как <папка>/NNN_<имя>.<ext>.
 Текст реплики (то, что видно в <li> без кнопки плеера) пишется в <папка>/lines.json.

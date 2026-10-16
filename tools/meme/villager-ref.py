@@ -1,6 +1,6 @@
 """Образец голоса жителя Minecraft для zero-shot: звуки жителя один за другим, как поток речи.
 
-usage: python villager-ref.py <выход.wav> [--len 10] [--gap 0.04-0.09] [--phrase 5] [--pitch 0.92-1.1]
+usage: python tools/meme/villager-ref.py <выход.wav> [--len 10] [--gap 0.04-0.09] [--phrase 5] [--pitch 0.92-1.1]
                               [--text hm|syl] [--seed 1]
 
 Берутся idle, yes, no и haggle из voice-origs/minecraft-villager/ (ассеты Minecraft). У каждого звука
@@ -18,7 +18,8 @@ import argparse, glob, os, re, subprocess
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
 SOUNDS = os.path.join(ROOT, "voice-origs", "minecraft-villager")
 SR = 24000
 HOP = 120                  # 5 мс

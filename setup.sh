@@ -27,7 +27,7 @@ if [ "$GPU" -eq 1 ]; then
 fi
 
 echo "==> Модель"
-bash ./download-model.sh "$QUANT" "${dl_args[@]}"
+bash scripts/download-model.sh "$QUANT" "${dl_args[@]}"
 mkdir -p voices
 
 # .env читается compose автоматически: последующие 'docker compose up' возьмут ту же модель

@@ -1,6 +1,6 @@
 services:
   cosyvoice:
-    build: .
+    build: ./cosyvoice
     image: cosyvoice-server:cpu
     init: true
     ports:
@@ -25,8 +25,8 @@ services:
     volumes:
       - ./stream-tts-data:/data                       # настройки, токены, SQLite, примеры голосов
       - ./voice-refs:/project/voice-refs:ro           # manifest.json с эффектами post
-      - ./villager-fx.py:/project/villager-fx.py:ro   # скрипт эффекта; режим cut звуков жителя не читает
-      # Остальным режимам villager-fx.py нужны звуки жителя:
+      - ./effects:/project/effects:ro                 # скрипты эффектов (post); режим cut звуков жителя не читает
+      # Остальным режимам effects/villager-fx.py нужны звуки жителя:
       # - ./voice-origs/minecraft-villager:/project/voice-origs/minecraft-villager:ro
     environment:
       STREAM_TTS_BIND: "${STREAM_TTS_BIND:-127.0.0.1}"

@@ -1,29 +1,30 @@
 """Сравнение альтернативных образцов мемных голосов: эталон JeetBot, сами образцы и их синтез.
 
-usage: python meme-pick.py [--port 8767]           интерфейс: http://localhost:8767
-       python meme-pick.py --add <голос> <id> <аудио...> --text "…" [--label "…"]
+usage: python tools/meme/meme-pick.py [--port 8767]           интерфейс: http://localhost:8767
+       python tools/meme/meme-pick.py --add <голос> <id> <аудио...> --text "…" [--label "…"]
                                                    новая альтернатива (аудио склеиваются, тишина обрезается)
-       python meme-pick.py --synth [голос ...]     озвучить тестовые фразы, где синтеза ещё нет
-       python meme-pick.py --install               поставить выбранное в voice-refs/meme
+       python tools/meme/meme-pick.py --synth [голос ...]     озвучить тестовые фразы, где синтеза ещё нет
+       python tools/meme/meme-pick.py --install               поставить выбранное в voice-refs/meme
 
 Альтернативы лежат в voice-clips/meme/<голос>/<id>.wav + .txt, метаданные в voice-clips/meme/alts.json:
   {голос: {title, ref: пример JeetBot, phrase: его текст, alts: {id: {label, install, source}}}}
 install — имя голоса при установке (по умолчанию сам голос), так две версии одного персонажа
 (neco-arc и jeetbot-neco-arc) сравниваются на одной карточке. S00 — образец, который стоит сейчас.
-post — эффект поверх синтеза ([скрипт, аргументы…], например villager-fx.py --mode hum; {text} в аргументах
+post — эффект поверх синтеза ([скрипт, аргументы…], например effects/villager-fx.py --mode hum, путь от корня проекта; {text} в аргументах
 заменяется фразой); образец у такого
 варианта тот же, а при установке post записывается в manifest.json голоса.
 Синтез: voice-clips/meme/ab/<голос>.<id>.<n>.wav, первая фраза — демо-текст JeetBot для голоса.
 Выбор и заметки: voice-clips/meme/picks.json ({голос: {pick: [id…], note}}).
 Синтезу нужен cosyvoice-server на localhost:8080; запросы к нему идут строго по одному.
-После --install: ./import-voices.sh voice-refs/meme --force
+После --install: scripts/import-voices.sh voice-refs/meme --force
 """
 import datetime, filecmp, importlib.util, json, os, shutil, subprocess, sys, tempfile, threading
 from http.server import ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("review", os.path.join(ROOT, "review.py"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
+spec = importlib.util.spec_from_file_location("review", os.path.join(ROOT, "tools", "wc3", "review.py"))
 review = importlib.util.module_from_spec(spec)  # http-обработчик с выдачей файлов и защитой путей
 spec.loader.exec_module(review)
 
@@ -244,14 +245,14 @@ def install():
     save(man_path, man)
     print("\n".join(changed) or "Менять нечего")
     if changed:
-        print("Дальше: ./import-voices.sh voice-refs/meme --force")
+        print("Дальше: scripts/import-voices.sh voice-refs/meme --force")
 
 
 class Handler(review.Handler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/":
-            return self.send_file(os.path.join(ROOT, "meme-pick.html"), "text/html; charset=utf-8")
+            return self.send_file(os.path.join(HERE, "meme-pick.html"), "text/html; charset=utf-8")
         if path == "/api/state":
             return self.send_json(state())
         if path.startswith("/alt/"):    # /alt/<голос>/<id>.wav

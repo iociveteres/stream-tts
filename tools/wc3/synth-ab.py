@@ -1,6 +1,6 @@
 """A/B кандидатов в образцы: синтез одинаковых тестовых фраз и автоматическая оценка.
 
-usage: python synth-ab.py <batch> [voice_id ...]
+usage: python tools/wc3/synth-ab.py <batch> [voice_id ...]
 
 Каждый кандидат партии (voice-clips/wc3/<batch>/clips.json) регистрируется на сервере как голос
 и озвучивает фразы TEST с фиксированным seed. Оценки:
@@ -23,8 +23,9 @@ import concurrent.futures, glob, importlib.util, json, os, random, subprocess, s
 
 import numpy as np
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("cut_clips", os.path.join(ROOT, "cut-clips.py"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
+spec = importlib.util.spec_from_file_location("cut_clips", os.path.join(HERE, "cut-clips.py"))
 cc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cc)
 

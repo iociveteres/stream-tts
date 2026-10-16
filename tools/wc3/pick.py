@@ -1,8 +1,8 @@
 """Выбор образцов по итогам A/B (synth-ab.py): где всё ясно — автоматически, на слух — только спорное.
 
-usage: python pick.py <batch> [--port 8766]   интерфейс: http://localhost:8766
-       python pick.py <batch> --list          решения текстом
-       python pick.py <batch> --install       поставить выбранные образцы в voice-refs/wc3
+usage: python tools/wc3/pick.py <batch> [--port 8766]   интерфейс: http://localhost:8766
+       python tools/wc3/pick.py <batch> --list          решения текстом
+       python tools/wc3/pick.py <batch> --install       поставить выбранные образцы в voice-refs/wc3
 
 Правила (adj = sim − CER_PENALTY·cer, то есть невнятный синтез штрафуется):
   - текущий образец S00 не хуже лучшего нового (разница adj меньше NOISE) — остаётся, автоматически;
@@ -13,17 +13,18 @@ usage: python pick.py <batch> [--port 8766]   интерфейс: http://localho
 
 --install копирует выбранные клипы в voice-refs/wc3/<голос>.wav/.txt (старые — в
 voice-refs/wc3/replaced/<batch>/) и обновляет manifest.json. Затем голоса пересобираются:
-./import-voices.sh voice-refs/wc3 --force (не во время synth-ab.py: сервер не терпит параллельной регистрации).
+scripts/import-voices.sh voice-refs/wc3 --force (не во время synth-ab.py: сервер не терпит параллельной регистрации).
 Только стандартная библиотека Python.
 """
 import datetime, importlib.util, json, os, shutil, sys
 from http.server import ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
 
 
-spec = importlib.util.spec_from_file_location("review", os.path.join(ROOT, "review.py"))
+spec = importlib.util.spec_from_file_location("review", os.path.join(HERE, "review.py"))
 review = importlib.util.module_from_spec(spec)  # http-обработчик с выдачей файлов, cut-clips — review.cc
 spec.loader.exec_module(review)
 cc = review.cc
@@ -129,7 +130,7 @@ class Handler(review.Handler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/":
-            return self.send_file(os.path.join(ROOT, "pick.html"), "text/html; charset=utf-8")
+            return self.send_file(os.path.join(HERE, "pick.html"), "text/html; charset=utf-8")
         if path == "/api/state":
             return self.send_json(self.batch.state())
         if path.startswith(("/clip/", "/ab/")):
@@ -174,7 +175,7 @@ def install(batch):
     cc.save_json(manifest_path, manifest)
     print("\n".join(changed) or "Заменять нечего")
     if changed:
-        print(f"Старые образцы: {backup}\nДальше: ./import-voices.sh voice-refs/wc3 --force")
+        print(f"Старые образцы: {backup}\nДальше: scripts/import-voices.sh voice-refs/wc3 --force")
 
 
 def main():
@@ -187,7 +188,7 @@ def main():
     flags = {a for a in args if a.startswith("--")}
     names = [a for a in args if not a.startswith("--")]
     if not names or not os.path.isfile(os.path.join(cc.CLIPS, names[0], "ab", "ab.json")):
-        sys.exit("Укажите партию с результатами A/B: python synth-ab.py <партия>, затем python pick.py <партия>")
+        sys.exit("Укажите партию с результатами A/B: python tools/wc3/synth-ab.py <партия>, затем python tools/wc3/pick.py <партия>")
     batch = Batch(names[0])
     if "--install" in flags:
         return install(batch)

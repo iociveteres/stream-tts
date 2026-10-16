@@ -74,7 +74,7 @@ class Voices:
         return p if isinstance(p, list) and p else None
 
     async def apply_post(self, voice, x, text):
-        """Эффект поверх синтеза, как в meme-pick.py: python <скрипт> <вход.wav> <выход.wav> <аргументы>."""
+        """Эффект поверх синтеза, как в tools/meme/meme-pick.py: python <скрипт> <вход.wav> <выход.wav> <аргументы>."""
         post = self.post(voice)
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = os.path.join(tmp, "in.wav"), os.path.join(tmp, "out.wav")

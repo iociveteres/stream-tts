@@ -1,6 +1,6 @@
 """Нарезает кандидатов в образцы голоса из звуков Warcraft III для отслушивания.
 
-usage: python cut-clips.py <batch> [voice_id ...]
+usage: python tools/wc3/cut-clips.py <batch> [voice_id ...]
   <batch>     имя партии, например b01: результат в voice-clips/wc3/<batch>/
   voice_id    только эти голоса (по умолчанию все из HEROES и UNITS)
 
@@ -28,7 +28,8 @@ wikiquote.json (ru.wikiquote.org/wiki/Warcraft_III:_Reign_of_Chaos). При ра
 """
 import datetime, difflib, glob, json, os, re, shutil, site, subprocess, sys, tempfile
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
 ORIGS = os.path.join(ROOT, "voice-origs", "Warcraft III (RU)")
 REFS = os.path.join(ROOT, "voice-refs", "wc3")
 CLIPS = os.path.join(ROOT, "voice-clips", "wc3")
