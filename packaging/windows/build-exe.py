@@ -6,7 +6,8 @@ usage: packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py
 Запускать python из сборочного venv (packaging/windows/requirements.txt): Nuitka компилирует тем интерпретатором,
 которым запущена, и берёт пакеты из него. Компилятор — MSVC (Visual Studio или Build Tools с C++): MinGW Nuitka для
 Python 3.13+ не поддерживает. Первая сборка — несколько минут, повторные быстрее (кэш Nuitka в %LOCALAPPDATA%).
-Результат: packaging/windows/dist/StreamTTS/ (StreamTTS.exe, DLL Python, streamtts/static, effects/).
+Результат: packaging/windows/dist/StreamTTS/ (StreamTTS.exe, DLL Python, streamtts/static, effects/, licenses/ —
+тексты лицензий Python, пакетов и runtime Nuitka; лицензии рантайма — в runtime/licenses/).
 --runtime core|all кладёт в dist/StreamTTS/runtime/ рантайм из build/runtime (build-runtime.py): core — без CUDA,
 all — с CUDA. Так собранную программу можно запустить без установщика; установщик (StreamTTS.iss) берёт рантайм
 сам, из build/runtime.
@@ -14,7 +15,7 @@ all — с CUDA. Так собранную программу можно зап�
 установки в packaging/windows/.inno, PATH или стандартных папок установки), --no-build — только установщик из уже
 собранного dist/StreamTTS.
 """
-import argparse, os, shutil, subprocess, sys
+import argparse, importlib.metadata as md, os, re, shutil, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -44,6 +45,60 @@ def nuitka_args(jobs):
     ]
 
 
+def requirements(path):
+    """Имена пакетов из requirements.txt (с -r)."""
+    names = []
+    for line in open(path, encoding="utf-8"):
+        line = line.split("#", 1)[0].strip()
+        if line.startswith("-r"):
+            names += requirements(os.path.join(os.path.dirname(path), line[2:].strip()))
+        elif line:
+            names.append(re.match(r"[A-Za-z0-9._-]+", line).group())
+    return names
+
+
+def copy_licenses():
+    """Тексты лицензий того, что Nuitka положила в программу, — в dist/StreamTTS/licenses/.
+
+    Python (LICENSE.txt установки, на которой venv: там же OpenSSL, libffi, SQLite и прочие), пакеты из
+    stream-tts/requirements.txt с зависимостями (их *.dist-info/licenses; у numpy там и OpenBLAS, и рантайм GCC),
+    исключение Nuitka для её runtime и списки THIRD-PARTY*.txt. Лицензии рантайма — в runtime/licenses/
+    (build-runtime.py)."""
+    lic = os.path.join(APP, "licenses")
+    shutil.rmtree(lic, ignore_errors=True)
+    os.makedirs(lic)
+    for name in ("THIRD-PARTY.txt", "THIRD-PARTY.en.txt"):
+        shutil.copy(os.path.join(HERE, name), lic)
+    os.makedirs(os.path.join(lic, "python"))
+    shutil.copy(os.path.join(sys.base_prefix, "LICENSE.txt"), os.path.join(lic, "python"))
+
+    def dist_licenses(dist, only=None):
+        files = [f for f in dist.files or () if f.parts[0].endswith(".dist-info") and f.parts[1:2] == ("licenses",)
+                 and (only is None or f.name == only)]
+        if not files:
+            sys.exit(f"{dist.name}: нет файлов лицензий в dist-info/licenses")
+        for f in files:
+            dst = os.path.join(lic, dist.name.lower(), *f.parts[2:])
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy(f.locate(), dst)
+
+    # Зависимости без extra; не установленные — с маркером, ложным для этой платформы и версии Python
+    todo, seen = requirements(os.path.join(SRC, "requirements.txt")), set()
+    while todo:
+        name = todo.pop().lower().replace("_", "-")
+        if name in seen:
+            continue
+        seen.add(name)
+        try:
+            dist = md.distribution(name)
+        except md.PackageNotFoundError:
+            continue
+        dist_licenses(dist)
+        todo += [re.match(r"[A-Za-z0-9._-]+", r).group() for r in dist.requires or () if "extra ==" not in r]
+    dist_licenses(md.distribution("nuitka"), "LICENSE-RUNTIME.txt")
+    print(f"Лицензии: {lic} ({', '.join(sorted(os.listdir(lic)))})")
+
+
 def iscc():
     pf = [os.environ.get(v, "") for v in ("ProgramFiles(x86)", "ProgramFiles")]
     pf.append(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs"))
@@ -69,6 +124,7 @@ def main():
         env = dict(os.environ, PYTHONPATH=SRC)  # пакет streamtts — из исходников
         subprocess.run(nuitka_args(a.jobs), cwd=HERE, env=env, check=True)
         os.replace(os.path.join(DIST, "StreamTTS.dist"), APP)
+    copy_licenses()
 
     if a.runtime:
         rt = os.path.join(HERE, "build", "runtime")

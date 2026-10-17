@@ -5,6 +5,7 @@ usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--fl
 Скачивает закреплённые версии (ASSETS, с проверкой sha256) и раскладывает по компонентам установщика:
   <out>/core/   cosyvoice-server и cosyvoice-cli, ONNX Runtime, GGML (CPU и Vulkan), ICU, FFmpeg (DLL и ffmpeg.exe)
   <out>/cuda/   ggml-cuda.dll и рантайм CUDA 13 (cudart, cuBLAS) — отдельный компонент, ~660 МБ
+  <out>/core/licenses/   тексты лицензий: из архивов (LICENSES) и из репозиториев тех же версий (LICENSE_URLS)
   <out>/vc_redist.x64.exe   VC++ 2015–2022: его требуют cosyvoice и ONNX Runtime (MSVCP140)
 --flat DIR собирает core и cuda в одну папку: так выглядит runtime/ в корне проекта для запуска stream-tts из
 исходников в режиме managed (docs/stream-tts.md). По умолчанию out — packaging/windows/build/runtime, загрузки
@@ -54,6 +55,32 @@ LAYOUT = [
     ("cudart", ["cudart64_13.dll", "cublas64_13.dll", "cublasLt64_13.dll"], "cuda"),
 ]
 LICENSES = {"icu": "LICENSE", "ffmpeg": "LICENSE.txt"}  # кладутся в core/licenses/<архив>-<файл>
+# В архивах cosyvoice.cpp и llama.cpp текстов лицензий нет, а MIT/BSD требуют их прикладывать: берём из репозиториев
+# тех же версий. cosyvoice.dll статически содержит PCRE2 (подмодуль vendor/pcre2), cosyvoice-server — cpp-httplib и
+# nlohmann/json (vendor/, их список — в THIRD_PARTY_NOTICES.md); onnxruntime.dll — 1.30.0 (версия в свойствах DLL),
+# со своими сторонними компонентами в ThirdPartyNotices.txt. Имя в core/licenses: (url, sha256).
+RAW = "https://raw.githubusercontent.com"
+COSY = f"{RAW}/Lourdle/cosyvoice.cpp/v0.2.0"
+ORT = f"{RAW}/microsoft/onnxruntime/v1.30.0"
+LICENSE_URLS = {
+    "cosyvoice.cpp-LICENSE": (f"{COSY}/LICENSE",
+                              "1626472fca8e6ff90fa9d1561cff421b8b67f3383d171b76ae93e7ed404a3ab2"),
+    "cosyvoice.cpp-THIRD_PARTY_NOTICES.md": (f"{COSY}/THIRD_PARTY_NOTICES.md",
+                                             "6a641347ac09a78c925837eb817925f1aea25a7f7684c09b4545f5eb97d21b4e"),
+    "cosyvoice.cpp-FFmpeg-NOTICE.md": (f"{COSY}/FFmpeg-NOTICE.md",
+                                       "9f3b2c7d1883b0e9e9b10a51a17c4891f5ffa191268c892b59a1d78cb269bb9c"),
+    "cpp-httplib-LICENSE": (f"{COSY}/vendor/cpp-httplib/LICENSE",
+                            "4b45cbe16d7b71b89ae6127e26e0d90a029198ca5e958ad8e3d0b8bbed364d8b"),
+    "nlohmann-json-LICENSE.MIT": (f"{RAW}/nlohmann/json/v3.12.0/LICENSE.MIT",  # версия — в vendor/nlohmann/json.hpp
+                                  "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603"),
+    "pcre2-LICENCE.md": (f"{RAW}/PCRE2Project/pcre2/7978954dbd2efc6f2196869290553cf1871b4ce6/LICENCE.md",
+                         "197d8a73ffee0d6b09adba2f9c677b5f5aede24edf89258a68e48248d010d811"),
+    "llama.cpp-LICENSE": (f"{RAW}/ggml-org/llama.cpp/b11500/LICENSE",  # GGML (ggml*.dll)
+                          "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"),
+    "onnxruntime-LICENSE": (f"{ORT}/LICENSE", "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"),
+    "onnxruntime-ThirdPartyNotices.txt": (f"{ORT}/ThirdPartyNotices.txt",
+                                          "143764b952fdb1a7c69ce653bfba74a7744d6a8a573bfb73e235fba356c83de3"),
+}
 
 
 def sha256(path):
@@ -66,7 +93,10 @@ def sha256(path):
 
 def fetch(name, cache):
     url, want = ASSETS[name]
-    dst = os.path.join(cache, url.rsplit("/", 1)[-1])
+    return download(url, want, os.path.join(cache, url.rsplit("/", 1)[-1]), name)
+
+
+def download(url, want, dst, name):
     if not (os.path.isfile(dst) and (want is None or sha256(dst) == want)):
         print(f"Качаю {url}", flush=True)
         tmp = dst + ".part"
@@ -128,7 +158,9 @@ def main():
         extract(files[name], [base], lic)
         os.replace(os.path.join(lic, base), os.path.join(lic, f"{name}-{base}"))
     shutil.move(os.path.join(a.out, "core", "LICENSE-LLVM-OpenMP"), os.path.join(lic, "LICENSE-LLVM-OpenMP"))
-    shutil.copy(os.path.join(HERE, "THIRD-PARTY.txt"), lic)
+    os.makedirs(os.path.join(a.cache, "licenses"), exist_ok=True)
+    for base, (url, want) in LICENSE_URLS.items():
+        shutil.copy(download(url, want, os.path.join(a.cache, "licenses", base), base), lic)
     shutil.copy(files["vc_redist"], os.path.join(a.out, "vc_redist.x64.exe"))
 
     for comp in ("core", "cuda"):

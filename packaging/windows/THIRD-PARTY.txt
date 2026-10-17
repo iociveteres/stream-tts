@@ -1,17 +1,28 @@
-StreamTTS для Windows включает сторонние программы. Их лицензии:
+StreamTTS для Windows включает сторонние программы. Их лицензии ниже,
+полные тексты — в папке программы: runtime\licenses\ (cosyvoice-server
+и библиотеки рядом с ним) и licenses\ (Python и его пакеты).
 
-cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT
+cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT,
+  см. runtime\licenses\cosyvoice.cpp-LICENSE и
+  cosyvoice.cpp-THIRD_PARTY_NOTICES.md
   https://github.com/Lourdle/cosyvoice.cpp
-GGML из llama.cpp b11500 (ggml*.dll) — MIT
+  В его составе: PCRE2 — BSD-3-Clause WITH PCRE2-exception,
+  см. pcre2-LICENCE.md; cpp-httplib — MIT, см. cpp-httplib-LICENSE;
+  nlohmann/json — MIT, см. nlohmann-json-LICENSE.MIT
+GGML из llama.cpp b11500 (ggml*.dll) — MIT,
+  см. runtime\licenses\llama.cpp-LICENSE
   https://github.com/ggml-org/llama.cpp
 LLVM OpenMP (libomp.dll) — Apache-2.0 with LLVM exception,
-  см. LICENSE-LLVM-OpenMP
-ONNX Runtime (onnxruntime*.dll) — MIT
+  см. runtime\licenses\LICENSE-LLVM-OpenMP
+ONNX Runtime 1.30 (onnxruntime*.dll) — MIT,
+  см. runtime\licenses\onnxruntime-LICENSE и
+  onnxruntime-ThirdPartyNotices.txt
   https://github.com/microsoft/onnxruntime
-ICU 78.3 (icu*.dll) — Unicode License v3, см. icu-LICENSE
+ICU 78.3 (icu*.dll) — Unicode License v3,
+  см. runtime\licenses\icu-LICENSE
   https://github.com/unicode-org/icu
 FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), сборка BtbN lgpl-shared —
-  LGPL 2.1 or later, см. ffmpeg-LICENSE.txt
+  LGPL 2.1 or later, см. runtime\licenses\ffmpeg-LICENSE.txt
   Исходный код: https://github.com/FFmpeg/FFmpeg (ветка release/8.1)
   Сборка: https://github.com/BtbN/FFmpeg-Builds
 NVIDIA CUDA Runtime и cuBLAS (cudart64_13.dll, cublas64_13.dll,
@@ -19,16 +30,18 @@ NVIDIA CUDA Runtime и cuBLAS (cudart64_13.dll, cublas64_13.dll,
   распространяемые файлы: https://docs.nvidia.com/cuda/eula/
 Microsoft Visual C++ Redistributable (vcruntime140*.dll, vc_redist.x64.exe) —
   лицензия Microsoft на распространяемый код Visual Studio
-Python 3.14 (python314.dll, *.pyd) — PSF License 2.0
-  https://docs.python.org/3/license.html
+Python 3.14 (python314.dll, *.pyd) — PSF License 2.0,
+  см. licenses\python\LICENSE.txt
   В его составе: OpenSSL (libssl-3.dll, libcrypto-3.dll) — Apache-2.0,
-  libffi — MIT, SQLite — public domain
-Пакеты Python: aiohttp — Apache-2.0 и MIT; aiosignal, frozenlist, multidict,
-  propcache, yarl — Apache-2.0; aiohappyeyeballs — PSF-2.0; attrs — MIT;
-  idna — BSD-3-Clause; numpy (с OpenBLAS в numpy.libs) — BSD-3-Clause
+  libffi — MIT, SQLite — public domain и другие (там же)
+Пакеты Python, см. licenses\<пакет>\: aiohttp — Apache-2.0 и MIT;
+  aiosignal, frozenlist, multidict, propcache, yarl — Apache-2.0;
+  aiohappyeyeballs — PSF-2.0; attrs — MIT; idna — BSD-3-Clause;
+  numpy (с OpenBLAS в numpy.libs) — BSD-3-Clause и другие
 Nuitka (компилятор программы): его runtime в StreamTTS.exe — AGPLv3
   с Nuitka Runtime Library Exception, которое разрешает распространять
-  собранную программу под любой лицензией
+  собранную программу под любой лицензией,
+  см. licenses\nuitka\LICENSE-RUNTIME.txt
 
 Модель синтеза (CosyVoice3 0.5B, Apache-2.0) в установщик не входит:
 она скачивается при первом запуске с

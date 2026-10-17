@@ -1,17 +1,29 @@
-StreamTTS for Windows includes third-party software. Licenses:
+StreamTTS for Windows includes third-party software. Licenses are listed
+below; full texts are in the program folder: runtime\licenses\
+(cosyvoice-server and the libraries next to it) and licenses\ (Python
+and its packages).
 
-cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT
+cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT,
+  see runtime\licenses\cosyvoice.cpp-LICENSE and
+  cosyvoice.cpp-THIRD_PARTY_NOTICES.md
   https://github.com/Lourdle/cosyvoice.cpp
-GGML from llama.cpp b11500 (ggml*.dll) — MIT
+  Bundled with it: PCRE2 — BSD-3-Clause WITH PCRE2-exception,
+  see pcre2-LICENCE.md; cpp-httplib — MIT, see cpp-httplib-LICENSE;
+  nlohmann/json — MIT, see nlohmann-json-LICENSE.MIT
+GGML from llama.cpp b11500 (ggml*.dll) — MIT,
+  see runtime\licenses\llama.cpp-LICENSE
   https://github.com/ggml-org/llama.cpp
 LLVM OpenMP (libomp.dll) — Apache-2.0 with LLVM exception,
-  see LICENSE-LLVM-OpenMP
-ONNX Runtime (onnxruntime*.dll) — MIT
+  see runtime\licenses\LICENSE-LLVM-OpenMP
+ONNX Runtime 1.30 (onnxruntime*.dll) — MIT,
+  see runtime\licenses\onnxruntime-LICENSE and
+  onnxruntime-ThirdPartyNotices.txt
   https://github.com/microsoft/onnxruntime
-ICU 78.3 (icu*.dll) — Unicode License v3, see icu-LICENSE
+ICU 78.3 (icu*.dll) — Unicode License v3,
+  see runtime\licenses\icu-LICENSE
   https://github.com/unicode-org/icu
 FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), BtbN lgpl-shared build —
-  LGPL 2.1 or later, see ffmpeg-LICENSE.txt
+  LGPL 2.1 or later, see runtime\licenses\ffmpeg-LICENSE.txt
   Source code: https://github.com/FFmpeg/FFmpeg (branch release/8.1)
   Build: https://github.com/BtbN/FFmpeg-Builds
 NVIDIA CUDA Runtime and cuBLAS (cudart64_13.dll, cublas64_13.dll,
@@ -19,17 +31,18 @@ NVIDIA CUDA Runtime and cuBLAS (cudart64_13.dll, cublas64_13.dll,
   redistributable files: https://docs.nvidia.com/cuda/eula/
 Microsoft Visual C++ Redistributable (vcruntime140*.dll, vc_redist.x64.exe) —
   Microsoft Visual Studio distributable code license
-Python 3.14 (python314.dll, *.pyd) — PSF License 2.0
-  https://docs.python.org/3/license.html
+Python 3.14 (python314.dll, *.pyd) — PSF License 2.0,
+  see licenses\python\LICENSE.txt
   Bundled with it: OpenSSL (libssl-3.dll, libcrypto-3.dll) — Apache-2.0,
-  libffi — MIT, SQLite — public domain
-Python packages: aiohttp — Apache-2.0 and MIT; aiosignal, frozenlist,
-  multidict, propcache, yarl — Apache-2.0; aiohappyeyeballs — PSF-2.0;
-  attrs — MIT; idna — BSD-3-Clause; numpy (with OpenBLAS in numpy.libs) —
-  BSD-3-Clause
+  libffi — MIT, SQLite — public domain and others (same file)
+Python packages, see licenses\<package>\: aiohttp — Apache-2.0 and MIT;
+  aiosignal, frozenlist, multidict, propcache, yarl — Apache-2.0;
+  aiohappyeyeballs — PSF-2.0; attrs — MIT; idna — BSD-3-Clause;
+  numpy (with OpenBLAS in numpy.libs) — BSD-3-Clause and others
 Nuitka (the program's compiler): its runtime in StreamTTS.exe is AGPLv3
   with the Nuitka Runtime Library Exception, which allows distributing
-  the compiled program under any license
+  the compiled program under any license,
+  see licenses\nuitka\LICENSE-RUNTIME.txt
 
 The speech model (CosyVoice3 0.5B, Apache-2.0) is not part of the installer:
 it is downloaded on first launch from
