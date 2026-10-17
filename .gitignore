@@ -7,6 +7,7 @@
 /runtime/
 /packaging/windows/build/
 /packaging/windows/dist/
+/packaging/windows/.inno/
 voice-clips/**/*.wav
 .venv/
 /stream-tts-data/

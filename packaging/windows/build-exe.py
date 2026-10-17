@@ -10,8 +10,9 @@ Python 3.13+ не поддерживает. Первая сборка — нес
 --runtime core|all кладёт в dist/StreamTTS/runtime/ рантайм из build/runtime (build-runtime.py): core — без CUDA,
 all — с CUDA. Так собранную программу можно запустить без установщика; установщик (StreamTTS.iss) берёт рантайм
 сам, из build/runtime.
---setup собирает установщик dist/StreamTTS-Setup-<VERSION>.exe (Inno Setup 6: ISCC из переменной ISCC, PATH или
-стандартных папок установки), --no-build — только установщик из уже собранного dist/StreamTTS.
+--setup собирает установщик dist/StreamTTS-Setup-<VERSION>.exe (Inno Setup 6: ISCC из переменной ISCC, портативной
+установки в packaging/windows/.inno, PATH или стандартных папок установки), --no-build — только установщик из уже
+собранного dist/StreamTTS.
 """
 import argparse, os, shutil, subprocess, sys
 
@@ -46,8 +47,9 @@ def nuitka_args(jobs):
 def iscc():
     pf = [os.environ.get(v, "") for v in ("ProgramFiles(x86)", "ProgramFiles")]
     pf.append(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs"))
-    for p in [os.environ.get("ISCC", ""), shutil.which("iscc") or ""] + [os.path.join(d, "Inno Setup 6", "ISCC.exe")
-                                                                        for d in pf if d]:
+    local = os.path.join(HERE, ".inno", "ISCC.exe")  # innosetup-6.x.exe /PORTABLE=1 /CURRENTUSER /DIR=.inno
+    for p in [os.environ.get("ISCC", ""), local, shutil.which("iscc") or ""] + [
+            os.path.join(d, "Inno Setup 6", "ISCC.exe") for d in pf if d]:
         if p and os.path.isfile(p):
             return p
     sys.exit("нет Inno Setup 6 (ISCC.exe): поставьте его или укажите путь в переменной ISCC")
