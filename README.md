@@ -158,24 +158,26 @@ curl -X POST http://localhost:8080/speaker/save \
 ### Готовые голоса
 
 В `voices/` лежат голоса, собранные в этом проекте. Они подключаются при старте, как любые голоса из `./voices`.
+Каталог: [docs/voices.md](docs/voices.md).
 
-- **Warcraft III (58 голосов `wc3-*`)** из оригинального русского дубляжа (RoC + TFT, 2002–2003): персонажи кампаний
+- **Warcraft III (64 голоса `wc3-*`)** из оригинального русского дубляжа (RoC + TFT, 2002–2003): персонажи кампаний
   (`wc3-arthas`, `wc3-thrall`, `wc3-jaina`, `wc3-illidan`, `wc3-narrator`…) и юниты (`wc3-peasant`, `wc3-footman`,
-  `wc3-peon`…). Полный список, откуда взяты образцы и как подбирать новые: [docs/voices-wc3.md](docs/voices-wc3.md).
-- **Мемные голоса для стрима** (как в JeetBot TTS): `dota2-pudge`, `portal-glados`, `stalker-bandit`, `***`,
-  `***`, `***`, `neco-arc`, `jeetbot-*`. Источники, инструменты и эффект «житель Minecraft»:
-  [docs/voices-meme.md](docs/voices-meme.md). Голоса реальных людей только для шуток на стриме: не выдавайте синтез
-  за их настоящие слова.
+  `wc3-peon`…). Полный список и откуда взяты реплики: [docs/voices-wc3.md](docs/voices-wc3.md).
+- **Другие игры**: `dota2-pudge`, `portal-glados`, `stalker-bandit`, `villager`, `neco-arc`, `neco-arc-angry`,
+  `neco-arc-ja`, `***`.
+- **Стримеры**: `***`, `***`. Голоса реальных людей только для шуток на стриме: не выдавайте синтез за
+  их настоящие слова.
 
 ```bash
-curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json' \
-  -d '{"text":"Работа никогда не заканчивается.","voice":"wc3-thrall","mode":"zero-shot","response_format":"wav"}' \
-  -o out.wav
+curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json'   -d '{"text":"Работа никогда не заканчивается.","voice":"wc3-thrall","mode":"zero-shot","response_format":"wav"}'   -o out.wav
 ```
 
+Как подбираются образцы (варианты, синтез тестовых фраз, оценки и модель эмоций, выбор на слух на локальной
+странице, установка): [docs/voice-pipeline.md](docs/voice-pipeline.md).
+
 Свой набор голосов: положите пары `<имя>.wav` + `<имя>.txt` (точная расшифровка) в папку и выполните
-`scripts/import-voices.sh <папка>`. С `--force` скрипт пересобирает уже сохранённые голоса: сначала выгружает голос из
-памяти сервера, иначе тот отвечает 409 на повторное имя.
+`scripts/import-voices.sh <папка>`. С `--force` скрипт пересобирает уже сохранённые голоса (все или только
+перечисленные после флага): сначала выгружает голос из памяти сервера, иначе тот отвечает 409 на повторное имя.
 
 ### Озвучка наград Twitch (`stream-tts`)
 
@@ -253,7 +255,8 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 - голоса, созданные через WebUI или API без **Save speaker**, живут только в памяти и пропадут после перезапуска.
 
 Если формат голосов сменится в новой версии cosyvoice.cpp, их можно пересобрать из исходных образцов.
-Для этого перенесите `voice-refs/` и выполните `scripts/import-voices.sh voice-refs/wc3`. Здесь фронтенд уже нужен.
+Для этого перенесите `voice-refs/` и выполните `scripts/import-voices.sh voice-refs/<набор>` для каждого набора
+(`wc3`, `games`, `streamers`). Здесь фронтенд уже нужен.
 
 ## Производительность
 
@@ -286,17 +289,18 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой
 │   └── import-voices.sh   # регистрация голосов из пар .wav + .txt и сохранение в voices/
-├── tools/                 # подбор образцов голосов, запуск из корня проекта
-│   ├── wc3/               # Warcraft III: нарезка, отслушивание, A/B синтеза, выбор (docs/voices-wc3.md)
-│   └── meme/              # мемные голоса: сбор реплик, отбор по голосу, сравнение (docs/voices-meme.md)
+├── tools/                 # подбор образцов голосов (docs/voice-pipeline.md), запуск из корня проекта
+│   ├── voices/            # общее: страница выбора, синтез и оценки, модель эмоций и её сверка на слух, CAM++
+│   ├── wc3/               # реплики Warcraft III: нарезка кандидатов, проверка текстов (docs/voices-wc3.md)
+│   └── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
 ├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts
-├── docs/                  # stream-tts.md, voices-wc3.md, voices-meme.md
+├── docs/                  # voice-pipeline.md, voices.md, voices-wc3.md, stream-tts.md
 │
 │   Данные (в git попадают только тексты и json):
 ├── models/                # модели (volume, только чтение)
 ├── voices/                # сохранённые голоса .gguf (volume)
-├── voice-refs/            # итоговые образцы голосов (.wav + .txt) для пересборки
-├── voice-clips/           # кандидаты в образцы, оценки и выбор
+├── voice-refs/            # итоговые образцы голосов (.wav + .txt) по наборам: wc3, games, streamers
+├── voice-clips/           # варианты образцов, их синтез, оценки и выбор по наборам
 ├── voice-origs/           # сырые звуковые паки
 ├── samples/               # тестовые аудио
 └── stream-tts-data/       # настройки, токены и история stream-tts (volume)

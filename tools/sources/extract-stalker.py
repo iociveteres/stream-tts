@@ -1,10 +1,10 @@
 """Достаёт файлы из архивов S.T.A.L.K.E.R. (Clear Sky / Call of Pripyat: resources.db*, *.xdb*).
 
 Использование:
-    python tools/meme/extract-stalker.py <папка resources> <регэксп пути> <куда> [--list]
+    python tools/sources/extract-stalker.py <папка resources> <регэксп пути> <куда> [--list]
 
 Пример (фразы бандитов):
-    python tools/meme/extract-stalker.py "E:/Games/steamapps/common/Stalker Call of Pripyat/resources" \
+    python tools/sources/extract-stalker.py "E:/Games/steamapps/common/Stalker Call of Pripyat/resources" \
         "characters_voice/human_0./bandit/" voice-origs/stalker-cop
 
 Формат — по исходникам OpenXRay (xrCore/LocatorAPI.cpp, LzHuf.cpp): архив — цепочка чанков

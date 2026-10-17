@@ -7,8 +7,8 @@ from .cosy import BACKGROUND, PREVIEW
 log = logging.getLogger("voices")
 
 DEMO_SEED = 7
-GROUPS = {"wc3": "Warcraft III", "jeetbot": "JeetBot", "dota2": "Dota 2", "portal": "Portal",
-          "stalker": "S.T.A.L.K.E.R."}
+# Группы на странице для зрителей — наборы voice-refs/<набор>/ (docs/voice-pipeline.md)
+GROUPS = {"wc3": "Warcraft III", "games": "Игры", "streamers": "Стримеры"}
 
 
 class Preempted(Exception):
@@ -25,7 +25,7 @@ class Voices:
         self.index = store.read_json(self.index_path, {})   # голос -> {phrase, lufs, ts}
         self.wake = asyncio.Event()
         self.progress = dict(todo=0, current="", error="")
-        self._manifests = (0, {})
+        self._manifests = (0, {}, {})
         self.preempted = False
 
     # --- список ---
@@ -58,23 +58,31 @@ class Voices:
             self.wake.set()
 
     # --- эффекты ---
-    def manifests(self):
-        """post из voice-refs/*/manifest.json (перечитывается при изменении файлов)."""
+    def _read_manifests(self):
+        """voice-refs/*/manifest.json (перечитываются при изменении файлов): post и набор голоса."""
         files = glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "manifest.json"))
         stamp = sum(os.path.getmtime(f) for f in files)
         if stamp != self._manifests[0]:
-            merged = {}
+            merged, sets = {}, {}
             for f in files:
-                merged.update(store.read_json(f, {}))
-            self._manifests = (stamp, merged)
-        return self._manifests[1]
+                data = store.read_json(f, {})
+                merged.update(data)
+                sets.update(dict.fromkeys(data, os.path.basename(os.path.dirname(f))))
+            self._manifests = (stamp, merged, sets)
+        return self._manifests
+
+    def manifests(self):
+        return self._read_manifests()[1]
+
+    def set_of(self, voice):
+        return self._read_manifests()[2].get(voice, "")
 
     def post(self, voice):
         p = self.manifests().get(voice, {}).get("post")
         return p if isinstance(p, list) and p else None
 
     async def apply_post(self, voice, x, text):
-        """Эффект поверх синтеза, как в tools/meme/meme-pick.py: python <скрипт> <вход.wav> <выход.wav> <аргументы>."""
+        """Эффект поверх синтеза, как в tools/voices/synth.py: python <скрипт> <вход.wav> <выход.wav> <аргументы>."""
         post = self.post(voice)
         with tempfile.TemporaryDirectory() as tmp:
             src, dst = os.path.join(tmp, "in.wav"), os.path.join(tmp, "out.wav")
@@ -163,15 +171,9 @@ class Voices:
     def page(self, demo_prefix="demos/"):
         groups = {}
         names = sorted(self.enabled())
-        prefix = lambda n: n.split("-")[0] if "-" in n else ""
-        counts = {}
-        for n in names:
-            counts[prefix(n)] = counts.get(prefix(n), 0) + 1
-        for n in names:
-            p = prefix(n)
-            key = p if p and counts[p] >= 3 else ""
-            groups.setdefault(key, []).append(n)
-        order = sorted(groups, key=lambda k: (k == "", GROUPS.get(k, k)))
+        for n in names:  # голоса без образца в voice-refs (созданные в WebUI) — в «Другие»
+            groups.setdefault(self.set_of(n), []).append(n)
+        order = sorted(groups, key=lambda k: (k == "", list(GROUPS).index(k) if k in GROUPS else len(GROUPS), k))
         sections = []
         for key in order:
             cards = []

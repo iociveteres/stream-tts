@@ -6,7 +6,7 @@
       "runtimeExecutable": "python",
       "runtimeArgs": [
         "tools/wc3/review.py",
-        "b01"
+        "b02"
       ],
       "port": 8765
     },
@@ -14,16 +14,15 @@
       "name": "pick",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "tools/wc3/pick.py",
-        "b02"
+        "tools/voices/pick.py"
       ],
       "port": 8766
     },
     {
-      "name": "meme",
+      "name": "emotion-eval",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "tools/meme/meme-pick.py"
+        "tools/voices/emotion-eval.py"
       ],
       "port": 8767
     },

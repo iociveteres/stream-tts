@@ -1,7 +1,7 @@
 """Режет длинную запись (YouTube, летсплей, стрим) на фразы с расшифровкой — для build-ref.py.
 
 Использование (из venv проекта, нужен faster-whisper; для --demucs ещё demucs):
-    .venv/Scripts/python.exe tools/meme/transcribe-lines.py <аудио...> --out <папка> [--demucs] [--lang ru]
+    .venv/Scripts/python.exe tools/sources/transcribe-lines.py <аудио...> --out <папка> [--demucs] [--lang ru]
         [--start 1:23] [--end 4:56]
 
 На выходе <папка>/NNN.wav (24 кГц моно) и lines.json: {file, text, src, start, end, lp}.

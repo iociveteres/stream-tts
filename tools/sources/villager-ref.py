@@ -1,6 +1,6 @@
 """Образец голоса жителя Minecraft для zero-shot: звуки жителя один за другим, как поток речи.
 
-usage: python tools/meme/villager-ref.py <выход.wav> [--len 10] [--gap 0.04-0.09] [--phrase 5] [--pitch 0.92-1.1]
+usage: python tools/sources/villager-ref.py <выход.wav> [--len 10] [--gap 0.04-0.09] [--phrase 5] [--pitch 0.92-1.1]
                               [--text hm|syl] [--seed 1]
 
 Берутся idle, yes, no и haggle из voice-origs/minecraft-villager/ (ассеты Minecraft). У каждого звука
@@ -9,7 +9,7 @@ usage: python tools/meme/villager-ref.py <выход.wav> [--len 10] [--gap 0.04
 порядок случайный без повторов подряд. Паузы между звуками — --gap, после каждых --phrase звуков
 пауза чуть длиннее, как между фразами.
 
-Рядом пишется <выход>.txt — «текст» образца для import-voices.sh / meme-pick.py:
+Рядом пишется <выход>.txt — «текст» образца для tools/voices/pick.py --add:
   hm   один слог-междометие на звук («Хм», «Хрм», «Мх-м»), фразы через точку;
   syl  два-три коротких слога на звук («хму-хм», «хрн-хм») — ближе к числу слогов в речи.
 Нужен numpy и ffmpeg.

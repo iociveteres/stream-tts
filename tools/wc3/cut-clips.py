@@ -1,16 +1,24 @@
 """Нарезает кандидатов в образцы голоса из звуков Warcraft III для отслушивания.
 
-usage: python tools/wc3/cut-clips.py <batch> [voice_id ...]
-  <batch>     имя партии, например b01: результат в voice-clips/wc3/<batch>/
+usage: .venv/Scripts/python.exe tools/wc3/cut-clips.py <batch> [voice_id ...] [--kinds SDUCA]
+       .venv/Scripts/python.exe tools/wc3/cut-clips.py --pools [voice_id ...]
+  <batch>     имя партии, например b03: результат в voice-clips/wc3/<batch>/
   voice_id    только эти голоса (по умолчанию все из HEROES и UNITS)
+  --kinds     какие виды кандидатов резать (по умолчанию все), например CA — только варианты по подаче
+  --pools     только обновить pools.json (реплики для sim в tools/voices/synth.py), без нарезки
+Дальше: python tools/voices/pick.py --add-batch wc3 <batch>, процесс целиком — docs/voice-pipeline.md.
 
-На голос не больше трёх кандидатов (по итогам A/B партии b01, synth-ab.py):
+Виды кандидатов (обычные — по итогам A/B пилота b01):
   S00      текущий образец из voice-refs/wc3, для сравнения
   D01 D02  герои: реплики из диалогов кампаний, 10-15 с, из соседних строк одной миссии
            (одна сцена, одна подача), две разные миссии. Ответы героя как юнита звучат
            хуже диалогов, а клипы 20-30 с выигрыша не дают.
   U01      юниты: короткие ответы всех типов (нейтральные, боевые, шутки) подряд, 15-25 с.
            Герою без диалогов режется так же.
+  C01      спокойная подача, A01 — подача с напором (ставится отдельным голосом <голос>-angry).
+           По энергии реплик из tools/voices/emotions.py: у героя — окно диалога с ровной подачей,
+           у юнита — самые спокойные или самые напористые ответы. Берутся, только если энергия
+           отличается от D/U хотя бы на MOOD_DIFF, A — ещё и с энергией от MOOD_LOUD («напор»).
 
 Текст реплики, по убыванию доверия (всё в voice-clips/wc3/):
   text-fixes.json        проверенные на слух правки {путь к исходнику: текст}
@@ -24,9 +32,10 @@ wikiquote.json (ru.wikiquote.org/wiki/Warcraft_III:_Reign_of_Chaos). При ра
 
 Метки фраз из review.py (phrase-tags.json): фразы с «не брать» в нарезку не попадают.
 
-Нужен faster-whisper (GPU: ещё nvidia-cublas-cu12 и nvidia-cudnn-cu12) и ffmpeg в PATH.
+Нужен faster-whisper (GPU: ещё nvidia-cublas-cu12 и nvidia-cudnn-cu12) и ffmpeg в PATH, для C и A — torch и
+transformers (venv проекта).
 """
-import datetime, difflib, glob, json, os, re, shutil, site, subprocess, sys, tempfile
+import datetime, difflib, glob, importlib.util, json, os, random, re, shutil, site, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
@@ -39,6 +48,10 @@ UNIT = (15.0, 25.0)      # длина клипа из ответов юнита,
 GAP = 0.25            # пауза между склеенными репликами, с
 SCENE_GAP = 10        # реплики героя дальше этого по номеру строки считаются другой сценой
 N_DLG = 2             # кандидатов из диалогов на героя
+POOL = 60             # реплик на «голос в целом» (pools.json): центр уже устойчив, а считать быстрее
+MOOD_DIFF = 0.08      # вариант по подаче (C, A) нужен, если энергия отличается от D/U хотя бы на столько
+MOOD_SPREAD = 0.2     # окно диалога для C/A — с ровной подачей: разброс энергии реплик не больше
+MOOD_LOUD = 0.78      # A ставится как <голос>-angry, поэтому нужен настоящий напор (порог LOUD в emotions.py)
 
 # голос -> (имя в файлах диалогов, регулярка по пути диалога или None, папки ответов в units/, название)
 # Папка ответов: "папка[:регулярка по имени файла[:метка для тега]]".
@@ -287,6 +300,23 @@ def dialogue_lines(name, folder):
 
 def dialogue_candidates(pieces, name, folder):
     """Окна из соседних реплик одной сцены (D), лучшие — из разных миссий."""
+    windows = dialogue_windows(pieces, name, folder)
+    chosen, used = [], set()
+    ranked = sorted(windows, key=lambda w: -w["score"])
+    for one_per_mission in (True, False):
+        for w in ranked:
+            rels = {p["rel"] for p in w["items"]}
+            if len(chosen) >= N_DLG or rels & used or w in chosen:
+                continue
+            if one_per_mission and any(c["tag"] == w["tag"] for c in chosen):
+                continue
+            chosen.append(w)
+            used |= rels
+    return [dict(kind="D", **w) for w in chosen]
+
+
+def dialogue_windows(pieces, name, folder):
+    """Все окна DIALOGUE с из соседних годных реплик одной сцены, с оценкой разборчивости."""
     lo, hi = DIALOGUE
     windows = []
     for mission, lines in dialogue_lines(name, folder).items():
@@ -304,18 +334,7 @@ def dialogue_candidates(pieces, name, folder):
                 score = (sum(p["lp"] for p in run) / len(run) - 0.05 * (len(run) - 1)
                          - 0.01 * abs(total(run) - (lo + hi) / 2))
                 windows.append(dict(score=score, items=run, tag="dlg:" + mission))
-    chosen, used = [], set()
-    ranked = sorted(windows, key=lambda w: -w["score"])
-    for one_per_mission in (True, False):
-        for w in ranked:
-            rels = {p["rel"] for p in w["items"]}
-            if len(chosen) >= N_DLG or rels & used or w in chosen:
-                continue
-            if one_per_mission and any(c["tag"] == w["tag"] for c in chosen):
-                continue
-            chosen.append(w)
-            used |= rels
-    return [dict(kind="D", **w) for w in chosen]
+    return windows
 
 
 def category(stem):
@@ -337,7 +356,7 @@ def unit_files(folder, pattern=""):
 
 
 def voice_pool(pieces, vid):
-    """Все годные реплики голоса (rel): из них режутся кандидаты, по ним synth-ab.py считает «голос в целом»."""
+    """Все годные реплики голоса (rel): из них режутся кандидаты, из них же pools.json для sim."""
     if vid in HEROES:
         name, folder, unit_dirs, _ = HEROES[vid]
         rels = [rel for lines in dialogue_lines(name, folder).values() for _, rel in lines]
@@ -373,6 +392,70 @@ def unit_candidates(pieces, folder, pattern="", label=None):
     return [dict(kind="U", items=run, tag="unit:" + (label or folder.split("/")[-1]))]
 
 
+def write_pools(pieces, voices):
+    """pools.json: реплики «голоса в целом» для sim в tools/voices/synth.py, пути от корня проекта.
+    Та же случайная выборка POOL реплик, что считал прежний synth-ab.py, поэтому оценки партий сравнимы."""
+    path = os.path.join(CLIPS, "pools.json")
+    pools = load_json(path, {})
+    origs = os.path.relpath(ORIGS, ROOT).replace("\\", "/")
+    for vid in voices:
+        pool = voice_pool(pieces, vid)
+        pools[vid] = [f"{origs}/{rel}" for rel in random.Random(vid).sample(pool, min(POOL, len(pool)))]
+    save_json(path, pools)
+
+
+def mood(emo, items):
+    """Средняя энергия реплик (emotions.py) и её разброс."""
+    a = [emo(os.path.join(ORIGS, p["rel"]))["a"] for p in items]
+    return sum(a) / len(a), max(a) - min(a)
+
+
+def mood_candidates(pieces, vid, regular, emo, kinds):
+    """Варианты по подаче: C — самая спокойная, A — с самым сильным напором (ставится как <голос>-angry).
+    Герой — окно диалога одной сцены с ровной подачей, юнит — его реплики по энергии. Вариант берётся, только
+    если энергия отличается от обычных кандидатов (D, U) хотя бы на MOOD_DIFF: иначе он их повторяет;
+    A — ещё и только с энергией от MOOD_LOUD."""
+    base = [mood(emo, c["items"])[0] for c in regular]
+    base = sum(base) / len(base) if base else None
+    taken = [{p["rel"] for p in c["items"]} for c in regular]
+    sign = {"C": -1, "A": 1}
+    out = []
+    windows = dialogue_windows(pieces, *HEROES[vid][:2]) if vid in HEROES else []
+    if windows:
+        for w in windows:
+            w["a"], w["spread"] = mood(emo, w["items"])
+        windows = [w for w in windows if {p["rel"] for p in w["items"]} not in taken]
+        smooth = [w for w in windows if w["spread"] <= MOOD_SPREAD] or windows
+        for kind in kinds:
+            if smooth:
+                w = max(smooth, key=lambda w: sign[kind] * w["a"])
+                out.append(dict(kind=kind, items=w["items"], tag=w["tag"], a=w["a"]))
+    else:
+        dirs = [d.split(":", 2)[:2] for d in HEROES[vid][2]] if vid in HEROES else [UNITS[vid][:2]]
+        lines, seen = [], set()
+        for d in dirs:
+            for rel in unit_files(*d):
+                p = dict(rel=rel, **pieces.info(rel))
+                key = re.sub(r"[^а-яё]", "", p["text"].lower())  # pissed6 = pissed1
+                if p["ok"] and key not in seen:
+                    seen.add(key)
+                    p["a"] = emo(os.path.join(ORIGS, rel))["a"]
+                    lines.append(p)
+        for kind in kinds:
+            run = []
+            for p in sorted(lines, key=lambda p: sign[kind] * -p["a"]):
+                if total(run + [p]) <= UNIT[1]:
+                    run.append(p)
+                if total(run) >= UNIT[0]:
+                    break
+            if total(run) >= 6:
+                run.sort(key=lambda p: p["rel"])
+                out.append(dict(kind=kind, items=run, tag="unit:" + dirs[0][0].split("/")[-1],
+                                a=sum(p["a"] for p in run) / len(run)))
+    return [c for c in out if (base is None or sign[c["kind"]] * (c["a"] - base) >= MOOD_DIFF)
+            and (c["kind"] != "A" or c["a"] >= MOOD_LOUD)]
+
+
 def sentence(text):
     text = text.strip()
     return text if re.search(r"[.!?…]$", text) else text + "."
@@ -401,13 +484,40 @@ def write_clip(pieces, items, dst):
     return parts
 
 
+def emotions():
+    """Оценщик подачи из tools/voices/emotions.py (нужны torch и transformers)."""
+    spec = importlib.util.spec_from_file_location("emotions", os.path.join(ROOT, "tools", "voices", "emotions.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.Emotions()
+
+
 def main():
-    batch = sys.argv[1]
-    only = sys.argv[2:]
+    args = sys.argv[1:]
+    kinds = list("SDUCA")
+    if "--kinds" in args:
+        i = args.index("--kinds")
+        kinds = args[i + 1].replace(",", "").upper()
+        del args[i:i + 2]
+    pools_only = "--pools" in args
+    if pools_only:
+        args.remove("--pools")
+    batch, only = (None, args) if pools_only else (args[0], args[1:])
     voices = [v for v in list(HEROES) + list(UNITS) if not only or v in only]
     unknown = set(only) - set(HEROES) - set(UNITS)
     if unknown:
         sys.exit(f"Неизвестные голоса: {' '.join(sorted(unknown))}")
+    if pools_only:
+        tmp = tempfile.mkdtemp()
+        pieces = Pieces(tmp)
+        try:
+            write_pools(pieces, voices)
+        finally:
+            pieces.save()
+            shutil.rmtree(tmp, ignore_errors=True)
+        return print(f"pools.json: {len(voices)} голосов")
+    mood_kinds = [k for k in "CA" if k in kinds]
+    emo = emotions() if mood_kinds else None
 
     out = os.path.join(CLIPS, batch)
     os.makedirs(out, exist_ok=True)
@@ -435,9 +545,13 @@ def main():
             else:
                 folder, pattern, title = UNITS[vid]
                 found = unit_candidates(pieces, folder, pattern)
+            if mood_kinds:
+                found += mood_candidates(pieces, vid, found, emo, mood_kinds)
+                emo.save()
+            found = [c for c in found if c["kind"] in kinds]
 
             ref = os.path.join(REFS, vid)
-            if os.path.exists(ref + ".wav"):
+            if "S" in kinds and os.path.exists(ref + ".wav"):
                 cid = f"{vid}.S00"
                 rel = f"voice-refs/wc3/{vid}.wav"
                 text = pieces.fixes.get(rel) or open(ref + ".txt", encoding="utf-8").read().strip()
@@ -456,8 +570,10 @@ def main():
                                  lp=round(sum(p["lp"] for p in c["items"]) / len(c["items"]), 2),
                                  parts=parts)
             n = sum(1 for r in rows.values() if r["voice"] == vid)
-            print(f"== {vid}: {n} кандидатов", flush=True)
+            print(f"== {vid}: {n} кандидатов" + "".join(f", {c['kind']} энергия {c['a']:.2f}"
+                                                       for c in found if "a" in c), flush=True)
             pieces.save()
+        write_pools(pieces, voices)
     finally:
         pieces.save()
         shutil.rmtree(tmp, ignore_errors=True)
@@ -466,7 +582,8 @@ def main():
     save_json(os.path.join(out, "clips.json"), rows)
     save_json(os.path.join(out, "batch.json"), dict(
         created=datetime.date.today().isoformat(), dialogue=DIALOGUE, unit=UNIT, gap=GAP,
-        scene_gap=SCENE_GAP, dialogue_per_voice=N_DLG))
+        scene_gap=SCENE_GAP, dialogue_per_voice=N_DLG, kinds="".join(kinds),
+        mood_diff=MOOD_DIFF, mood_spread=MOOD_SPREAD, mood_loud=MOOD_LOUD))
     write_ratings(out, rows)
     print(f"Готово: {len(rows)} кандидатов в {out}")
 
