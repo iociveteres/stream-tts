@@ -1,7 +1,9 @@
 """Голоса: список с сервера, включение и громкость, эффекты post, примеры звучания и страница для зрителей."""
-import asyncio, glob, hashlib, html, io, json, logging, math, os, sys, tempfile, time, zipfile
+import asyncio, glob, hashlib, html, importlib.util, io, json, logging, math, os, re, time, zipfile
 
-from . import audio, config, store
+import numpy as np
+
+from . import audio, config, paths, store
 from .cosy import BACKGROUND, PREVIEW
 
 log = logging.getLogger("voices")
@@ -13,6 +15,26 @@ GROUPS = {"wc3": "Warcraft III", "games": "Игры", "streamers": "Стриме
 
 class Preempted(Exception):
     pass
+
+
+_effects = {}  # путь -> (mtime, модуль)
+
+
+def load_effect(path):
+    """Скрипт эффекта как модуль (importlib), перезагружается при изменении файла."""
+    mtime = os.path.getmtime(path)
+    cached = _effects.get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    name = "streamtts_fx_" + hashlib.sha1(path.encode()).hexdigest()[:8]
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    if not callable(getattr(mod, "apply", None)):
+        raise RuntimeError(f"в эффекте {path} нет функции apply(звук, аргументы)")
+    mod.FFMPEG = paths.ffmpeg()
+    _effects[path] = (mtime, mod)
+    return mod
 
 
 class Voices:
@@ -59,8 +81,10 @@ class Voices:
 
     # --- эффекты ---
     def _read_manifests(self):
-        """voice-refs/*/manifest.json (перечитываются при изменении файлов): post и набор голоса."""
-        files = glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "manifest.json"))
+        """voice-refs/*/manifest.json проекта и <голоса>/<набор>/manifest.json установленных наборов
+        (перечитываются при изменении файлов): post и набор голоса."""
+        files = (glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "manifest.json"))
+                 + glob.glob(os.path.join(paths.VOICES, "*", "manifest.json")))
         stamp = sum(os.path.getmtime(f) for f in files)
         if stamp != self._manifests[0]:
             merged, sets = {}, {}
@@ -82,19 +106,20 @@ class Voices:
         return p if isinstance(p, list) and p else None
 
     async def apply_post(self, voice, x, text):
-        """Эффект поверх синтеза, как в tools/voices/synth.py: python <скрипт> <вход.wav> <выход.wav> <аргументы>."""
+        """Эффект поверх синтеза, как в tools/voices/synth.py, но в этом процессе: у скрипта эффекта
+        вызывается apply(звук, аргументы). Звук на входе и выходе проходит через PCM16, как раньше через
+        WAV-файлы, поэтому результат совпадает с запуском скрипта из командной строки."""
         post = self.post(voice)
-        with tempfile.TemporaryDirectory() as tmp:
-            src, dst = os.path.join(tmp, "in.wav"), os.path.join(tmp, "out.wav")
-            await audio.write_wav(src, x)
-            args = [a.replace("{text}", text) for a in post[1:]]
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, os.path.join(config.PROJECT, post[0]), src, dst, *args,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            _, err = await proc.communicate()
-            if proc.returncode:
-                raise RuntimeError(f"эффект {post[0]}: {err.decode(errors='replace')[-300:]}")
-            return await audio.decode_file(dst)
+        # manifest.json приходит и с наборами голосов из zip: запускать можно только эффекты из effects/
+        if not re.fullmatch(r"effects/[\w.-]+\.py", post[0]):
+            raise RuntimeError(f"эффект {post[0]}: допустимы только скрипты effects/*.py")
+        fx = load_effect(paths.resource(post[0]))
+        args = [a.replace("{text}", text) for a in post[1:]]
+        try:
+            y = await asyncio.to_thread(fx.apply, audio.pcm16(x), args)
+        except (Exception, SystemExit) as e:  # SystemExit: argparse в эффекте при неверных аргументах
+            raise RuntimeError(f"эффект {post[0]}: {e}") from e
+        return audio.pcm16(np.clip(y, -1, 1))
 
     # --- примеры и калибровка ---
     def demo_path(self, voice):

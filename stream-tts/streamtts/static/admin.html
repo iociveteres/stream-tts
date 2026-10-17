@@ -19,6 +19,7 @@
   <button data-tab="queue" class="on">Очередь</button>
   <button data-tab="twitch">Twitch</button>
   <button data-tab="voices">Голоса</button>
+  <button data-tab="server" hidden>Сервер</button>
   <button data-tab="settings">Настройки</button>
   <button data-tab="stats">Статистика</button>
 </nav>
@@ -131,6 +132,59 @@
       <button type="button" id="demo-rebuild">Пересинтезировать все</button>
     </form>
     <p id="demo-progress" class="muted small"></p>
+  </div>
+</section>
+
+<!-- ============ Сервер (встроенный cosyvoice-server: модель, устройство, наборы голосов) ============ -->
+<section id="tab-server" class="tab">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h2>Модель</h2>
+        <p class="muted small">CosyVoice3 0.5B с Hugging Face (<code>Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF</code>).
+          Скачивается один раз, прерванная загрузка продолжается с того же места.
+          Папка: <code id="models-dir"></code></p>
+        <ul id="models" class="setlist"></ul>
+        <form id="model-form" class="row end mt">
+          <label class="grow">Квантование <select name="quant" id="quant"></select></label>
+          <button class="primary" id="model-download">Скачать</button>
+          <button type="button" id="model-cancel" class="danger" hidden>Отменить</button>
+        </form>
+        <label class="check small mt"><input type="checkbox" id="frontend"> ONNX-фронтенд int8 (~240 МБ): нужен только
+          для создания голосов из аудио, для озвучки не нужен</label>
+        <div id="dl" class="dl mt" hidden>
+          <div class="track"><div class="fill" id="dl-fill"></div></div>
+          <p id="dl-text" class="small"></p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Наборы голосов</h2>
+        <p class="muted small">Набор — zip с голосами <code>*.gguf</code> и <code>manifest.json</code> (названия,
+          эффекты). Имя набора — папка внутри архива или имя файла; на странице для зрителей это группа.
+          Повторная установка заменяет набор. Пока голоса ставятся, синтез остановлен на несколько секунд.
+          Папка: <code id="voices-dir"></code></p>
+        <ul id="sets" class="setlist"></ul>
+        <div class="row mt">
+          <input type="file" id="set-file" accept=".zip,application/zip" class="grow">
+          <button id="set-import" class="primary">Установить</button>
+        </div>
+        <p id="set-result" class="small"></p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Устройство синтеза</h2>
+        <form id="backend-form" class="radios"></form>
+        <p class="muted small">Видеокарта синтезирует в 3–4 раза быстрее реального времени, процессор — в 4–9 раз
+          медленнее: для живого стрима нужна видеокарта. Vulkan работает на видеокартах NVIDIA, AMD и Intel; первая
+          фраза на нём после установки может синтезироваться до минуты (готовятся шейдеры), дальше быстро.</p>
+        <p id="backend-lock" class="warn small" hidden></p>
+      </div>
+      <div class="card">
+        <h2>Состояние сервера</h2>
+        <div id="runtime-info" class="small"></div>
+      </div>
+    </div>
   </div>
 </section>
 

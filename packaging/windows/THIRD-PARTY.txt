@@ -1,0 +1,19 @@
+Stream TTS для Windows включает сторонние программы. Их лицензии:
+
+cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT
+  https://github.com/Lourdle/cosyvoice.cpp
+GGML из llama.cpp b11500 (ggml*.dll) — MIT
+  https://github.com/ggml-org/llama.cpp
+LLVM OpenMP (libomp.dll) — Apache-2.0 with LLVM exception, см. LICENSE-LLVM-OpenMP
+ONNX Runtime (onnxruntime*.dll) — MIT
+  https://github.com/microsoft/onnxruntime
+ICU 78.3 (icu*.dll) — Unicode License v3, см. icu-LICENSE
+  https://github.com/unicode-org/icu
+FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), сборка BtbN lgpl-shared — LGPL 2.1 or later, см. ffmpeg-LICENSE.txt.
+  Исходный код: https://github.com/FFmpeg/FFmpeg (ветка release/8.1), сборка: https://github.com/BtbN/FFmpeg-Builds
+NVIDIA CUDA Runtime и cuBLAS (cudart64_13.dll, cublas64_13.dll, cublasLt64_13.dll; компонент CUDA) —
+  NVIDIA CUDA Toolkit EULA, распространяемые файлы: https://docs.nvidia.com/cuda/eula/
+Python и пакеты stream-tts (aiohttp, numpy и зависимости) — их лицензии лежат в папке _internal программы.
+
+Модель синтеза (CosyVoice3 0.5B, Apache-2.0) в установщик не входит: она скачивается при первом запуске с
+https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF

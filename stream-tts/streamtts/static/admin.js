@@ -79,7 +79,7 @@ function renderAll() {
 }
 function renderLive() {
   renderHeader(); renderQueue(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
-  renderStreamNote();
+  renderStreamNote(); renderServer();
 }
 
 // --- шапка ---
@@ -93,7 +93,7 @@ function renderHeader() {
   const pills = [pill(...tw, t.error)];
   if (t.state === "ok") pills.push(pill("EventSub", t.ws === "connected" ? "good" : "warn", t.ws));
   pills.push(pill(c.ok ? (c.busy ? "cosyvoice: синтез" : "cosyvoice") : "cosyvoice недоступен",
-    c.ok ? "good" : "bad", c.ok ? c.url : c.error));
+    c.ok ? "good" : "bad", c.ok ? c.url + runtimeInfo(c.runtime) : c.error));
   pills.push(pill(!ov.active ? "оверлей не подключён" : ov.ready ? "оверлей" : "оверлей ждёт клика",
     !ov.active ? "bad" : ov.ready ? "good" : "warn"));
   if (!wsOnline) pills.push(pill("нет связи с сервисом", "bad"));
@@ -103,7 +103,10 @@ function renderHeader() {
   const banner = [];
   if (t.state === "expired") banner.push("Вход в Twitch истёк: войдите заново на вкладке Twitch. Пока входа нет, " +
     "активации не обрабатываются, баллы за них вернутся после входа.");
-  if (c.ok === false) banner.push(`cosyvoice недоступен (${c.url}): ${c.error}`);
+  if (c.ok === false && S.setup && !S.setup.models.length)
+    banner.push(h("span", {}, "Модель синтеза не установлена: скачайте её на вкладке ",
+      h("a", { href: "#server" }, "«Сервер»"), "."));
+  else if (c.ok === false) banner.push(`cosyvoice недоступен (${c.url}): ${c.error}`);
   $("#banner").hidden = !banner.length;
   $("#banner").replaceChildren(...banner.map(b => h("div", {}, b)));
 }
@@ -367,6 +370,106 @@ function renderDemoProgress() {
 }
 
 // --- настройки ---
+// --- сервер (режим managed): модель, устройство, наборы голосов ---
+const fmtMB = b => fmtNum(b / 1048576, 0) + " МБ";
+const fmtDur = s => s < 60 ? `${Math.ceil(s)} с` : `${Math.round(s / 60)} мин`;
+const BACKEND_NAMES = { auto: "Автоматически", cuda: "Видеокарта NVIDIA (CUDA)", vulkan: "Видеокарта (Vulkan)", cpu: "Процессор" };
+const RT_STATES = { waiting: "ждёт", starting: "запускается", running: "работает", crashed: "упал, перезапуск",
+  stopped: "остановлен" };
+let quantsFilled = false, backendKey = "";
+function renderServer() {
+  const st = S.setup, rt = S.cosy.runtime;
+  $('#tabs [data-tab="server"]').hidden = !st;
+  if (!st) return;
+  $("#models-dir").textContent = st.models_dir;
+  $("#voices-dir").textContent = st.voices_dir;
+  if (!quantsFilled) {
+    $("#quant").replaceChildren(...st.quants.map(([q, size]) => h("option", { value: q, selected: q === st.default_quant },
+      `${q} — ${fmtMB(size)}${q === st.default_quant ? " (рекомендуется)" : ""}`)));
+    quantsFilled = true;
+  }
+  // Установленные модели: какая используется, переключение
+  $("#models").replaceChildren(...(st.models.length ? st.models.map(m => h("li", { class: m === st.model ? "on" : "" },
+    h("span", { class: "grow" }, m), m === st.model ? h("span", { class: "tag" }, "используется")
+      : h("button", { disabled: rt.locked.model, onclick: () => api("/api/model/use", { name: m }) }, "Использовать")))
+    : [h("li", { class: "muted" }, "Модель не установлена: выберите квантование и нажмите «Скачать».")]));
+  // Загрузка
+  const d = st.download, running = d.state === "running";
+  $("#model-download").disabled = running;
+  $("#model-cancel").hidden = !running;
+  $("#dl").hidden = d.state === "idle";
+  $("#dl-fill").style.width = (d.total ? Math.min(100, 100 * d.done / d.total) : 0) + "%";
+  const left = d.speed > 0 ? ` · осталось ${fmtDur((d.total - d.done) / d.speed)}` : "";
+  $("#dl-text").className = "small " + ({ error: "bad", done: "good" }[d.state] || "");
+  $("#dl-text").textContent = {
+    running: `${d.file || "подготовка"}: ${fmtMB(d.done)} из ${fmtMB(d.total)}` +
+      (d.speed > 0 ? ` · ${fmtNum(d.speed / 1048576)} МБ/с` : "") + left,
+    done: `Готово: ${d.quant} скачана, сервер перезапускается.`,
+    cancelled: `Загрузка отменена на ${fmtMB(d.done)} из ${fmtMB(d.total)}: «Скачать» продолжит с этого места.`,
+    error: `Ошибка: ${d.error}. «Скачать» продолжит с того же места.`,
+  }[d.state] || "";
+  // Устройство: перерисовка только при смене вариантов, чтобы не сбивать выбор
+  const key = JSON.stringify([rt.backends, rt.prefer, rt.locked.backend]);
+  if (key !== backendKey) {
+    backendKey = key;
+    const have = k => k === "auto" || k === "cpu" || rt.backends.some(b => b.toLowerCase().startsWith(k));
+    $("#backend-form").replaceChildren(...Object.entries(BACKEND_NAMES).map(([k, name]) =>
+      h("label", { class: have(k) ? "" : "na" }, h("input", { type: "radio", name: "backend", value: k,
+        checked: rt.prefer === k, disabled: rt.locked.backend || !have(k) }),
+        h("span", {}, name, have(k) ? "" : h("span", { class: "muted small" }, " — не найдено")))));
+  }
+  $("#backend-lock").hidden = !rt.locked.backend;
+  $("#backend-lock").textContent = "Устройство задано переменной COSYVOICE_BACKEND.";
+  // Наборы голосов
+  $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
+    h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted small" },
+      ` — голосов: ${s.voices.length}: ${s.voices.slice(0, 8).join(", ")}${s.voices.length > 8 ? "…" : ""}`)),
+    h("button", { class: "icon danger", title: "Удалить набор", onclick: () =>
+      confirm(`Удалить набор «${s.name}» (${s.voices.length} голосов)?`) && api("/api/voicesets/delete", { name: s.name })
+    }, "✕"))) : [h("li", { class: "muted" }, "Наборов нет.")]));
+  // Состояние
+  const row = (k, v) => [h("dt", {}, k), h("dd", {}, v)];
+  $("#runtime-info").replaceChildren(h("dl", {},
+    row("Состояние", h("span", { class: { running: "good", crashed: "bad", waiting: "warn" }[rt.state] || "" },
+      RT_STATES[rt.state] || rt.state)),
+    rt.error ? row("Причина", rt.error) : null,
+    row("Устройство", rt.backend || "—"), row("Модель", rt.model || "—"), row("Голосов", rt.voices),
+    row("Адрес", S.cosy.url), rt.restarts ? row("Перезапусков", rt.restarts) : null,
+    row("Программа", rt.server)));
+}
+$("#model-form").onsubmit = e => {
+  e.preventDefault();
+  api("/api/model/download", { quant: $("#quant").value, frontend: $("#frontend").checked });
+};
+$("#model-cancel").onclick = () => api("/api/model/cancel");
+$("#backend-form").onchange = e => api("/api/backend", { backend: e.target.value });
+$("#set-import").onclick = async () => {
+  const f = $("#set-file").files[0], out = $("#set-result");
+  if (!f) { toast("Выберите zip с набором", true); return; }
+  const btn = $("#set-import");
+  btn.disabled = true;
+  out.className = "small muted";
+  out.textContent = `Устанавливаю ${f.name}…`;
+  try {
+    const r = await fetch("/api/voicesets/import", { method: "POST", body: f,
+      headers: { "Content-Type": "application/zip", "X-Filename": encodeURIComponent(f.name) } });
+    const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    if (!j.ok) { out.className = "small bad"; out.textContent = j.error || "Ошибка"; return; }
+    out.className = "small good";
+    out.textContent = `Набор «${j.name}»: установлено голосов ${j.added.length}` +
+      (j.skipped.length ? `, пропущено ${j.skipped.length}: ${j.skipped.join(", ")}` : "") +
+      (j.ignored.length ? `. Не голоса, пропущены: ${j.ignored.join(", ")}` : "") + ".";
+    $("#set-file").value = "";
+  } catch (e) { out.className = "small bad"; out.textContent = "Сервер недоступен: " + e.message; }
+  finally { btn.disabled = false; }
+};
+
+// Встроенный сервер (режим managed): бэкенд, модель, число голосов
+function runtimeInfo(rt) {
+  if (!rt) return "";
+  const backend = { cpu: "CPU" }[rt.backend.toLowerCase()] || rt.backend.replace(/\d+$/, "") || "…";
+  return ` — встроенный, ${backend}${rt.model ? ", " + rt.model : ""}, голосов: ${rt.voices}`;
+}
 function renderSettings() {
   const f = $("#settings");
   for (const el of f.elements) {
@@ -375,7 +478,7 @@ function renderSettings() {
   }
   const c = S.config;
   $("#server-info").replaceChildren(
-    h("div", {}, "cosyvoice: ", h("code", {}, S.cosy.url)),
+    h("div", {}, "cosyvoice: ", h("code", {}, S.cosy.url), runtimeInfo(S.cosy.runtime)),
     h("div", {}, `Интерфейс: ${c.bind}:${c.port}, пароль ${c.password ? "задан" : "не задан (доступ только с этого ПК)"}`));
   $("#logout-link").hidden = !c.password;
 }
@@ -522,4 +625,6 @@ function niceStep(max) {
 }
 
 // --- старт ---
-reload().then(() => { showTab(location.hash.slice(1) || (S.twitch.state === "ok" ? "queue" : "twitch")); connect(); });
+// Первый запуск: без модели — сразу на вкладку «Сервер»
+const firstTab = () => S.setup && !S.setup.models.length ? "server" : S.twitch.state === "ok" ? "queue" : "twitch";
+reload().then(() => { showTab(location.hash.slice(1) || firstTab()); connect(); });

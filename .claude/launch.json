@@ -34,6 +34,15 @@
         "import os, sys; os.environ.setdefault('COSYVOICE_URL', 'http://localhost:8080'); sys.path.insert(0, 'stream-tts'); import runpy; runpy.run_module('streamtts', run_name='__main__')"
       ],
       "port": 8090
+    },
+    {
+      "name": "stream-tts-managed",
+      "runtimeExecutable": "stream-tts/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-c",
+        "import os, sys; os.environ.setdefault('STREAM_TTS_PORT', '8092'); os.environ.setdefault('STREAM_TTS_DATA', 'stream-tts-data/native'); sys.path.insert(0, 'stream-tts'); import runpy; runpy.run_module('streamtts', run_name='__main__')"
+      ],
+      "port": 8092
     }
   ]
 }

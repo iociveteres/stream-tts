@@ -1,0 +1,51 @@
+# Установщик StreamTTS для Windows: рантайм (build-runtime.py) → Nuitka (build-exe.py) → Inno Setup.
+# Запуск вручную (Actions → windows → Run workflow) или по тегу v*. Результат — артефакт StreamTTS-Setup.
+name: windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # Загрузки рантайма (~1 ГБ) с закреплёнными sha256: ключ меняется вместе с версиями в build-runtime.py
+      - uses: actions/cache@v4
+        with:
+          path: packaging/windows/build/cache
+          key: runtime-${{ hashFiles('packaging/windows/build-runtime.py') }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ hashFiles('packaging/windows/requirements.txt', 'stream-tts/streamtts/*.py') }}
+          restore-keys: nuitka-
+
+      - name: Зависимости сборки
+        run: python -m pip install -r packaging/windows/requirements.txt
+
+      # На образах windows-latest Inno Setup 6 обычно есть; если нет — ставится из Chocolatey
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Рантайм
+        run: python packaging/windows/build-runtime.py
+
+      - name: StreamTTS.exe и установщик
+        run: python packaging/windows/build-exe.py --setup
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StreamTTS-Setup
+          path: packaging/windows/dist/StreamTTS-Setup-*.exe
+          compression-level: 0

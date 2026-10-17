@@ -28,7 +28,8 @@
 |---|---|---|
 | `setup.sh`, `docker-compose.yml`, `docker-compose.gpu.yml` | запуск всего стека | да |
 | `cosyvoice/` | `Dockerfile` и `entrypoint.sh` образа cosyvoice-server | да |
-| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `static/` — админка, оверлей, страница голосов | да |
+| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели и наборы голосов из админки, `desktop.py` — точка входа собранной программы, `static/` — админка, оверлей, страница голосов | да |
+| `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup), `THIRD-PARTY.txt`; сборочный venv `.venv`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`, `import-voices.sh` | да |
 | `tools/voices/` | общий подбор: `pick.py` + `pick.html` (страница, `--add`, `--add-batch`, `--install`), `synth.py` (синтез и оценки), `emotions.py` (модель эмоций), `emotion-eval.py` + `.html` (сверка моделей эмоций с разметкой на слух), `campplus.py` (эмбеддинги) | да |
 | `tools/wc3/` | реплики WC3: `cut-clips.py` (кандидаты партиями, `pools.json`), `review.py` (тексты и метки фраз), `extract-subtitles.py` | да |
@@ -37,6 +38,7 @@
 | `voice-clips/<набор>/` | `set.json`, `alts.json` (варианты), `picks.json` (выбор), `ab/` (синтез, `scores.json`); у WC3 ещё партии `b0N/` | только `.txt`/`.json` |
 | `voice-refs/` | итоговые образцы и `manifest.json` наборов | нет |
 | `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `.env` | данные и секреты | нет |
+| `runtime/` | нативный cosyvoice-server для Windows: exe, DLL (GGML CPU/CUDA/Vulkan, ICU, FFmpeg), `ffmpeg.exe` | нет |
 
 Связи между файлами, которые легко порвать при переносе:
 - Скрипты в `tools/` считают корень проекта как `ROOT = dirname(dirname(HERE))` и берут данные от него, а соседние
@@ -49,8 +51,10 @@
 - `post` в `voice-clips/*/alts.json` и `voice-refs/*/manifest.json` — это `[скрипт, аргументы…]`, путь к скрипту
   от корня проекта (`effects/villager-fx.py`). stream-tts ищет его в `STREAM_TTS_PROJECT` (в контейнере `/project`,
   туда смонтированы `voice-refs/` и `effects/`).
-- Порты: cosyvoice 8080, stream-tts 8090, `review.py` 8765, `tools/voices/pick.py` 8766,
-  `tools/voices/emotion-eval.py` 8767
+- `post` выполняется в процессе stream-tts: скрипт эффекта грузится через importlib и должен иметь
+  `apply(звук, аргументы)`; интерфейс командной строки остаётся для `tools/voices/synth.py`.
+- Порты: cosyvoice 8080, stream-tts 8090 (`stream-tts-managed` из исходников — 8092, его cosyvoice-server — на
+  свободном порту), `review.py` 8765, `tools/voices/pick.py` 8766, `tools/voices/emotion-eval.py` 8767
   (конфигурации в `.claude/launch.json`).
 
 ## Как запускать
@@ -66,9 +70,19 @@
 - stream-tts без Docker: `stream-tts/.venv` (Python 3.14) и конфигурация `stream-tts` в `.claude/launch.json`
   (ставит `COSYVOICE_URL=http://localhost:8080`, данные берутся из `stream-tts-data/`).
 - Shell-скрипты — bash (Git Bash на Windows), из PowerShell не запускаются.
+- Программа для Windows: `packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py --runtime core`
+  (Nuitka + MSVC, первая сборка ~6 мин), установщик — `--setup` (нужен Inno Setup 6). Рантайм —
+  `build-runtime.py`. Проверять собранный exe на другом порту и с отдельными данными (`STREAM_TTS_PORT`,
+  `STREAM_TTS_DATA`), чтобы не задеть Docker-версию на 8090.
 
 ## Подводные камни
 
+- Сборка Nuitka: собранную программу `paths.py` узнаёт по `__compiled__` (Nuitka не задаёт `sys.frozen`), данные
+  пакета и `effects/` лежат рядом с exe. Модули, которые грузятся по пути через importlib (эффекты), и их импорты
+  Nuitka не видит: новые зависимости эффектов добавлять в `--include-module` в `build-exe.py`.
+- stream-tts без `COSYVOICE_URL` при наличии `runtime/cosyvoice-server.exe` запускает свой сервер (режим managed):
+  это второй сервер на той же видеокарте (~2,5 ГБ видеопамяти). Конфигурация `stream-tts` в `.claude/launch.json`
+  задаёт `COSYVOICE_URL` и работает с Docker как раньше.
 - **К cosyvoice-server — строго один запрос за раз.** Параллельная регистрация голосов роняет сервер
   (`double free`). Не запускать `scripts/import-voices.sh` одновременно с `tools/voices/synth.py` (его запускает и
   кнопка на странице `pick.py`) или stream-tts, который синтезирует в этот момент. stream-tts раз в минуту

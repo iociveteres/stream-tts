@@ -1,15 +1,17 @@
 """HTTP: админка (под паролем), оверлей и страница голосов (открыты), API и WebSocket."""
-import asyncio, contextlib, hashlib, hmac, json, logging, os, secrets, time
+import asyncio, contextlib, hashlib, hmac, json, logging, os, secrets, tempfile, time, urllib.parse
 
 from aiohttp import web
 
-from . import config, stats
+from . import config, install, runtime, stats
 from .twitch import TwitchError, explain
 
 log = logging.getLogger("web")
 STATIC = os.path.join(config.HERE, "static")
 COOKIE = "stream_tts"
 PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/login", "/favicon")
+UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream")}
+MAX_UPLOAD = 512 << 20
 
 
 def _secret():
@@ -46,6 +48,7 @@ def make_app(ctx):
     r.add_get("/api/profanity", api_profanity_get)
     for path, fn in POSTS.items():
         r.add_post(path, fn)
+    r.add_post("/api/voicesets/import", api_voiceset_import)
     return app
 
 
@@ -68,7 +71,8 @@ async def auth_middleware(request, handler):
         origin = request.headers.get("Origin")
         if origin and origin.split("://", 1)[-1] != request.host:
             raise web.HTTPForbidden(text="чужой Origin")
-        if request.content_type != "application/json":
+        # Загрузка файла — сырым телом с нестандартным типом: такой запрос с чужой страницы требует CORS-проверки
+        if request.content_type != "application/json" and request.content_type not in UPLOADS.get(path, ()):
             raise web.HTTPUnsupportedMediaType(text="нужен application/json")
     return await handler(request)
 
@@ -123,10 +127,12 @@ def state(ctx, full=True):
     out = dict(
         engine=ctx.engine.snapshot(),
         twitch=ctx.twitch.public(),
-        cosy=dict(ok=ctx.cosy.ok, error=ctx.cosy.error, url=config.COSYVOICE_URL,
-                  busy=ctx.cosy.lane.holder[1] if ctx.cosy.lane.holder else ""),
+        cosy=dict(ok=ctx.cosy.ok, error=ctx.cosy.error, url=ctx.cosy.url,
+                  busy=ctx.cosy.lane.holder[1] if ctx.cosy.lane.holder else "",
+                  runtime=ctx.runtime.public() if ctx.runtime else None),
         gpu=ctx.gpu.data,
         demos=dict(ctx.voices.progress),
+        setup=ctx.install.public() if ctx.install else None,
         ts=time.time(),
     )
     if full:
@@ -329,6 +335,73 @@ async def post_profanity(request, ctx, data):
     return ok(sample=ctx.profanity.clean(sample, beep="[писк]") if sample else "")
 
 
+# --- первый запуск (режим managed): модель, устройство, наборы голосов ---
+def _install(ctx):
+    if not ctx.install:
+        raise ValueError("сервер синтеза внешний (COSYVOICE_URL): модель и голоса ставятся на нём")
+    return ctx.install
+
+
+async def post_model_download(request, ctx, data):
+    _install(ctx).start_download(str(data.get("quant") or install.DEFAULT_QUANT), bool(data.get("frontend")))
+    return ok()
+
+
+async def post_model_cancel(request, ctx, data):
+    _install(ctx).cancel()
+    return ok()
+
+
+async def post_model_use(request, ctx, data):
+    _install(ctx).use_model(str(data["name"]))
+    await ctx.runtime.restart()
+    return ok()
+
+
+async def post_backend(request, ctx, data):
+    _install(ctx)
+    backend = str(data.get("backend", "auto"))
+    if backend not in runtime.BACKENDS:
+        return fail("ожидалось auto, cuda, vulkan или cpu")
+    ctx.settings.update(backend=backend)
+    await ctx.runtime.restart()
+    return ok()
+
+
+async def post_voiceset_delete(request, ctx, data):
+    await _install(ctx).delete_set(str(data["name"]))
+    return ok()
+
+
+async def api_voiceset_import(request):
+    """Набор голосов: zip сырым телом, имя файла — в X-Filename (URL-кодировано)."""
+    ctx = request.app["ctx"]
+    try:
+        inst = _install(ctx)
+    except ValueError as e:
+        return fail(str(e))
+    filename = urllib.parse.unquote(request.headers.get("X-Filename", "voices.zip"))
+    fd, tmp = tempfile.mkstemp(suffix=".zip")
+    try:
+        size = 0
+        with os.fdopen(fd, "wb") as f:
+            async for chunk in request.content.iter_chunked(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    return fail("архив больше 512 МБ")
+                f.write(chunk)
+        result = await inst.import_set(tmp, filename)
+    except ValueError as e:
+        return fail(str(e))
+    finally:
+        os.remove(tmp)
+    for v in result["added"]:  # голос мог смениться: пример пересинтезировать
+        ctx.voices.index.pop(v, None)
+    ctx.voices.wake.set()
+    ctx.engine.dirty.set()
+    return ok(**result)
+
+
 def _wrap(fn):
     async def handler(request):
         try:
@@ -362,4 +435,9 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/test": post_test,
     "/api/ban": post_ban,
     "/api/profanity": post_profanity,
+    "/api/model/download": post_model_download,
+    "/api/model/cancel": post_model_cancel,
+    "/api/model/use": post_model_use,
+    "/api/backend": post_backend,
+    "/api/voicesets/delete": post_voiceset_delete,
 }.items()}

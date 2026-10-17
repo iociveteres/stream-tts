@@ -104,10 +104,13 @@ Scope: `channel:manage:redemptions` (создать награду, ставит
   вместо 5–6 с, синтез идёт в ~2,5 раза быстрее реального времени. Голоса с `post` всегда синтезируются целиком.
   На CPU синтез медленнее реального времени, и стриминг там будет заикаться: интерфейс об этом предупреждает.
 - `!ttsskip` во время синтеза вызывает `POST /tts/stop` (работает, когда сервер запущен с `--webui`, как сейчас).
-- **Эффект `post`.** Если у голоса в `voice-refs/<набор>/manifest.json` есть `post` (`[скрипт, аргументы…]`, путь
-  к скрипту от корня проекта, например `effects/villager-fx.py`; `{text}` подставляется), он применяется к синтезу так
-  же, как в `tools/voices/synth.py` ([voice-pipeline.md](voice-pipeline.md)). Сейчас `post` не задан ни у одного
-  голоса.
+- **Эффект `post`.** Если у голоса в `voice-refs/<набор>/manifest.json` (или в `manifest.json` установленного
+  набора, `<голоса>/<набор>/manifest.json`) есть `post` (`[скрипт, аргументы…]`, путь к скрипту от корня проекта,
+  например `effects/villager-fx.py`; `{text}` подставляется), он применяется к синтезу. Скрипт грузится через
+  importlib в процессе stream-tts, вызывается его `apply(звук, аргументы)`; звук до и после проходит через PCM16, как
+  раньше через WAV-файлы, поэтому результат совпадает с запуском из командной строки в `tools/voices/synth.py`
+  ([voice-pipeline.md](voice-pipeline.md)) побайтно. Скрипт ищется в проекте, потом в поставке программы. Сейчас
+  `post` не задан ни у одного голоса.
 - **Громкость.**
   - Без стриминга: громкость фразы меряется по BS.1770 (LUFS), фраза доводится до −16 LUFS с ограничением пиков.
   - Со стримингом: у каждого голоса есть усиление, откалиброванное заранее по тестовой фразе.
@@ -141,7 +144,55 @@ Scope: `channel:manage:redemptions` (создать награду, ставит
 
 ## Развёртывание
 
-Второй сервис `stream-tts` в `docker-compose.yml`, стартует параллельно cosyvoice, `restart: unless-stopped`.
+Два режима работы с cosyvoice-server, ядро одно:
+- **external** — задан `COSYVOICE_URL`: сервер запущен отдельно (Docker, другая машина). Так работает
+  `docker-compose.yml`.
+- **managed** — `COSYVOICE_URL` не задан, а рядом есть нативный `cosyvoice-server(.exe)` (папка `runtime/` рядом с
+  программой, в исходниках — в корне проекта, или путь в `COSYVOICE_SERVER`). stream-tts сам запускает его на
+  `127.0.0.1` (свободный порт или `COSYVOICE_PORT`), перезапускает при падении и завершает при выходе (на Windows
+  через Job Object, даже если stream-tts убит). Аргументы — как в `cosyvoice/entrypoint.sh` (`runtime.py`): модель
+  (`MODEL` или единственный `*.gguf` в папке моделей; без модели сервер ждёт её появления), голоса `*.gguf` из папки
+  голосов и её подпапок-наборов (имя голоса — имя файла), ONNX-фронтенд из `<модели>/frontend-onnx`, проверка AVX2.
+  Бэкенд выбирается по `cosyvoice-cli --list-backends`: CUDA, если есть `ggml-cuda.dll` и видеокарта NVIDIA, иначе
+  Vulkan (дискретная раньше встроенной), иначе CPU; `COSYVOICE_BACKEND=cuda|vulkan|cpu` задаёт его явно. Всегда
+  `GGML_CUDA_DISABLE_GRAPHS=1`, на CUDA ещё `--llm-flash-attn 0`. В админке рядом с адресом сервера видны
+  «встроенный», бэкенд, модель и число голосов.
+
+**Первый запуск (режим managed)** — вкладка «Сервер» в админке (`install.py`), без модели админка открывается
+сразу на ней:
+- **Модель.** Квант на выбор (Q8_0 по умолчанию, ещё Q6_K, Q5_K_M, Q4_K_M, Q4_0, F16), как в
+  `scripts/download-model.sh`: файл с Hugging Face пишется в `<имя>.part` с докачкой по Range и пятью повторами,
+  сверяется с sha256 из заголовка `x-linked-etag` и только потом переименовывается. Прогресс, скорость и остаток
+  времени видны в админке; «Отменить» оставляет `.part`, следующее «Скачать» продолжает с того же места. ONNX-фронтенд
+  int8 — по галочке: для озвучки он не нужен. После загрузки модель выбирается (`settings.model`) и сервер
+  запускается сам. Из нескольких установленных моделей используется выбранная.
+- **Устройство синтеза**: «Автоматически», CUDA, Vulkan или процессор (`settings.backend`); варианты, которых нет на
+  машине, недоступны. Смена перезапускает сервер. `COSYVOICE_BACKEND` и `MODEL` выбор в админке перекрывают.
+- **Наборы голосов** — zip с `*.gguf` и `manifest.json` (ключи — имена голосов: `title`, `post`…) в корне архива
+  или в одной папке. Имя набора — эта папка или имя zip (латиница, цифры, `-`, `_`), оно же группа на странице
+  голосов. Набор ставится в `<голоса>/<набор>/` целиком, повторная установка заменяет его, «✕» удаляет. Голос с
+  именем, которое уже есть в другом наборе, пропускается; файлы не на верхнем уровне и не `.gguf` игнорируются,
+  `.gguf` проверяется по сигнатуре. Пока файлы меняются, сервер остановлен (на Windows он держит `.gguf` открытыми),
+  затем запускается с новым списком; stream-tts перечитывает голоса после каждого запуска сервера, примеры новых
+  голосов синтезируются в фоне. `post` из `manifest.json` может ссылаться только на `effects/*.py`. Zip грузится
+  сырым телом (`Content-Type: application/zip`, имя в `X-Filename`): такой запрос с чужой страницы требует
+  CORS-проверки, как и JSON.
+
+Рантайм для Windows (проверено 17.10.2026 на RTX 3060 Ti): cosyvoice.cpp v0.2.0
+(`cosyvoice-67d45fe-windows-x64-ffmpeg.zip`), GGML из llama.cpp b11500 (`ggml*.dll` со всеми `ggml-cpu-*.dll`,
+`libomp.dll`; `ggml-cuda.dll` с `cublas64_13`, `cublasLt64_13`, `cudart64_13` из `cudart-llama-bin-win-cuda-13.4-x64`;
+`ggml-vulkan.dll`), ICU 78 (`icudt78`, `icuuc78`, `icuin78`), FFmpeg 8.1 lgpl-shared (DLL и `ffmpeg.exe`), VC++
+2015–2022. Ядро без бэкендов GPU — 188 МБ, CUDA — ещё 664 МБ, Vulkan — 45 МБ. Скорость (RTF, фраза целиком):
+CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой машине ~35 с — компиляция шейдеров, кэш драйвера живёт
+между запусками), CPU 4–9.
+
+Пути (`paths.py`). Из исходников проекта — как раньше: `stream-tts-data/`, `models/`, `voices/`, `voice-refs/`,
+`runtime/` в корне. Собранная программа хранит данные, модели и голоса в `%LOCALAPPDATA%\StreamTTS\` (Linux:
+`$XDG_DATA_HOME/stream-tts`), код и статику только читает. Всё переопределяется переменными `STREAM_TTS_DATA`,
+`STREAM_TTS_MODELS`, `STREAM_TTS_VOICES`, `STREAM_TTS_PROJECT`, `STREAM_TTS_RUNTIME`. ffmpeg ищется в рантайме и
+рядом с программой, потом в `PATH` (или `FFMPEG`).
+
+**Docker.** Второй сервис `stream-tts` в `docker-compose.yml`, стартует параллельно cosyvoice, `restart: unless-stopped`.
 
 - Образ: `python:3.15-slim` (аргумент `PYTHON` в `stream-tts/Dockerfile`; если колёс под новую версию нет —
   вернуть 3.14), ffmpeg, aiohttp, numpy.
@@ -150,16 +201,59 @@ Scope: `channel:manage:redemptions` (создать награду, ставит
   `voice-origs/minecraft-villager/`.
 - cosyvoice доступен по docker-сети (`http://cosyvoice:8080`), его порт остаётся на `127.0.0.1`.
 
-Переменные `.env`:
+Переменные `.env` (в программе для Windows — `stream-tts.env`, см. «Сборка для Windows»):
 
 | Переменная | По умолчанию | Зачем |
 |---|---|---|
 | `STREAM_TTS_PORT` | `8090` | порт интерфейса и оверлея |
 | `STREAM_TTS_BIND` | `127.0.0.1` | `0.0.0.0`, чтобы OBS на другом ПК дотянулся по сети |
 | `STREAM_TTS_PASSWORD` | — | пароль админки; обязателен, если `BIND` не localhost |
-| `COSYVOICE_URL` | `http://cosyvoice:8080` | синтез на другой машине |
+| `COSYVOICE_URL` | `http://cosyvoice:8080` в compose | внешний сервер; без него — режим managed |
+| `COSYVOICE_SERVER` | `runtime/cosyvoice-server(.exe)` | managed: путь к серверу или его папке |
+| `COSYVOICE_BACKEND` | `auto` | managed: `cuda`, `vulkan` или `cpu` |
+| `COSYVOICE_PORT` | свободный | managed: порт сервера на `127.0.0.1` |
+| `MODEL` | единственный `*.gguf` | managed: файл модели |
 | `COSYVOICE_API_KEY` | — | ключ, если сервер запущен с `--api-key` |
 | `TWITCH_CLIENT_ID` | — | можно задать и в интерфейсе |
+
+### Сборка для Windows
+
+Программа без Docker и Python: Setup.exe ставит StreamTTS в Program Files, данные, модель и голоса живут в
+`%LOCALAPPDATA%\StreamTTS\` и при удалении остаются. Модели в установщике нет: при первом запуске админка
+открывается на вкладке «Сервер». Файлы — в `packaging/windows/`:
+
+- `build-runtime.py` — рантайм с закреплёнными версиями и sha256 (см. выше): `build/runtime/core/` (279 МБ),
+  `build/runtime/cuda/` (664 МБ), `vc_redist.x64.exe`. Нужна только стандартная библиотека Python.
+- `build-exe.py` — `StreamTTS.exe` через Nuitka (standalone, консольное приложение) в `dist/StreamTTS/` (73 МБ):
+  пакет `streamtts` со `static/` и `profanity.txt`, `effects/villager-fx.py`. Нужен сборочный venv
+  (`requirements.txt`: зависимости stream-tts и Nuitka) на Python 3.14 и MSVC (Visual Studio или Build Tools с C++):
+  MinGW Nuitka для Python 3.13+ не поддерживает. Первая сборка ~6 мин, повторные быстрее за счёт кэша компилятора.
+  `--runtime core|all` кладёт рантайм рядом с exe для запуска без установщика, `--setup` собирает установщик.
+- `StreamTTS.iss` — Inno Setup 6: `dist/StreamTTS-Setup-<версия>.exe`. Компоненты: основной (программа, рантайм
+  без CUDA) и CUDA; CUDA по умолчанию снята, если в системе нет `nvcuda.dll` (драйвера NVIDIA). VC++ Redistributable
+  ставится тихо, если в реестре (`HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64`) версия старше 14.51:
+  cosyvoice собран тулсетом 14.51 и со старым рантаймом не запускается. Запущенную программу установщик видит по
+  мьютексу `StreamTTS` и просит закрыть. Установщик со всеми компонентами — 611 МБ, сжатие ~1 мин (проверено на
+  Inno Setup 6.7.3). Inno Setup можно не ставить в систему: `innosetup-6.x.exe /PORTABLE=1 /CURRENTUSER /VERYSILENT
+  /DIR=<папка>` и путь к `ISCC.exe` в переменной `ISCC`.
+- `.github/workflows/windows.yml` — то же в GitHub Actions (`windows-latest`, по кнопке или тегу `v*`), установщик —
+  артефакт сборки.
+
+```bash
+packaging/windows/.venv/Scripts/python.exe packaging/windows/build-runtime.py
+packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py --runtime core --setup
+```
+
+Запуск (`desktop.py`, работает и из исходников: `python -m streamtts.desktop`):
+- переменные из таблицы выше читаются ещё и из `%LOCALAPPDATA%\StreamTTS\stream-tts.env` (`KEY=VALUE`, переменные
+  окружения важнее); при первом запуске там появляется пример с комментариями;
+- одна копия на папку данных: повторный запуск открывает админку уже запущенной и выходит;
+- админка открывается в браузере, когда сервер ответил (`--no-browser` — не открывать);
+- лог — в консоли и в `%LOCALAPPDATA%\StreamTTS\logs\stream-tts.log` (три старых файла по 2 МБ);
+- закрыть окно консоли — выключить stream-tts, встроенный cosyvoice-server завершается вместе с ним. Если запуск
+  не удался (порт занят), окно ждёт Enter, чтобы ошибку можно было прочитать.
+
+Эффект `villager-fx.py` в программе работает только в режиме `cut`: звуков жителя из `voice-origs/` в поставке нет.
 
 **Отдельный домашний сервер.** Основная схема: cosyvoice и `stream-tts` на сервере, на ПК стримера только OBS с
 Browser Source `http://<сервер>:8090/overlay`. Оверлей открыт без пароля, он только читает. Админка (настройки,

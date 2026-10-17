@@ -1,0 +1,3 @@
+# Сборочный venv: packaging/windows/.venv на Python 3.14 (как stream-tts/.venv); компилятор — MSVC
+-r ../../stream-tts/requirements.txt
+nuitka==4.3.1

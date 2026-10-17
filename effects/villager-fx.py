@@ -2,6 +2,8 @@
 
 usage: python effects/villager-fx.py <вход.wav> <выход.wav> [--mode hum|half|mumble] [--seed N]
        python effects/villager-fx.py <вход.wav> <выход.wav> --mode cut --text "<фраза>"
+stream-tts грузит модуль через importlib и вызывает apply(звук, [аргументы]) в своём процессе
+(float32 24 кГц моно на входе и выходе; FFMPEG он подставляет свой).
 
 Речь делится на слоги и слова по огибающей громкости: границы идут по паузам и по провалам
 огибающей. Дальше в зависимости от режима:
@@ -16,13 +18,14 @@ usage: python effects/villager-fx.py <вход.wav> <выход.wav> [--mode hum
 плавает), а по громкости — под сам кусок. Звуки берутся из voice-origs/minecraft-villager/ (ассеты
 Minecraft: idle, yes, no, haggle). Нужны numpy и ffmpeg. Результат: 24 кГц моно.
 """
-import argparse, glob, os, subprocess, zlib
+import argparse, glob, os, subprocess, threading, zlib
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # effects/ -> корень проекта
 SOUNDS = os.path.join(ROOT, "voice-origs", "minecraft-villager")
+FFMPEG = "ffmpeg"
 SR = 24000
 HOP = 240                      # 10 мс
 POOL = ("idle", "yes", "no", "haggle")
@@ -32,13 +35,13 @@ REPLACE = {"hum": 0.0, "half": 0.35, "mumble": 1.0}
 
 
 def read(path):
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
+    raw = subprocess.run([FFMPEG, "-v", "error", "-i", path, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
                          capture_output=True, check=True).stdout
     return np.frombuffer(raw, np.float32).copy()
 
 
 def write(path, x):
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", "1", "-i", "-",
+    subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", "1", "-i", "-",
                     "-c:a", "pcm_s16le", path], input=np.clip(x, -1, 1).astype(np.float32).tobytes(), check=True)
 
 
@@ -90,9 +93,10 @@ def fit(snd, length, rng):
 
 def nasal(x):
     """Речь «в нос»: срез низа и верха и подъём около 1 кГц."""
-    p = os.path.join(os.environ.get("TEMP", "/tmp"), f"vfx-{os.getpid()}.wav")
+    # имя с потоком: в stream-tts эффект идёт в одном процессе, и два вызова могут совпасть по времени
+    p = os.path.join(os.environ.get("TEMP", "/tmp"), f"vfx-{os.getpid()}-{threading.get_ident()}.wav")
     write(p, x)
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", p, "-af",
+    raw = subprocess.run([FFMPEG, "-v", "error", "-i", p, "-af",
                           "highpass=f=300,lowpass=f=3400,equalizer=f=1000:t=q:w=1.2:g=6",
                           "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"], capture_output=True, check=True).stdout
     os.remove(p)
@@ -113,18 +117,19 @@ def cut(x, chars):
     return y
 
 
-def main():
+def parse(argv):
     ap = argparse.ArgumentParser()
-    ap.add_argument("src")
-    ap.add_argument("dst")
     ap.add_argument("--mode", choices=list(REPLACE) + ["cut"], default="half")
     ap.add_argument("--seed", type=int)
     ap.add_argument("--text", default="")
-    a = ap.parse_args()
+    return ap.parse_args(argv)
 
-    speech = read(a.src)
+
+def apply(speech, argv=()):
+    """Эффект над звуком (float32 24 кГц моно), argv — аргументы командной строки после файлов."""
+    a = parse(list(argv))
     if a.mode == "cut":
-        return write(a.dst, cut(speech, len(a.text)))
+        return cut(speech, len(a.text))
     seed = a.seed if a.seed is not None else zlib.crc32(speech[::97].tobytes())  # один вход — один результат
     rng = np.random.default_rng(seed)
     sounds = {k: [read(p) for p in sorted(glob.glob(os.path.join(SOUNDS, k + "*.ogg")))] for k in POOL}
@@ -167,7 +172,15 @@ def main():
 
     nz = np.nonzero(np.abs(out) > 1e-4)[0]
     out = out[nz[0]:nz[-1] + 1] if len(nz) else out
-    write(a.dst, out / max(1.0, np.abs(out).max() / 0.95))
+    return out / max(1.0, np.abs(out).max() / 0.95)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("src")
+    ap.add_argument("dst")
+    a, argv = ap.parse_known_args()
+    write(a.dst, apply(read(a.src), argv))
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import asyncio, io, math, wave
 
 import numpy as np
 
+from . import paths
 from .config import SR
 
 
@@ -136,6 +137,11 @@ def from_pcm16(b):
     return np.frombuffer(b, "<i2").astype(np.float32) / 32768
 
 
+def pcm16(x):
+    """Как запись в WAV PCM16 через ffmpeg и чтение обратно: округление к ближайшему, насыщение."""
+    return (np.clip(np.rint(np.asarray(x, np.float32) * 32768), -32768, 32767) / 32768).astype(np.float32)
+
+
 def read_wav(data):
     """WAV из ответа cosyvoice (PCM16 моно 24 кГц) в float32."""
     with wave.open(io.BytesIO(data)) as w:
@@ -154,7 +160,7 @@ def resample(x, sr_from, sr_to):
 
 async def ffmpeg(args, data=None):
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-v", "error", "-nostdin", "-y", *args,
+        paths.ffmpeg(), "-v", "error", "-nostdin", "-y", *args,
         stdin=asyncio.subprocess.PIPE if data is not None else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     out, err = await proc.communicate(data)

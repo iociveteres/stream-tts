@@ -4,6 +4,9 @@
 /samples/
 /voice-origs/
 /voice-refs/
+/runtime/
+/packaging/windows/build/
+/packaging/windows/dist/
 voice-clips/**/*.wav
 .venv/
 /stream-tts-data/

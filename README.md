@@ -242,7 +242,13 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 
 Разработка без Docker: `cd stream-tts && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt`,
 затем `COSYVOICE_URL=http://localhost:8080 .venv/Scripts/python -m streamtts` (или конфигурация `stream-tts`
-в `.claude/launch.json`).
+в `.claude/launch.json`). Без `COSYVOICE_URL` stream-tts сам запускает нативный cosyvoice-server из `runtime/` в
+корне проекта (режим managed, [docs/stream-tts.md](docs/stream-tts.md#развёртывание)) с моделью из `models/` и
+голосами из `voices/`; конфигурация `stream-tts-managed` — на порту 8092 и с данными в `stream-tts-data/native/`,
+чтобы не мешать Docker-версии.
+
+Программа для Windows без Docker и Python (установщик с рантаймом, модель качается из админки) собирается в
+`packaging/windows/`: [docs/stream-tts.md](docs/stream-tts.md#сборка-для-windows).
 
 ### Перенос голосов между инстансами
 
@@ -286,6 +292,10 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 │   ├── Dockerfile         # двухстадийная сборка из готовых релизов (GPU=cuda — с CUDA-бэкендом)
 │   └── entrypoint.sh      # собирает аргументы сервера из /models и /voices
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), второй сервис в docker-compose.yml
+│   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
+│                          # голосов из админки), desktop.py (точка входа программы для Windows), static/
+├── packaging/windows/     # программа и установщик для Windows: build-runtime.py, build-exe.py (Nuitka),
+│                          # StreamTTS.iss (Inno Setup); сборка в CI — .github/workflows/windows.yml
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой
 │   └── import-voices.sh   # регистрация голосов из пар .wav + .txt и сохранение в voices/
@@ -303,6 +313,7 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 ├── voice-clips/           # варианты образцов, их синтез, оценки и выбор по наборам
 ├── voice-origs/           # сырые звуковые паки
 ├── samples/               # тестовые аудио
+├── runtime/               # нативный cosyvoice-server с DLL и ffmpeg для режима managed (Windows)
 └── stream-tts-data/       # настройки, токены и история stream-tts (volume)
 ```
 
