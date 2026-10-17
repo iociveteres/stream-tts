@@ -35,7 +35,7 @@
 | `tools/wc3/` | реплики WC3: `cut-clips.py` (кандидаты партиями, `pools.json`), `review.py` (тексты и метки фраз), `extract-subtitles.py` | да |
 | `tools/sources/` | прочие источники: `fetch-wiki-lines.py`, `extract-stalker.py`, `transcribe-lines.py` → `score-speaker.py` → `build-ref.py`; `villager-ref.py` | да |
 | `effects/` | эффекты поверх синтеза (`post`), сейчас `villager-fx.py` | да |
-| `voice-clips/<набор>/` | `set.json`, `alts.json` (варианты), `picks.json` (выбор), `ab/` (синтез, `scores.json`); у WC3 ещё партии `b0N/` | только `.txt`/`.json` |
+| `voice-clips/<набор>/` | `set.json`, `alts.json` (варианты), `picks.json` (выбор), `ab/` (синтез, `scores.json`); у WC3 ещё партии `b0N/` | нет (тексты реплик из игр) |
 | `voice-refs/` | итоговые образцы и `manifest.json` наборов | нет |
 | `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `.env` | данные и секреты | нет |
 | `runtime/` | нативный cosyvoice-server для Windows: exe, DLL (GGML CPU/CUDA/Vulkan, ICU, FFmpeg), `ffmpeg.exe` | нет |
@@ -96,7 +96,8 @@
 - Замеры скорости — по `elapsed_ms` из `docker compose logs cosyvoice` или через `127.0.0.1`: `localhost` из Python
   на Windows добавляет ~2 с (сначала пробует IPv6).
 - В `voice-clips/` лежит ручная работа пользователя: `ratings.txt`, `text-fixes.json`, `phrase-tags.json`,
-  `picks.json`, `alts.json`. Не перезаписывать без нужды, перед массовой правкой — резервная копия в scratchpad.
+  `picks.json`, `alts.json`. В git их нет (там тексты реплик из игр), откатить нечем: не перезаписывать без нужды,
+  перед массовой правкой — резервная копия в scratchpad.
 - Имена в русской локализации WC3 2002 года звучат по-старому (Артес, Тиренда, Малганус, Кел-Тузед, Мэв, Фарион,
   Маннорох) — это учитывается и в расшифровках, и в тексте для синтеза.
 - Переименование голоса: новое имя регистрируется (`import-voices.sh`), старое выгружается

@@ -38,18 +38,21 @@
 
 Новый набор — это папка `voice-clips/<набор>/` с `set.json`: `{"title": "…", "phrases": ["…", …]}`.
 
-| Путь | Что | В git |
-|---|---|---|
-| `voice-clips/<набор>/set.json` | название набора и тестовые фразы синтеза | да |
-| `voice-clips/<набор>/alts.json` | голоса и их варианты (формат ниже) | да |
-| `voice-clips/<набор>/picks.json` | выбор на слух и заметки: `{голос: {pick: [id…] или ["keep"], note}}` | да |
-| `voice-clips/<набор>/<голос>/<id>.wav`, `.txt` | вариант образца | только `.txt` |
-| `voice-clips/<набор>/ab/<голос>.<id>.<n>.wav` | синтез n-й тестовой фразы | нет |
-| `voice-clips/<набор>/ab/scores.json` | оценки synth.py | да |
-| `voice-clips/wc3/<партия>/` | кандидаты одной нарезки `cut-clips.py` (их файлы варианты WC3 и используют) | только `.txt`/`.json` |
-| `voice-clips/wc3/pools.json` | реплики «голоса в целом» для оценки `sim` | да |
-| `voice-clips/emotions.json`, `embeddings.json` | кеши модели эмоций и CAM++ | нет |
-| `voice-refs/<набор>/<имя>.wav`, `.txt`, `manifest.json` | установленные образцы; `replaced/<дата>/` — заменённые | нет |
+В git из этого ничего не попадает: в `voice-clips/` тексты реплик из игр и записей стримеров (права на них у
+правообладателей) и ручная разметка, она хранится только локально.
+
+| Путь | Что |
+|---|---|
+| `voice-clips/<набор>/set.json` | название набора и тестовые фразы синтеза |
+| `voice-clips/<набор>/alts.json` | голоса и их варианты (формат ниже) |
+| `voice-clips/<набор>/picks.json` | выбор на слух и заметки: `{голос: {pick: [id…] или ["keep"], note}}` |
+| `voice-clips/<набор>/<голос>/<id>.wav`, `.txt` | вариант образца |
+| `voice-clips/<набор>/ab/<голос>.<id>.<n>.wav` | синтез n-й тестовой фразы |
+| `voice-clips/<набор>/ab/scores.json` | оценки synth.py |
+| `voice-clips/wc3/<партия>/` | кандидаты одной нарезки `cut-clips.py` (их файлы варианты WC3 и используют) |
+| `voice-clips/wc3/pools.json` | реплики «голоса в целом» для оценки `sim` |
+| `voice-clips/emotions.json`, `embeddings.json` | кеши модели эмоций и CAM++ |
+| `voice-refs/<набор>/<имя>.wav`, `.txt`, `manifest.json` | установленные образцы; `replaced/<дата>/` — заменённые |
 
 `alts.json`:
 

@@ -313,7 +313,7 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 ├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts
 ├── docs/                  # voice-pipeline.md, voices.md, voices-wc3.md, stream-tts.md
 │
-│   Данные (в git попадают только тексты и json):
+│   Данные (в git не попадают):
 ├── models/                # модели (volume, только чтение)
 ├── voices/                # сохранённые голоса .gguf (volume)
 ├── voice-refs/            # итоговые образцы голосов (.wav + .txt) по наборам: wc3, games, streamers
@@ -392,11 +392,10 @@ docker run --rm --gpus all --entrypoint /opt/cosyvoice/cosyvoice-cli cosyvoice-s
 
 Код проекта (скрипты, инструменты, stream-tts, сборка, документация) — MIT, см. [LICENSE](LICENSE). Она не
 распространяется на чужое, что лежит рядом:
-- расшифровки реплик в `voice-clips/` — тексты из игр (Warcraft III, Dota 2 и др.) и записей стримеров, права
-  на них у правообладателей;
 - примеры звука `stream-tts/streamtts/static/quants/*.mp3` — синтез голосами `irina` и `wc3-footman`, клонированными
   с чужих записей;
-- образцы и голоса (`voice-refs/`, `voice-origs/`, `voices/`) в git не входят, у каждого свои права.
+- образцы, голоса и их подбор (`voice-refs/`, `voice-origs/`, `voices/`, `voice-clips/` с расшифровками реплик из
+  игр и записей стримеров) в git не входят, у каждого свои права.
 
 Сторонние компоненты:
 - cosyvoice.cpp: MIT.

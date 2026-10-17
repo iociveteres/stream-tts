@@ -8,11 +8,9 @@
 /packaging/windows/build/
 /packaging/windows/dist/
 /packaging/windows/.inno/
-voice-clips/**/*.wav
+# расшифровки реплик из игр и записей стримеров, ручная разметка: только локально (README, «Лицензии»)
+/voice-clips/
 .venv/
 /stream-tts-data/
 __pycache__/
 *.pyc
-voice-clips/**/embeddings.json
-voice-clips/**/emotions.json
-voice-clips/emotion-models.json
