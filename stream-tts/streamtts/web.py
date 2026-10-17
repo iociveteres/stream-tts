@@ -10,6 +10,8 @@ log = logging.getLogger("web")
 STATIC = os.path.join(config.HERE, "static")
 COOKIE = "stream_tts"
 PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/login", "/favicon")
+# Файлы, которые меняются под тем же адресом: статика при обновлении программы, примеры голосов при смене фразы
+REVALIDATE = ("/static/", "/voices/demos/")
 UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream")}
 MAX_UPLOAD = 512 << 20
 
@@ -28,6 +30,7 @@ def _secret():
 def make_app(ctx):
     app = web.Application(middlewares=[auth_middleware], client_max_size=1 << 20)
     app["ctx"] = ctx
+    app.on_response_prepare.append(no_cache)
     app["token"] = hmac.new(_secret().encode(), config.PASSWORD.encode(), hashlib.sha256).hexdigest()
     r = app.router
     r.add_get("/", page("admin.html"))
@@ -50,6 +53,14 @@ def make_app(ctx):
         r.add_post(path, fn)
     r.add_post("/api/voicesets/import", api_voiceset_import)
     return app
+
+
+async def no_cache(request, response):
+    # Без Cache-Control браузер держит файл по эвристике (доля от возраста Last-Modified), то есть днями, и после
+    # обновления берёт новую разметку со старыми admin.css/admin.js. no-cache — проверка при каждой загрузке:
+    # FileResponse отвечает 304 по ETag (mtime и размер), так что сеть почти не тратится.
+    if request.path.startswith(REVALIDATE):
+        response.headers["Cache-Control"] = "no-cache"
 
 
 def page(name):
@@ -119,7 +130,7 @@ async def voices_zip(request):
 
 # --- состояние ---
 SETTINGS_KEYS = ("enabled", "access", "filter_links", "filter_profanity", "read_nick", "subtitles", "queue_limit",
-                 "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "guide_done")
+                 "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "chat_all")
 
 
 def state(ctx, full=True):
@@ -133,6 +144,7 @@ def state(ctx, full=True):
         gpu=ctx.gpu.data,
         demos=dict(ctx.voices.progress),
         setup=ctx.install.public() if ctx.install else None,
+        bench=ctx.bench.public() if ctx.bench else None,
         ts=time.time(),
     )
     if full:
@@ -226,14 +238,16 @@ async def post_settings(request, ctx, data):
 
 
 async def post_voice(request, ctx, data):
-    names = ctx.voices.names() if data.get("all") else [data["name"]]
+    # name — один голос, names — несколько (кнопки «Включить/Выключить все» по результатам поиска)
+    many = "names" in data
+    names = [str(n) for n in data["names"]] if many else [data["name"]]
+    if any(n not in ctx.voices.names() for n in names):
+        return fail("нет такого голоса")
     for n in names:
-        if n not in ctx.voices.names():
-            return fail("нет такого голоса")
         v = ctx.settings.voice(n)
         if "enabled" in data:
             v["enabled"] = bool(data["enabled"])
-        if "gain_db" in data and not data.get("all"):
+        if "gain_db" in data and not many:
             v["gain_db"] = max(-20.0, min(20.0, float(data["gain_db"])))
     ctx.settings.save()
     ctx.voices.wake.set()
@@ -264,13 +278,6 @@ async def post_login(request, ctx, data):
 
 async def post_logout(request, ctx, data):
     await ctx.twitch.logout()
-    return ok()
-
-
-async def post_guide(request, ctx, data):
-    done = set(ctx.settings["guide_done"])
-    (done.add if data.get("done") else done.discard)(int(data["step"]))
-    ctx.settings.update(guide_done=sorted(done))
     return ok()
 
 
@@ -368,6 +375,12 @@ async def post_backend(request, ctx, data):
     return ok()
 
 
+async def post_bench(request, ctx, data):
+    _install(ctx)
+    ctx.bench.start(bool(data.get("all")))
+    return ok()
+
+
 async def post_voiceset_delete(request, ctx, data):
     await _install(ctx).delete_set(str(data["name"]))
     return ok()
@@ -425,7 +438,6 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/twitch/client_id": post_client_id,
     "/api/twitch/login": post_login,
     "/api/twitch/logout": post_logout,
-    "/api/twitch/guide": post_guide,
     "/api/reward": post_reward,
     "/api/reward/delete": post_reward_delete,
     "/api/enabled": post_enabled,
@@ -439,5 +451,6 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/model/cancel": post_model_cancel,
     "/api/model/use": post_model_use,
     "/api/backend": post_backend,
+    "/api/bench": post_bench,
     "/api/voicesets/delete": post_voiceset_delete,
 }.items()}

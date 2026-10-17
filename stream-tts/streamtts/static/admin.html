@@ -117,11 +117,10 @@
       <button id="vall-on">Включить все</button>
       <button id="vall-off">Выключить все</button>
     </div>
-    <p class="muted small">Выключенный голос нельзя выбрать командой, а зрители с ним получают новый голос по хешу ника.
-      Поправка громкости добавляется к выравниванию: без стриминга фраза доводится до −16 LUFS,
-      со стримингом — усилением, откалиброванным по примеру голоса.</p>
+    <p class="muted small">Выключенный голос нельзя выбрать командой, зрители с ним получат случайный.
+      Громкость голосов выравнивается сама; поправка — если голос всё равно тише или громче остальных.</p>
     <div class="table-wrap"><table id="voices"><thead><tr><th></th><th>Голос</th><th>Пример</th>
-      <th>Поправка, дБ</th><th class="num" title="Усиление для стриминга, по примеру">Калибровка</th></tr></thead>
+      <th>Поправка, дБ</th></tr></thead>
       <tbody></tbody></table></div>
   </div>
   <div class="card">
@@ -141,16 +140,15 @@
     <div>
       <div class="card">
         <h2>Модель</h2>
-        <p class="muted small">CosyVoice3 0.5B с Hugging Face (<code>Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF</code>)
-          в нескольких вариантах квантования: чем меньше файл, тем меньше видеопамяти. Скачивается один раз,
-          прерванная загрузка продолжается с того же места. Папка: <code id="models-dir"></code></p>
+        <p class="muted small">Чем меньше вариант, тем меньше видеопамяти; на слух разница почти не слышна.</p>
         <ul id="models" class="setlist quants"></ul>
-        <p class="muted small">Видеопамять — сколько занимает сервер синтеза на видеокарте NVIDIA: обычно и на самых
-          длинных образцах голоса; на Vulkan примерно на 0,5 ГБ больше. Примеры — одна и та же фраза
-          (<span id="sample-phrase"></span>).</p>
-        <div class="row end">
-          <label class="check small grow"><input type="checkbox" id="frontend"> ONNX-фронтенд int8 (~240 МБ): нужен
-            только для создания голосов из аудио, для озвучки не нужен</label>
+        <div class="row end mt">
+          <details class="grow">
+            <summary class="muted small">Дополнительно</summary>
+            <label class="check small mt"><input type="checkbox" id="frontend"> Скачать и фронтенд для создания
+              голосов из аудио (~240 МБ, для озвучки не нужен)</label>
+            <p class="muted small">Папка: <code id="models-dir"></code></p>
+          </details>
           <button type="button" id="model-cancel" class="danger" hidden>Отменить загрузку</button>
         </div>
         <div id="dl" class="dl mt" hidden>
@@ -160,9 +158,7 @@
       </div>
       <div class="card">
         <h2>Наборы голосов</h2>
-        <p class="muted small">Набор — zip с голосами <code>*.gguf</code> и <code>manifest.json</code> (названия,
-          эффекты). Имя набора — папка внутри архива или имя файла; на странице для зрителей это группа.
-          Повторная установка заменяет набор. Пока голоса ставятся, синтез остановлен на несколько секунд.
+        <p class="muted small">Набор — zip с голосами. Повторная установка заменяет набор.
           Папка: <code id="voices-dir"></code></p>
         <ul id="sets" class="setlist"></ul>
         <div class="row mt">
@@ -176,10 +172,20 @@
       <div class="card">
         <h2>Устройство синтеза</h2>
         <form id="backend-form" class="radios"></form>
-        <p class="muted small">Видеокарта синтезирует в 3–4 раза быстрее реального времени, процессор — в 4–9 раз
-          медленнее: для живого стрима нужна видеокарта. Vulkan работает на видеокартах NVIDIA, AMD и Intel; первая
-          фраза на нём после установки может синтезироваться до минуты (готовятся шейдеры), дальше быстро.</p>
+        <p class="muted small">Для стрима нужна видеокарта: процессор обычно не успевает за реальным временем.
+          Vulkan подходит для видеокарт NVIDIA, AMD и Intel.</p>
         <p id="backend-lock" class="warn small" hidden></p>
+      </div>
+      <div class="card">
+        <h2>Скорость синтеза</h2>
+        <p class="muted small">Замер на этом компьютере: синтез фразы и задержка первого звука при стриминге.
+          Пока идёт проверка, озвучка ждёт в очереди.</p>
+        <div id="bench-table"></div>
+        <div class="row mt">
+          <button id="bench-one" class="primary">Проверить текущее</button>
+          <button id="bench-all" title="Сервер перезапускается на каждом устройстве">Сравнить все устройства</button>
+          <span id="bench-state" class="small muted"></span>
+        </div>
       </div>
       <div class="card">
         <h2>Состояние сервера</h2>
@@ -202,6 +208,9 @@
           </select></label>
         <p class="muted small">Twitch к наградам такого ограничения не применяет: проверка идёт по бейджам из чата,
           поэтому зритель должен хоть раз написать в чат. Остальным баллы возвращаются.</p>
+        <label class="check"><input type="checkbox" name="chat_all"> Озвучивать все сообщения чата, без баллов</label>
+        <p class="muted small">Нужен вход в Twitch. Действуют те же доступ, баны, фильтры и лимит очереди; команды
+          (<code>!…</code>) и эмоуты не читаются. Награда работает как раньше.</p>
         <label class="check"><input type="checkbox" name="read_nick"> Читать ник: «&lt;ник&gt; говорит: …»</label>
         <label class="check"><input type="checkbox" name="subtitles"> Субтитры в оверлее</label>
         <div class="row">
@@ -216,8 +225,7 @@
           <summary class="muted small">Дополнительно</summary>
           <label class="mt">Размер куска стриминга, токенов <input type="number" name="chunk_tokens" min="10" max="1000" step="10"></label>
           <p class="muted small">25 токенов — секунда звука. Чем меньше кусок, тем раньше первый звук, но тем медленнее
-            синтез. RTX 3060 Ti, фраза ~25 с: 50 — первый звук через 1 с, синтез 0,8× реального времени;
-            150 — 2 с и 0,4×; 300 — 3 с и 0,33×; целиком — 6 с и 0,22×. Стримятся фразы длиннее полутора кусков.</p>
+            синтез. Стримятся фразы длиннее полутора кусков.</p>
           <label>max_token_text_ratio <input type="number" name="token_ratio" min="0" step="0.5"></label>
           <p class="muted small">Длину фразы ещё жёстко ограничивает обрезка: не больше 1,8× расчётной длины
             (12 символов в секунду) и не больше 60 с.</p>
@@ -283,6 +291,10 @@
   </div>
 </section>
 </main>
+<dialog id="ask">
+  <p id="ask-text"></p>
+  <div class="row end-x"><button type="button" id="ask-no">Отмена</button><button type="button" id="ask-yes"></button></div>
+</dialog>
 <div id="toast"></div>
 <div id="tip" class="tip" hidden></div>
 <script src="/static/admin.js"></script>

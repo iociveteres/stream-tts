@@ -13,6 +13,7 @@ DEFAULTS = {
     "filter_links": True,
     "filter_profanity": True,
     "read_nick": False,
+    "chat_all": False,          # озвучивать все сообщения чата, не только награду
     "subtitles": True,
     "queue_limit": 20,
     "streaming": True,
@@ -20,7 +21,6 @@ DEFAULTS = {
     "token_ratio": 10.0,        # max_token_text_ratio для /tts
     "chunk_tokens": 150,        # токенов в куске стриминга (по умолчанию в cosyvoice.cpp 28: заметно медленнее)
     "demo_phrase": "Привет, чат! Вот так звучит мой голос.",
-    "guide_done": [],           # пройденные шаги гайда регистрации приложения
     "voices": {},               # имя -> {enabled, gain_db, calib_db, calib_phrase}
     "known_voices": [],         # последний список голосов сервера (на случай, если он недоступен)
 }
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS bans (login TEXT PRIMARY KEY, ts REAL);
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY, redemption TEXT, ts REAL, user_id TEXT, login TEXT, voice TEXT,
     text_len INTEGER, outcome TEXT, reason TEXT, wait_ms INTEGER, synth_ms INTEGER, audio_ms INTEGER,
-    test INTEGER DEFAULT 0);
+    test INTEGER DEFAULT 0, chat INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
 """
 
@@ -93,6 +93,8 @@ class DB:
         self.con.row_factory = sqlite3.Row
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.executescript(SCHEMA)
+        if "chat" not in {r[1] for r in self.con.execute("PRAGMA table_info(events)")}:  # база до режима чата
+            self.con.execute("ALTER TABLE events ADD COLUMN chat INTEGER DEFAULT 0")
         self.lock = threading.Lock()
 
     def q(self, sql, *args):
@@ -139,7 +141,7 @@ class DB:
     # --- история ---
     def log(self, **e):
         cols = ("redemption", "ts", "user_id", "login", "voice", "text_len", "outcome", "reason",
-                "wait_ms", "synth_ms", "audio_ms", "test")
+                "wait_ms", "synth_ms", "audio_ms", "test", "chat")
         self.q(f"INSERT INTO events({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
                *(e.get(c) for c in cols))
 

@@ -165,6 +165,7 @@ class Managed:
         self.frontend = None       # (speech_tokenizer, campplus) для POST /frontend/model/load
         self.proc = None
         self.task = None
+        self.override = ""         # устройство на время проверки скорости (bench.py), в настройки не пишется
         self._restarting = False
         self._hold = 0             # paused(): сервер остановлен, пока меняются файлы голосов
         self._wake = None          # asyncio.Event: перезапуск без ожидания
@@ -177,8 +178,9 @@ class Managed:
 
     @property
     def prefer(self):
-        """Бэкенд: COSYVOICE_BACKEND, иначе выбор в админке, иначе auto."""
-        v = (env("COSYVOICE_BACKEND") or (self.s.get("backend", "") if self.s else "") or "auto").lower()
+        """Бэкенд: COSYVOICE_BACKEND, иначе проверка скорости, иначе выбор в админке, иначе auto."""
+        v = (env("COSYVOICE_BACKEND") or self.override or (self.s.get("backend", "") if self.s else "")
+             or "auto").lower()
         return v if v in BACKENDS else "auto"
 
     def public(self):
@@ -350,8 +352,8 @@ class Managed:
             await asyncio.sleep(1)
         else:
             return False
-        self.state = "running"
-        self.starts += 1
+        # «Работает» — только после фронтенда: иначе проверка скорости (bench.py) начинала синтез параллельно с
+        # /frontend/model/load, а к серверу можно лишь один запрос за раз
         if self.frontend:
             body = dict(speech_tokenizer=self.frontend[0], campplus=self.frontend[1])
             try:
@@ -360,6 +362,8 @@ class Managed:
                     log.info("ONNX-фронтенд: %s %s", r.status, (await r.text())[:200])
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 log.warning("ONNX-фронтенд не загружен: %s", e)
+        self.state = "running"
+        self.starts += 1
         return True
 
     async def _run(self, args):

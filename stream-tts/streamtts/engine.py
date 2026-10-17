@@ -26,9 +26,10 @@ def max_samples(text):
 
 
 class Item:
-    def __init__(self, rid, reward_id, user_id, login, display, raw, test=False):
+    def __init__(self, rid, reward_id, user_id, login, display, raw, test=False, chat=False):
         self.id, self.reward_id, self.user_id, self.login, self.display = rid, reward_id, user_id, login, display
         self.raw, self.test = raw, test
+        self.chat = chat        # сообщение чата (режим chat_all): баллов нет, возвращать нечего
         self.text = ""          # после фильтров
         self.speak = ""         # что синтезируется (с «<ник> говорит:»)
         self.voice = ""
@@ -44,7 +45,8 @@ class Item:
 
     def public(self, playing=False):
         return dict(id=self.id, login=self.login, display=self.display, text=self.text, voice=self.voice,
-                    state="playing" if playing else self.state, test=self.test, age=round(time.time() - self.received),
+                    state="playing" if playing else self.state, test=self.test, chat=self.chat,
+                    age=round(time.time() - self.received),
                     audio=round(self.samples / SR, 1))
 
 
@@ -176,6 +178,22 @@ class Engine:
         item = Item(rid, reward_id, user_id, login.lower(), display or login, raw or "", test)
         if not test:
             self.db.touch_user(user_id, item.login)
+        await self._accept(item)
+
+    async def chat_message(self, ev):
+        """Режим «все сообщения чата»: сообщение проходит тот же путь, что награда, но без баллов."""
+        frags = ev.get("message", {}).get("fragments") or []
+        if ev.get("reply") and frags and frags[0].get("type") == "mention":
+            frags = frags[1:]   # ответ начинается с @ника того, кому отвечают: его не читаем
+        # эмоуты и cheer-эмоуты — это имена картинок (Kappa, Cheer100), читаются только текст и упоминания
+        raw = "".join(f.get("text", "") for f in frags if f.get("type") in ("text", "mention"))
+        login = ev["chatter_user_login"].lower()
+        item = Item("chat-" + ev["message_id"], "", ev["chatter_user_id"], login,
+                    ev.get("chatter_user_name") or login, raw, chat=True)
+        await self._accept(item)
+
+    async def _accept(self, item):
+        user_id = item.user_id
         reason = None
         if not self.s["enabled"]:
             reason = R_OFF
@@ -195,6 +213,10 @@ class Engine:
                 if not item.voice:
                     reason = R_NOVOICE
         if reason:
+            if item.chat:  # чат не засоряет журнал и историю: без доступа, бана и т. п. сообщение просто не читается
+                if reason == R_FULL:
+                    self.note(f"{item.display}: сообщение чата не озвучено ({reason})")
+                return
             self.note(f"{item.display}: возврат ({reason})")
             await self.resolve(item, "refund", reason)
             return
@@ -213,14 +235,14 @@ class Engine:
             self.queue.remove(item)
         if outcome != "played":
             item.cancelled = True
-        if not item.test and self.twitch:
+        if not item.test and not item.chat and self.twitch:
             asyncio.create_task(self.twitch.set_status(item.reward_id, [item.id],
                                                        "FULFILLED" if outcome == "played" else "CANCELED"))
         wait = round((item.play_start - item.received) * 1000) if item.play_start else None
         self.db.log(redemption=item.id, ts=item.received, user_id=item.user_id, login=item.login,
                     voice=item.voice or None, text_len=len(item.text or item.raw), outcome=outcome, reason=reason,
                     wait_ms=wait, synth_ms=item.synth_ms, audio_ms=round(item.samples / SR * 1000) or None,
-                    test=int(item.test))
+                    test=int(item.test), chat=int(item.chat))
         await self.poke()
 
     # --- управление ---
@@ -268,8 +290,14 @@ class Engine:
         uid, login = ev["chatter_user_id"], ev["chatter_user_login"].lower()
         badges = {b["set_id"] for b in ev.get("badges") or []}
         self.db.touch_user(uid, login, badges)
-        if not text.lower().startswith("!tts"):
+        if not text.startswith("!"):
+            # Сообщение, отправленное вместе с нашей наградой, уже озвучивается как активация
+            if self.s["chat_all"] and text and (not self.twitch or
+                                                ev.get("channel_points_custom_reward_id") != self.s["reward"]["id"]):
+                await self.chat_message(ev)
             return
+        if not text.lower().startswith("!tts"):
+            return   # команды других ботов не читаются
         parts = text.split()
         cmd, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
         if cmd == "!ttssf":

@@ -298,7 +298,7 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 │   └── entrypoint.sh      # собирает аргументы сервера из /models и /voices
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), второй сервис в docker-compose.yml
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
-│                          # голосов из админки), desktop.py (точка входа программы для Windows), static/
+│                          # голосов из админки), bench.py (скорость устройств), desktop.py (точка входа программы для Windows), static/
 │                          # (static/quants/ — примеры звука квантов для админки и установщика)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py, build-exe.py (Nuitka),
 │                          # StreamTTS.iss (Inno Setup); сборка в CI — .github/workflows/windows.yml
