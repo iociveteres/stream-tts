@@ -20,10 +20,22 @@ log = logging.getLogger("install")
 
 REPO = "Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF"
 BASE = f"https://huggingface.co/{REPO}/resolve/main"
-# Основные кванты и их размер в байтах (полный список — scripts/download-model.sh --list)
-QUANTS = {"Q8_0": 943933536, "Q6_K": 839539424, "Q5_K_M": 682814464, "Q4_K_M": 629141792, "Q4_0": 527497952,
-          "F16": 1724750240}
+# Кванты на выбор (полный список — scripts/download-model.sh --list): размер файла в байтах и видеопамять
+# cosyvoice-server на CUDA, МБ — обычно и на самых длинных образцах (замеры на RTX 3060 Ti, 2026-10-17;
+# на Vulkan пик примерно на 0,5 ГБ больше). На 54 фразах (6 голосов × 3 seed) разборчивость по Whisper и
+# сходство CAM++ у всех трёх в пределах шума. Ниже Q5 не проверяли, F16 не лучше Q8_0 и вдвое больше.
+# Примеры звука — static/quants/<голос>-<квант>.mp3 (одна фраза, seed 42), те же файлы берёт установщик.
+QUANTS = {
+    "Q8_0": dict(size=943933536, vram=1500, vram_max=1900, note="Лучшее качество, рекомендация автора модели"),
+    "Q6_K": dict(size=839539424, vram=1450, vram_max=1800, note="На слух как Q8_0, видеопамяти на ~0,1 ГБ меньше"),
+    "Q5_K_M": dict(size=682814464, vram=1300, vram_max=1700,
+                   note="Для видеокарт с 4 ГБ: видеопамяти на ~0,2 ГБ меньше"),
+}
 DEFAULT_QUANT = "Q8_0"  # рекомендация автора модели
+SAMPLES = (("irina", "Женский голос"), ("wc3-footman", "Мужской голос"))
+SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет. Вперёд!"
+# Квант, выбранный в установщике (StreamTTS.iss): при первом запуске без модели он качается сам
+SETUP_CHOICE = os.path.join(paths.APP, "setup-model.txt")
 FRONTEND = ("frontend-onnx/campplus.int8.onnx", "frontend-onnx/speech_tokenizer_v3.int8.onnx")
 CHUNK = 1 << 20
 RETRIES = 5
@@ -58,7 +70,9 @@ class Installer:
 
     # --- состояние для админки ---
     def public(self):
-        return dict(quants=list(QUANTS.items()), default_quant=DEFAULT_QUANT, models=installed_models(),
+        quants = [dict(QUANTS[q], quant=q, file=model_name(q)) for q in QUANTS]
+        return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=SAMPLES, sample_phrase=SAMPLE_PHRASE,
+                    models=installed_models(),
                     model=os.path.basename(self.runtime.model) if self.runtime.model else self.s.get("model", ""),
                     models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets())
 
@@ -79,6 +93,20 @@ class Installer:
             files += [(f, f) for f in FRONTEND]
         self.dl = dict(state="running", quant=quant, file="", done=0, total=0, speed=0.0, error="")
         self.task = asyncio.create_task(self._download(quant, files))
+
+    def first_run(self):
+        """Модели нет, а в установщике выбран квант: качаем его сам, один раз (отмена не перезапускает)."""
+        if installed_models() or self.s.get("setup_download"):
+            return
+        try:
+            with open(SETUP_CHOICE, encoding="utf-8-sig") as f:
+                quant = f.read().strip()
+        except OSError:
+            return
+        if quant in QUANTS:
+            log.info("модель %s выбрана в установщике, качаю", quant)
+            self.s.update(setup_download=quant)
+            self.start_download(quant, False)
 
     def cancel(self):
         if self.task and not self.task.done():

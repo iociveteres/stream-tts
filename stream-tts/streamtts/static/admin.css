@@ -87,6 +87,10 @@ td.text { max-width: 360px; overflow-wrap: anywhere; }
   border-radius: 8px; background: var(--bg); }
 .setlist li .grow { min-width: 0; overflow-wrap: anywhere; }
 .setlist li.on { border-color: var(--accent); }
+.quants li { align-items: flex-start; }
+.quants .samples { gap: 6px; margin-top: 6px; }
+.quants .samples button { padding: 3px 10px; }
+.quants .samples button.on { border-color: var(--accent); color: var(--accent); }
 .dl .track { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .dl .fill { height: 8px; background: var(--accent); width: 0; transition: width .4s; }
 .radios { display: grid; gap: 8px; }

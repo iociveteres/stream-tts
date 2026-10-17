@@ -28,7 +28,7 @@
 |---|---|---|
 | `setup.sh`, `docker-compose.yml`, `docker-compose.gpu.yml` | запуск всего стека | да |
 | `cosyvoice/` | `Dockerfile` и `entrypoint.sh` образа cosyvoice-server | да |
-| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели и наборы голосов из админки, `desktop.py` — точка входа собранной программы, `static/` — админка, оверлей, страница голосов | да |
+| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели и наборы голосов из админки, `desktop.py` — точка входа собранной программы, `static/` — админка, оверлей, страница голосов, `static/quants/` — примеры звука квантов (их же берёт установщик) | да |
 | `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup), `THIRD-PARTY.txt`; сборочный venv `.venv`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`, `import-voices.sh` | да |
 | `tools/voices/` | общий подбор: `pick.py` + `pick.html` (страница, `--add`, `--add-batch`, `--install`), `synth.py` (синтез и оценки), `emotions.py` (модель эмоций), `emotion-eval.py` + `.html` (сверка моделей эмоций с разметкой на слух), `campplus.py` (эмбеддинги) | да |
@@ -81,7 +81,7 @@
   пакета и `effects/` лежат рядом с exe. Модули, которые грузятся по пути через importlib (эффекты), и их импорты
   Nuitka не видит: новые зависимости эффектов добавлять в `--include-module` в `build-exe.py`.
 - stream-tts без `COSYVOICE_URL` при наличии `runtime/cosyvoice-server.exe` запускает свой сервер (режим managed):
-  это второй сервер на той же видеокарте (~2,5 ГБ видеопамяти). Конфигурация `stream-tts` в `.claude/launch.json`
+  это второй сервер на той же видеокарте (1,5–1,9 ГБ видеопамяти на Q8_0). Конфигурация `stream-tts` в `.claude/launch.json`
   задаёт `COSYVOICE_URL` и работает с Docker как раньше.
 - **К cosyvoice-server — строго один запрос за раз.** Параллельная регистрация голосов роняет сервер
   (`double free`). Не запускать `scripts/import-voices.sh` одновременно с `tools/voices/synth.py` (его запускает и

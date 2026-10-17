@@ -141,17 +141,18 @@
     <div>
       <div class="card">
         <h2>Модель</h2>
-        <p class="muted small">CosyVoice3 0.5B с Hugging Face (<code>Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF</code>).
-          Скачивается один раз, прерванная загрузка продолжается с того же места.
-          Папка: <code id="models-dir"></code></p>
-        <ul id="models" class="setlist"></ul>
-        <form id="model-form" class="row end mt">
-          <label class="grow">Квантование <select name="quant" id="quant"></select></label>
-          <button class="primary" id="model-download">Скачать</button>
-          <button type="button" id="model-cancel" class="danger" hidden>Отменить</button>
-        </form>
-        <label class="check small mt"><input type="checkbox" id="frontend"> ONNX-фронтенд int8 (~240 МБ): нужен только
-          для создания голосов из аудио, для озвучки не нужен</label>
+        <p class="muted small">CosyVoice3 0.5B с Hugging Face (<code>Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF</code>)
+          в нескольких вариантах квантования: чем меньше файл, тем меньше видеопамяти. Скачивается один раз,
+          прерванная загрузка продолжается с того же места. Папка: <code id="models-dir"></code></p>
+        <ul id="models" class="setlist quants"></ul>
+        <p class="muted small">Видеопамять — сколько занимает сервер синтеза на видеокарте NVIDIA: обычно и на самых
+          длинных образцах голоса; на Vulkan примерно на 0,5 ГБ больше. Примеры — одна и та же фраза
+          (<span id="sample-phrase"></span>).</p>
+        <div class="row end">
+          <label class="check small grow"><input type="checkbox" id="frontend"> ONNX-фронтенд int8 (~240 МБ): нужен
+            только для создания голосов из аудио, для озвучки не нужен</label>
+          <button type="button" id="model-cancel" class="danger" hidden>Отменить загрузку</button>
+        </div>
         <div id="dl" class="dl mt" hidden>
           <div class="track"><div class="fill" id="dl-fill"></div></div>
           <p id="dl-text" class="small"></p>

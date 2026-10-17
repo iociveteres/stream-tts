@@ -376,26 +376,49 @@ const fmtDur = s => s < 60 ? `${Math.ceil(s)} с` : `${Math.round(s / 60)} ми�
 const BACKEND_NAMES = { auto: "Автоматически", cuda: "Видеокарта NVIDIA (CUDA)", vulkan: "Видеокарта (Vulkan)", cpu: "Процессор" };
 const RT_STATES = { waiting: "ждёт", starting: "запускается", running: "работает", crashed: "упал, перезапуск",
   stopped: "остановлен" };
-let quantsFilled = false, backendKey = "";
+// Примеры звучания квантов: один плеер на всю вкладку, кнопки переживают перерисовку по ws
+const sample = new Audio();
+let sampleKey = "";
+sample.onended = sample.onerror = () => { sampleKey = ""; renderServer(); };
+function playSample(key) {
+  if (sampleKey === key) { sample.pause(); sampleKey = ""; }
+  else { sample.src = `/static/quants/${key}.mp3`; sample.play().catch(() => {}); sampleKey = key; }
+  renderServer();
+}
+const fmtGB = mb => fmtNum(mb / 1024, 1);
+
+let backendKey = "";
 function renderServer() {
   const st = S.setup, rt = S.cosy.runtime;
   $('#tabs [data-tab="server"]').hidden = !st;
   if (!st) return;
   $("#models-dir").textContent = st.models_dir;
   $("#voices-dir").textContent = st.voices_dir;
-  if (!quantsFilled) {
-    $("#quant").replaceChildren(...st.quants.map(([q, size]) => h("option", { value: q, selected: q === st.default_quant },
-      `${q} — ${fmtMB(size)}${q === st.default_quant ? " (рекомендуется)" : ""}`)));
-    quantsFilled = true;
-  }
-  // Установленные модели: какая используется, переключение
-  $("#models").replaceChildren(...(st.models.length ? st.models.map(m => h("li", { class: m === st.model ? "on" : "" },
-    h("span", { class: "grow" }, m), m === st.model ? h("span", { class: "tag" }, "используется")
-      : h("button", { disabled: rt.locked.model, onclick: () => api("/api/model/use", { name: m }) }, "Использовать")))
-    : [h("li", { class: "muted" }, "Модель не установлена: выберите квантование и нажмите «Скачать».")]));
-  // Загрузка
+  $("#sample-phrase").textContent = `«${st.sample_phrase}»`;
   const d = st.download, running = d.state === "running";
-  $("#model-download").disabled = running;
+  // Модели: варианты квантования с примерами и установленные файлы (в т. ч. положенные вручную)
+  const use = m => m === st.model ? h("span", { class: "tag" }, "используется")
+    : h("button", { disabled: rt.locked.model, onclick: () => api("/api/model/use", { name: m }) }, "Использовать");
+  const catalog = st.quants.map(q => h("li", { class: q.file === st.model ? "on" : "" },
+    h("div", { class: "grow" },
+      h("b", {}, q.quant), q.quant === st.default_quant ? h("span", { class: "tag" }, "рекомендуется") : null,
+      h("div", { class: "small" }, `${fmtMB(q.size)} · видеопамять ≈${fmtGB(q.vram)} ГБ, до ${fmtGB(q.vram_max)} ГБ`),
+      h("div", { class: "muted small" }, q.note),
+      h("div", { class: "row samples" }, st.samples.map(([voice, label]) => {
+        const key = `${voice}-${q.quant}`;
+        return h("button", { type: "button", class: "small" + (sampleKey === key ? " on" : ""),
+          onclick: () => playSample(key) }, (sampleKey === key ? "■ " : "▶ ") + label);
+      }))),
+    st.models.includes(q.file) ? use(q.file)
+      : running && d.quant === q.quant ? h("span", { class: "tag" }, "скачивается")
+      : h("button", { class: "primary", disabled: running, onclick: () =>
+          api("/api/model/download", { quant: q.quant, frontend: $("#frontend").checked }) }, "Скачать")));
+  const known = st.quants.map(q => q.file);
+  const other = st.models.filter(m => !known.includes(m)).map(m => h("li", { class: m === st.model ? "on" : "" },
+    h("span", { class: "grow" }, m), use(m)));
+  const empty = st.models.length ? [] : [h("li", { class: "muted" }, "Модель не установлена: послушайте примеры и скачайте вариант.")];
+  $("#models").replaceChildren(...empty, ...catalog, ...other);
+  // Загрузка
   $("#model-cancel").hidden = !running;
   $("#dl").hidden = d.state === "idle";
   $("#dl-fill").style.width = (d.total ? Math.min(100, 100 * d.done / d.total) : 0) + "%";
@@ -437,10 +460,6 @@ function renderServer() {
     row("Адрес", S.cosy.url), rt.restarts ? row("Перезапусков", rt.restarts) : null,
     row("Программа", rt.server)));
 }
-$("#model-form").onsubmit = e => {
-  e.preventDefault();
-  api("/api/model/download", { quant: $("#quant").value, frontend: $("#frontend").checked });
-};
 $("#model-cancel").onclick = () => api("/api/model/cancel");
 $("#backend-form").onchange = e => api("/api/backend", { backend: e.target.value });
 $("#set-import").onclick = async () => {

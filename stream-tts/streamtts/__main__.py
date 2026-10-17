@@ -57,6 +57,7 @@ async def on_startup(app):
     ctx = app["ctx"]
     if ctx.runtime:
         await ctx.runtime.start()
+        ctx.install.first_run()
     await ctx.cosy.start()
     await ctx.twitch.start()
     ctx.tasks = [asyncio.create_task(c) for c in (
