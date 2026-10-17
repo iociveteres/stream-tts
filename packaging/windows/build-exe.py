@@ -60,7 +60,7 @@ def requirements(path):
 def copy_licenses():
     """Тексты лицензий того, что Nuitka положила в программу, — в dist/StreamTTS/licenses/.
 
-    Python (LICENSE.txt установки, на которой venv: там же OpenSSL, libffi, SQLite и прочие), пакеты из
+    LICENSE проекта (MIT, как StreamTTS-LICENSE.txt), Python (LICENSE.txt установки, на которой venv: там же OpenSSL, libffi, SQLite и прочие), пакеты из
     stream-tts/requirements.txt с зависимостями (их *.dist-info/licenses; у numpy там и OpenBLAS, и рантайм GCC),
     исключение Nuitka для её runtime и списки THIRD-PARTY*.txt. Лицензии рантайма — в runtime/licenses/
     (build-runtime.py)."""
@@ -69,6 +69,7 @@ def copy_licenses():
     os.makedirs(lic)
     for name in ("THIRD-PARTY.txt", "THIRD-PARTY.en.txt"):
         shutil.copy(os.path.join(HERE, name), lic)
+    shutil.copy(os.path.join(ROOT, "LICENSE"), os.path.join(lic, "StreamTTS-LICENSE.txt"))
     os.makedirs(os.path.join(lic, "python"))
     shutil.copy(os.path.join(sys.base_prefix, "LICENSE.txt"), os.path.join(lic, "python"))
 

@@ -293,6 +293,7 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 ├── docker-compose.yml     # cosyvoice + stream-tts
 ├── docker-compose.gpu.yml # надстройка для видеокарты NVIDIA
 ├── AGENTS.md              # заметки для ИИ-агентов (CLAUDE.md ссылается на него)
+├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
 ├── cosyvoice/             # образ cosyvoice-server
 │   ├── Dockerfile         # двухстадийная сборка из готовых релизов (GPU=cuda — с CUDA-бэкендом)
 │   └── entrypoint.sh      # собирает аргументы сервера из /models и /voices
@@ -389,6 +390,15 @@ docker run --rm --gpus all --entrypoint /opt/cosyvoice/cosyvoice-cli cosyvoice-s
 
 ## Лицензии
 
+Код проекта (скрипты, инструменты, stream-tts, сборка, документация) — MIT, см. [LICENSE](LICENSE). Она не
+распространяется на чужое, что лежит рядом:
+- расшифровки реплик в `voice-clips/` — тексты из игр (Warcraft III, Dota 2 и др.) и записей стримеров, права
+  на них у правообладателей;
+- примеры звука `stream-tts/streamtts/static/quants/*.mp3` — синтез голосами `irina` и `wc3-footman`, клонированными
+  с чужих записей;
+- образцы и голоса (`voice-refs/`, `voice-origs/`, `voices/`) в git не входят, у каждого свои права.
+
+Сторонние компоненты:
 - cosyvoice.cpp: MIT.
 - Модели CosyVoice3 GGUF: Apache-2.0.
 - FFmpeg из репозиториев Ubuntu может включать GPL-компоненты. Это важно только при публикации образа.
