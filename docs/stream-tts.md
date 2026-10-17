@@ -274,8 +274,12 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
   без CUDA) и CUDA; CUDA по умолчанию снята, если в системе нет `nvcuda.dll` (драйвера NVIDIA). VC++ Redistributable
   ставится тихо, если в реестре (`HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64`) версия старше 14.51:
   cosyvoice собран тулсетом 14.51 и со старым рантаймом не запускается. Запущенную программу установщик видит по
-  мьютексу `StreamTTS` и просит закрыть. Установщик со всеми компонентами — 611 МБ, сжатие ~1 мин (проверено на
-  Inno Setup 6.7.3). Inno Setup можно не ставить в систему: `innosetup-6.x.exe /PORTABLE=1 /CURRENTUSER /VERYSILENT
+  мьютексу `StreamTTS` и просит закрыть. Языки — русский и английский: свои тексты в `[CustomMessages]`, список
+  сторонних лицензий (`THIRD-PARTY.txt`, `THIRD-PARTY.en.txt`) — страница «Информация», без принятия соглашения;
+  выбранная модель видна в сводке перед установкой. Перенос русского текста посреди слова в окнах установщика —
+  признак включённой в Windows бета-опции «UTF-8 для всех языков» (ANSI-кодовая страница 65001): так переносит
+  сам `DrawText`, у остальных пользователей перенос по словам. Установщик со всеми компонентами — 611 МБ, сжатие
+  ~1 мин (проверено на Inno Setup 6.7.3). Inno Setup можно не ставить в систему: `innosetup-6.x.exe /PORTABLE=1 /CURRENTUSER /VERYSILENT
   /DIR=packaging\windows\.inno` (папка в `.gitignore`, `build-exe.py` ищет ISCC там) или в любую папку и путь к
   `ISCC.exe` в переменной `ISCC`.
 - `.github/workflows/windows.yml` — то же в GitHub Actions (`windows-latest`, по кнопке или тегу `v*`), установщик —

@@ -1,0 +1,38 @@
+StreamTTS for Windows includes third-party software. Licenses:
+
+cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT
+  https://github.com/Lourdle/cosyvoice.cpp
+GGML from llama.cpp b11500 (ggml*.dll) — MIT
+  https://github.com/ggml-org/llama.cpp
+LLVM OpenMP (libomp.dll) — Apache-2.0 with LLVM exception,
+  see LICENSE-LLVM-OpenMP
+ONNX Runtime (onnxruntime*.dll) — MIT
+  https://github.com/microsoft/onnxruntime
+ICU 78.3 (icu*.dll) — Unicode License v3, see icu-LICENSE
+  https://github.com/unicode-org/icu
+FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), BtbN lgpl-shared build —
+  LGPL 2.1 or later, see ffmpeg-LICENSE.txt
+  Source code: https://github.com/FFmpeg/FFmpeg (branch release/8.1)
+  Build: https://github.com/BtbN/FFmpeg-Builds
+NVIDIA CUDA Runtime and cuBLAS (cudart64_13.dll, cublas64_13.dll,
+  cublasLt64_13.dll; CUDA component) — NVIDIA CUDA Toolkit EULA,
+  redistributable files: https://docs.nvidia.com/cuda/eula/
+Microsoft Visual C++ Redistributable (vcruntime140*.dll, vc_redist.x64.exe) —
+  Microsoft Visual Studio distributable code license
+Python 3.14 (python314.dll, *.pyd) — PSF License 2.0
+  https://docs.python.org/3/license.html
+  Bundled with it: OpenSSL (libssl-3.dll, libcrypto-3.dll) — Apache-2.0,
+  libffi — MIT, SQLite — public domain
+Python packages: aiohttp — Apache-2.0 and MIT; aiosignal, frozenlist,
+  multidict, propcache, yarl — Apache-2.0; aiohappyeyeballs — PSF-2.0;
+  attrs — MIT; idna — BSD-3-Clause; numpy (with OpenBLAS in numpy.libs) —
+  BSD-3-Clause
+Nuitka (the program's compiler): its runtime in StreamTTS.exe is AGPLv3
+  with the Nuitka Runtime Library Exception, which allows distributing
+  the compiled program under any license
+
+The speech model (CosyVoice3 0.5B, Apache-2.0) is not part of the installer:
+it is downloaded on first launch from
+https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+
+Note: the StreamTTS interface is in Russian.

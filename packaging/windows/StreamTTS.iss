@@ -7,6 +7,7 @@
 ; %LOCALAPPDATA%\StreamTTS (paths.py) и при удалении не трогаются. Модель в установщик не входит: вариант
 ; квантования выбирается на странице «Модель синтеза» (с примерами звука), пишется в {app}\setup-model.txt, и
 ; программа сама качает его при первом запуске (install.py, Installer.first_run); потом — вкладка «Сервер».
+; Тексты — в [CustomMessages] на двух языках; сторонние лицензии — страница «Информация» (THIRD-PARTY*.txt).
 
 #ifndef AppVersion
   #define AppVersion "0.1.0"
@@ -35,20 +36,67 @@ LZMANumBlockThreads=4
 WizardStyle=modern
 UninstallDisplayIcon={app}\StreamTTS.exe
 UninstallDisplayName=StreamTTS
-LicenseFile=THIRD-PARTY.txt
 
 [Languages]
-Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
-Name: "en"; MessagesFile: "compiler:Default.isl"
+; сторонние лицензии только перечисляются, принимать их не нужно: страница «Информация», а не соглашение
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "THIRD-PARTY.txt"
+Name: "en"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "THIRD-PARTY.en.txt"
+
+[Messages]
+; в Russian.isl «Кб», «Мб», «Гб», в остальных текстах — КБ, МБ, ГБ
+ru.DiskSpaceGBLabel=Требуется как минимум [gb] ГБ свободного дискового пространства.
+ru.DiskSpaceMBLabel=Требуется как минимум [mb] МБ свободного дискового пространства.
+ru.DiskSpaceWarning=Установка требует не менее %1 КБ свободного места, а на выбранном вами диске доступно только %2 КБ.%n%nВы желаете тем не менее продолжить установку?
+ru.ComponentSize1=%1 КБ
+ru.ComponentSize2=%1 МБ
+ru.ComponentsDiskSpaceGBLabel=Текущий выбор требует не менее [gb] ГБ на диске.
+ru.ComponentsDiskSpaceMBLabel=Текущий выбор требует не менее [mb] МБ на диске.
+
+[CustomMessages]
+ru.TypeFull=Полная (с CUDA)
+ru.TypeCompact=Без CUDA (видеокарты AMD, Intel или только процессор)
+ru.TypeCustom=Выборочная
+ru.ComponentMain=StreamTTS и cosyvoice-server (процессор и Vulkan)
+ru.ComponentCuda=Ускорение на видеокартах NVIDIA (CUDA)
+ru.VCRedistStatus=Установка Microsoft Visual C++ Redistributable…
+ru.ModelCaption=Модель синтеза
+ru.ModelDescription=Какой вариант модели скачать при первом запуске?
+ru.ModelSubCaption=Модель CosyVoice3 качается с Hugging Face при первом запуске программы, другой вариант можно скачать потом во вкладке «Сервер». Чем меньше файл, тем меньше видеопамяти; на слух разница едва заметна — послушайте примеры. Видеопамять указана для видеокарт NVIDIA, на Vulkan — примерно на 0,5 ГБ больше.
+ru.ModelQ8=Q8_0 — 900 МБ, видеопамять ≈1,5 ГБ (до 1,9) — рекомендуется
+ru.ModelQ6=Q6_K — 801 МБ, видеопамять ≈1,4 ГБ (до 1,8)
+ru.ModelQ5=Q5_K_M — 651 МБ, видеопамять ≈1,3 ГБ (до 1,7) — для видеокарт с 4 ГБ
+ru.ModelListen=Послушать выбранный вариант:
+ru.ModelFemale=Женский голос
+ru.ModelMale=Мужской голос
+ru.ModelStop=Стоп
+ru.ReadyModel=Модель синтеза (скачается при первом запуске):
+en.TypeFull=Full (with CUDA)
+en.TypeCompact=Without CUDA (AMD or Intel graphics, or CPU only)
+en.TypeCustom=Custom
+en.ComponentMain=StreamTTS and cosyvoice-server (CPU and Vulkan)
+en.ComponentCuda=NVIDIA GPU acceleration (CUDA)
+en.VCRedistStatus=Installing Microsoft Visual C++ Redistributable…
+en.ModelCaption=Speech Model
+en.ModelDescription=Which model variant should be downloaded on first launch?
+en.ModelSubCaption=The CosyVoice3 model is downloaded from Hugging Face when the program first starts; another variant can be downloaded later on the «Сервер» (Server) tab. A smaller file needs less video memory, and the difference is barely audible — listen to the samples. Video memory is given for NVIDIA cards; with Vulkan it is about 0.5 GB more.
+en.ModelQ8=Q8_0 — 900 MB, video memory ≈1.5 GB (up to 1.9) — recommended
+en.ModelQ6=Q6_K — 801 MB, video memory ≈1.4 GB (up to 1.8)
+en.ModelQ5=Q5_K_M — 651 MB, video memory ≈1.3 GB (up to 1.7) — for 4 GB graphics cards
+en.ModelListen=Listen to the selected variant:
+en.ModelFemale=Female voice
+en.ModelMale=Male voice
+en.ModelStop=Stop
+en.ReadyModel=Speech model (downloaded on first launch):
 
 [Types]
-Name: "full"; Description: "Полная (с CUDA)"
-Name: "compact"; Description: "Без CUDA (видеокарты AMD, Intel или только процессор)"
-Name: "custom"; Description: "Выборочная"; Flags: iscustom
+Name: "full"; Description: "{cm:TypeFull}"
+Name: "compact"; Description: "{cm:TypeCompact}"
+Name: "custom"; Description: "{cm:TypeCustom}"; Flags: iscustom
 
 [Components]
-Name: "main"; Description: "StreamTTS и cosyvoice-server (процессор и Vulkan)"; Types: full compact custom; Flags: fixed
-Name: "cuda"; Description: "Ускорение на видеокартах NVIDIA (CUDA), ~660 МБ"; Types: full
+Name: "main"; Description: "{cm:ComponentMain}"; Types: full compact custom; Flags: fixed
+; размер (~660 МБ) Inno показывает в колонке справа
+Name: "cuda"; Description: "{cm:ComponentCuda}"; Types: full
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -77,9 +125,9 @@ Name: "{autoprograms}\StreamTTS"; Filename: "{app}\StreamTTS.exe"; WorkingDir: "
 Name: "{autodesktop}\StreamTTS"; Filename: "{app}\StreamTTS.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Установка Microsoft Visual C++ Redistributable…"; Flags: waituntilterminated; Check: VCRedistNeeded
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "{cm:VCRedistStatus}"; Flags: waituntilterminated; Check: VCRedistNeeded
 ; от имени пользователя, а не админа: данные — в его %LOCALAPPDATA%
-Filename: "{app}\StreamTTS.exe"; Description: "Запустить StreamTTS"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\StreamTTS.exe"; Description: "{cm:LaunchProgram,StreamTTS}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Code]
 const
@@ -152,15 +200,11 @@ var
   Stop: TNewButton;
   Top: Integer;
 begin
-  ModelPage := CreateInputOptionPage(wpSelectComponents, 'Модель синтеза',
-    'Какой вариант модели скачать при первом запуске?',
-    'Модель CosyVoice3 качается с Hugging Face при первом запуске программы, другой вариант можно скачать ' +
-    'потом во вкладке «Сервер». Чем меньше файл, тем меньше видеопамяти; на слух разница едва заметна — ' +
-    'послушайте примеры. Видеопамять указана для видеокарт NVIDIA, на Vulkan — примерно на 0,5 ГБ больше.',
-    True, False);
-  ModelPage.Add('Q8_0 — 900 МБ, видеопамять ≈1,5 ГБ (до 1,9) — рекомендуется');
-  ModelPage.Add('Q6_K — 801 МБ, видеопамять ≈1,4 ГБ (до 1,8)');
-  ModelPage.Add('Q5_K_M — 651 МБ, видеопамять ≈1,3 ГБ (до 1,7) — для видеокарт с 4 ГБ');
+  ModelPage := CreateInputOptionPage(wpSelectComponents, CustomMessage('ModelCaption'),
+    CustomMessage('ModelDescription'), CustomMessage('ModelSubCaption'), True, False);
+  ModelPage.Add(CustomMessage('ModelQ8'));
+  ModelPage.Add(CustomMessage('ModelQ6'));
+  ModelPage.Add(CustomMessage('ModelQ5'));
   ModelPage.SelectedValueIndex := StrToIntDef(GetPreviousData('ModelQuant', '0'), 0);
   ModelPage.CheckListBox.Height := ScaleY(66);
 
@@ -168,11 +212,11 @@ begin
   Hint := TNewStaticText.Create(ModelPage);
   Hint.Parent := ModelPage.Surface;
   Hint.Top := Top;
-  Hint.Caption := 'Послушать выбранный вариант:';
+  Hint.Caption := CustomMessage('ModelListen');
   Top := Hint.Top + Hint.Height + ScaleY(6);
-  AddButton('Женский голос', 0, Top, @SampleFemaleClick);
-  AddButton('Мужской голос', ScaleX(138), Top, @SampleMaleClick);
-  Stop := AddButton('Стоп', ScaleX(276), Top, @SampleStopClick);
+  AddButton(CustomMessage('ModelFemale'), 0, Top, @SampleFemaleClick);
+  AddButton(CustomMessage('ModelMale'), ScaleX(138), Top, @SampleMaleClick);
+  Stop := AddButton(CustomMessage('ModelStop'), ScaleX(276), Top, @SampleStopClick);
   Stop.Width := ScaleX(80);
 end;
 
@@ -200,6 +244,33 @@ end;
 procedure DeinitializeSetup;
 begin
   StopSample;
+end;
+
+procedure AddMemo(var Memo: String; Info, NewLine: String);
+begin
+  if Info <> '' then
+  begin
+    // разделы — через пустую строку, как в стандартной сводке
+    if Memo <> '' then
+      Memo := Memo + NewLine + NewLine;
+    Memo := Memo + Info;
+  end;
+end;
+
+// Стандартная сводка плюс выбранная модель (страницу модели пропустили — модель уже скачана, писать нечего)
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo, MemoComponentsInfo,
+  MemoGroupInfo, MemoTasksInfo: String): String;
+begin
+  Result := '';
+  AddMemo(Result, MemoUserInfoInfo, NewLine);
+  AddMemo(Result, MemoDirInfo, NewLine);
+  AddMemo(Result, MemoTypeInfo, NewLine);
+  AddMemo(Result, MemoComponentsInfo, NewLine);
+  if not ModelInstalled then
+    AddMemo(Result, CustomMessage('ReadyModel') + NewLine + Space +
+      ModelPage.CheckListBox.ItemCaption[ModelPage.SelectedValueIndex], NewLine);
+  AddMemo(Result, MemoGroupInfo, NewLine);
+  AddMemo(Result, MemoTasksInfo, NewLine);
 end;
 
 procedure RegisterPreviousData(PreviousDataKey: Integer);
