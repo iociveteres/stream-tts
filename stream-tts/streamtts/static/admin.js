@@ -496,7 +496,9 @@ function renderDemoProgress() {
 // --- новый голос из записи (editor.py) ---
 // Черновик живёт на сервере; здесь его копия D. Варианты правятся на месте и уходят на сервер целиком с задержкой
 // (edChanged), перед синтезом и сохранением — сразу (edFlush): сервер синтезирует то, что у него записано.
-const ED_PACKAGES = ["frontend"];   // без этих пакетов голос из записи не создать
+const ED_PACKAGES = ["frontend", "music"];   // пакеты для редактора: без фронтенда голос не создать
+const pkg = id => (S.packages || []).find(p => p.id === id);
+const musicReady = () => !!(pkg("music") && pkg("music").installed && pkg("music").usable);
 const LEN_OK = [10, 20], LEN_MAX = [2, 30];   // с: совет и пределы длины образца (editor.SAMPLE_MIN/MAX)
 let D = null;
 const ed = { bufs: {}, views: {}, sel: null, busy: new Set(), synthAll: false, timer: 0, saving: null };
@@ -752,7 +754,7 @@ function addVariant(s) {
   if (!ed.sel || ed.sel.src !== s.id) { toast(T("Сначала выделите отрезок на волне этой записи"), true); return; }
   const r2 = x => Math.round(x * 100) / 100;
   const v = { id: "v" + Date.now().toString(36), src: s.id, start: r2(ed.sel.a), end: r2(ed.sel.b), text: "", denoise: false,
-    ready: [] };
+    music: false, ready: [] };
   D.variants.push(v);
   renderEdVariants();
   renderMatrix();
@@ -793,6 +795,11 @@ function renderEdVariants() {
       h("div", { class: "row" },
         h("b", {}, vLabel(v)), h("span", { class: "muted small" }, src.name),
         num("start", T("от, с")), num("end", T("до, с")), dur,
+        // музыка убирается до шумоподавления (editor.sample); без пакета галочку можно только снять
+        h("label", { class: "check small", title: musicReady() ? T("Голос отделяется от музыки (Demucs) один раз, " +
+            "около 10 секунд на 20 секунд записи") : T("Нужен пакет «Очистка образца от музыки»") },
+          h("input", { type: "checkbox", checked: !!v.music, disabled: !musicReady() && !v.music,
+            onchange: e => { v.music = e.target.checked; edChanged(); } }), T("убрать музыку")),
         h("label", { class: "check small" }, h("input", { type: "checkbox", checked: v.denoise,
           onchange: e => { v.denoise = e.target.checked; edChanged(); } }), T("шумоподавление")),
         h("span", { class: "grow" }),
@@ -970,7 +977,8 @@ function renderPackages() {
       : h("span", { class: "tag" }, T("не установлен"));
     else if (mine && running) action = h("button", { onclick: () => api("/api/model/cancel") }, T("Отменить"));
     else if (p.installed) action = h("button", { class: "icon danger", title: T("Удалить пакет"), onclick: async () => {
-        if (await ask(T("Удалить пакет «{name}»? Сервер синтеза перезапустится.", { name: p.title }), T("Удалить"), true))
+        if (await ask(p.restart ? T("Удалить пакет «{name}»? Сервер синтеза перезапустится.", { name: p.title })
+            : T("Удалить пакет «{name}»?", { name: p.title }), T("Удалить"), true))
           api("/api/package/delete", { id: p.id }); } }, "✕");
     else action = h("button", { class: "primary", disabled: running, onclick: () => api("/api/package/download", { id: p.id }) },
       T("Скачать"));
@@ -978,16 +986,24 @@ function renderPackages() {
         { running: dlProgress(d), error: T("Ошибка: {e}", { e: d.error }),
           cancelled: T("Загрузка отменена: «Скачать» продолжит с того же места.") }[d.state] || "")
       : null;
+    if (!p.usable) action = h("span", { class: "tag" }, T("недоступен"));
+    const hint = !p.usable ? T("В этой версии программы нет onnxruntime (в образе Docker его нет): пакет работает " +
+        "в программе для Windows и при запуске из исходников.")
+      : S.setup || p.installed ? ""
+      : p.restart ? T("Сервер синтеза внешний: скачайте фронтенд на нём (scripts/download-model.sh --frontend int8) " +
+        "и перезапустите cosyvoice.")
+      : T("Сервер синтеза внешний, загрузка пакетов отключена: положите файлы в {dir}.",
+        { dir: p.dir });
     return h("li", { class: p.installed ? "" : "on" }, h("div", { class: "grow" },
       h("b", {}, p.title), " ", h("span", { class: "muted small" }, fmtMB(p.size) + " · " + p.license),
       S.setup && p.installed ? h("span", { class: "tag" }, T("установлен")) : null,
       h("div", { class: "small muted" }, p.about),
-      !S.setup && !p.installed ? h("div", { class: "small warn" }, T("Сервер синтеза внешний: скачайте фронтенд " +
-        "на нём (scripts/download-model.sh --frontend int8) и перезапустите cosyvoice.")) : null,
+      hint ? h("div", { class: "small warn" }, hint) : null,
       status), action);
   };
   $("#packages").replaceChildren(...S.packages.map(item));
   $("#ed-packages").replaceChildren(...S.packages.filter(p => ED_PACKAGES.includes(p.id)).map(item));
+  if (D && !$("#editor").hidden) renderEdVariants();   // галочка «убрать музыку» зависит от пакета
 }
 
 let backendKey = "";
@@ -1028,7 +1044,8 @@ function renderServer() {
   $("#dl-text").className = "small " + ({ error: "bad", done: "good" }[d.state] || "");
   $("#dl-text").textContent = {
     running: dlProgress(d),
-    done: d.package ? T("Готово: пакет скачан, сервер перезапускается.")
+    done: d.package ? ((pkg(d.package) || {}).restart ? T("Готово: пакет скачан, сервер перезапускается.")
+        : T("Готово: пакет скачан."))
       : T("Готово: {quant} скачана, сервер перезапускается.", { quant: d.quant }),
     cancelled: T("Загрузка отменена на {done} из {total}: «Скачать» продолжит с этого места.",
       { done: fmtMB(d.done), total: fmtMB(d.total) }),

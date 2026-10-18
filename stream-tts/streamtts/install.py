@@ -2,8 +2,10 @@
 
 Модель качается как в scripts/download-model.sh: Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF с Hugging Face, квант на
 выбор (по умолчанию Q8_0), по желанию ONNX-фронтенд int8 (нужен только для извлечения голоса из аудио, для озвучки
-не нужен; он же — дополнительный пакет из PACKAGES, качается и удаляется из настроек админки). Файл пишется в <имя>.part с докачкой (Range) и повторами, сверяется с sha256 из x-linked-etag и только
-потом переименовывается. Папка моделей — paths.MODELS.
+не нужен; он же — дополнительный пакет из PACKAGES, качается и удаляется из настроек админки). Другие пакеты
+(htdemucs для очистки образца от музыки, separate.py) — из своих репозиториев Hugging Face. Файл пишется в <имя>.part
+с докачкой (Range) и повторами, сверяется с sha256 из x-linked-etag и только потом переименовывается. Папка
+моделей — paths.MODELS.
 
 Набор голосов — zip с *.gguf и manifest.json (ключи — имена голосов: title, post…) в корне или в одной папке.
 Имя набора — эта папка или имя zip; оно же группа на странице голосов (voices.GROUPS). Набор ставится в
@@ -39,15 +41,25 @@ SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не верну�
 # Квант, выбранный в установщике (StreamTTS.iss): при первом запуске без модели он качается сам
 SETUP_CHOICE = os.path.join(paths.APP, "setup-model.txt")
 FRONTEND = ("frontend-onnx/campplus.int8.onnx", "frontend-onnx/speech_tokenizer_v3.int8.onnx")
-# Необязательные пакеты: качаются из админки (настройки и редактор голоса), лежат в paths.MODELS. size — байт.
-# alt — те же файлы в полной точности (scripts/download-model.sh --frontend full): тоже считаются установленными.
+# Необязательные пакеты: качаются из админки (настройки и редактор голоса). files — пути в репозитории source на
+# Hugging Face, локально — paths.MODELS/<into>/<путь>. size — байт. alt — те же файлы в полной точности
+# (scripts/download-model.sh --frontend full): тоже считаются установленными. restart — файлы читает
+# cosyvoice-server: после загрузки он перезапускается, а удаляются они при остановленном сервере.
 PACKAGES = {
     "frontend": dict(
         title="Создание голосов из записи",
         about="ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса). Нужен, чтобы сделать "
               "голос из записи; для озвучки не нужен.",
-        files=FRONTEND, size=252891972, license="Apache-2.0", source=REPO,
+        files=FRONTEND, size=252891972, license="Apache-2.0", source=REPO, restart=True,
         alt=("frontend-onnx/campplus.onnx", "frontend-onnx/speech_tokenizer_v3.onnx")),
+    # Веса Demucs обучены на MusDB: автор называет их исследовательскими (facebookresearch/demucs#267, #327, #508),
+    # код Demucs и экспорт в ONNX — MIT. Поэтому пакет не входит в установщик, а качается по кнопке, с пометкой.
+    "music": dict(
+        title="Очистка образца от музыки",
+        about="Demucs v4 (htdemucs, int8): отделяет голос от музыки — галочка «убрать музыку» у варианта образца в "
+              "редакторе голоса. Работает на процессоре: 20 секунд записи — около 10 секунд.",
+        files=("htdemucs_int8.onnx",), into="demucs", size=84108789, source="HRSadeghi/demucs-onnx",
+        license="веса — только для исследований"),
 }
 CHUNK = 1 << 20
 RETRIES = 5
@@ -56,6 +68,13 @@ SET_NAME = re.compile(r"[^a-z0-9_-]+")
 VOICE_NAME = re.compile(r"^[\w.-]{1,64}$")
 MAX_GGUF = 64 << 20        # голос ~120 КБ; больше — точно не голос
 MAX_ZIP_FILES = 2000
+
+
+def package_files(pid):
+    """[(url, путь от paths.MODELS)] файлов пакета."""
+    p = PACKAGES[pid]
+    return [(f"https://huggingface.co/{p['source']}/resolve/main/{f}", f"{p['into']}/{f}" if p.get("into") else f)
+            for f in p["files"]]
 
 
 def model_name(quant):
@@ -102,9 +121,9 @@ class Installer:
             raise ValueError(tr("неизвестный квант {quant}", quant=quant))
         if self.task and not self.task.done():
             raise ValueError(tr("загрузка уже идёт"))
-        files = [(model_name(quant), model_name(quant))]
+        files = [(f"{BASE}/{model_name(quant)}", model_name(quant))]
         if frontend:
-            files += [(f, f) for f in FRONTEND]
+            files += package_files("frontend")
         self.dl = dict(state="running", quant=quant, package="", file="", done=0, total=0, speed=0.0, error="")
         self.task = asyncio.create_task(self._download(quant, files))
 
@@ -114,13 +133,16 @@ class Installer:
         if self.task and not self.task.done():
             raise ValueError(tr("загрузка уже идёт"))
         self.dl = dict(state="running", quant="", package=pid, file="", done=0, total=0, speed=0.0, error="")
-        self.task = asyncio.create_task(self._download("", [(f, f) for f in PACKAGES[pid]["files"]]))
+        self.task = asyncio.create_task(self._download("", package_files(pid)))
 
     async def delete_package(self, pid):
         if pid not in PACKAGES:
             raise ValueError(tr("нет такого пакета"))
-        async with self.runtime.paused():  # сервер держит открытыми файлы фронтенда
-            for rel in PACKAGES[pid]["files"] + PACKAGES[pid]["alt"]:
+        p = PACKAGES[pid]
+        files = [rel for _, rel in package_files(pid)] + list(p.get("alt", ()))
+        # сервер держит открытыми файлы фронтенда
+        async with self.runtime.paused() if p.get("restart") else contextlib.nullcontext():
+            for rel in files:
                 with contextlib.suppress(FileNotFoundError):
                     os.remove(os.path.join(paths.MODELS, *rel.split("/")))
         log.info("пакет %s удалён", pid)
@@ -147,24 +169,25 @@ class Installer:
         try:
             timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                plan = []  # (rel, dst, size, sha256)
-                for rel, local in files:
-                    dst = os.path.join(paths.MODELS, *local.split("/"))
-                    size, sha = await self._head(session, rel)
+                plan = []  # (url, путь от paths.MODELS, dst, size, sha256)
+                for url, rel in files:
+                    dst = os.path.join(paths.MODELS, *rel.split("/"))
+                    size, sha = await self._head(session, url, rel)
                     if os.path.isfile(dst) and (not size or os.path.getsize(dst) == size):
                         continue
-                    plan.append((rel, dst, size, sha))
-                self.dl["total"] = sum(p[2] for p in plan)
-                self.dl["done"] = sum(_part_size(p[1]) for p in plan)
-                for rel, dst, size, sha in plan:
-                    await self._fetch(session, rel, dst, size, sha)
+                    plan.append((url, rel, dst, size, sha))
+                self.dl["total"] = sum(p[3] for p in plan)
+                self.dl["done"] = sum(_part_size(p[2]) for p in plan)
+                for p in plan:
+                    await self._fetch(session, *p)
             self.dl.update(state="done", file="", speed=0.0)
             if quant:
                 log.info("модель %s скачана", quant)
                 self.s.update(model=model_name(quant))
             else:
                 log.info("пакет %s скачан", self.dl["package"])
-            await self.runtime.restart()  # новая модель или фронтенд подхватываются только при запуске
+            if quant or PACKAGES[self.dl["package"]].get("restart"):
+                await self.runtime.restart()  # новая модель или фронтенд подхватываются только при запуске
         except asyncio.CancelledError:
             self.dl.update(state="cancelled", speed=0.0, error="")
             log.info("загрузка отменена (докачается со следующей попытки)")
@@ -174,16 +197,16 @@ class Installer:
         finally:
             self._push(force=True)
 
-    async def _head(self, session, rel):
+    async def _head(self, session, url, rel):
         """Размер и sha256 файла: у LFS-файлов Hugging Face отдаёт их в x-linked-size и x-linked-etag до редиректа."""
-        async with session.head(f"{BASE}/{rel}", allow_redirects=False) as r:
+        async with session.head(url, allow_redirects=False) as r:
             if r.status >= 400:
                 raise RuntimeError(f"{rel}: HTTP {r.status}")
             size = int(r.headers.get("x-linked-size") or r.headers.get("content-length") or 0)
             sha = r.headers.get("x-linked-etag", "").strip('"')
             return size, sha if re.fullmatch(r"[0-9a-f]{64}", sha) else ""
 
-    async def _fetch(self, session, rel, dst, size, sha):
+    async def _fetch(self, session, url, rel, dst, size, sha):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         part = dst + ".part"
         self.dl["file"] = rel
@@ -197,7 +220,7 @@ class Installer:
                 break
             headers = {"Range": f"bytes={have}-"} if have else {}
             try:
-                async with session.get(f"{BASE}/{rel}", headers=headers) as r:
+                async with session.get(url, headers=headers) as r:
                     if r.status == 200 and have:  # сервер не умеет Range: заново
                         self.dl["done"] -= have
                         have = 0
@@ -251,16 +274,29 @@ class Installer:
 
 
 def package_installed(pid):
-    p = PACKAGES[pid]
-    have = lambda files: all(os.path.isfile(os.path.join(paths.MODELS, *f.split("/"))) for f in files)
+    have = lambda f: os.path.isfile(os.path.join(paths.MODELS, *f.split("/")))
+    files = [rel for _, rel in package_files(pid)]
     # фронтенд: каждый файл в int8 или в полной точности (как выбирает runtime.py)
-    return all(have([a]) or have([b]) for a, b in zip(p["files"], p["alt"]))
+    alt = PACKAGES[pid].get("alt") or files
+    return all(have(a) or have(b) for a, b in zip(files, alt))
+
+
+def package_usable(pid):
+    """Программа умеет работать с пакетом: очистке от музыки нужен onnxruntime (в образе Docker его нет)."""
+    if pid == "music":
+        from . import separate
+        return separate.runtime_ok()
+    return True
 
 
 def packages(installed=None):
-    """Необязательные пакеты для админки. installed — словарь id -> bool, когда файлов не видно (внешний сервер)."""
-    return [dict(id=pid, title=tr(p["title"]), about=tr(p["about"]), size=p["size"], license=p["license"],
-                 source=p["source"], installed=installed[pid] if installed else package_installed(pid))
+    """Необязательные пакеты для админки. installed — id -> bool для пакетов, файлов которых не видно (фронтенд на
+    внешнем сервере)."""
+    installed = installed or {}
+    return [dict(id=pid, title=tr(p["title"]), about=tr(p["about"]), size=p["size"], license=tr(p["license"]),
+                 source=p["source"], restart=bool(p.get("restart")), usable=package_usable(pid),
+                 dir=os.path.join(paths.MODELS, p.get("into", "")),
+                 installed=installed[pid] if pid in installed else package_installed(pid))
             for pid, p in PACKAGES.items()]
 
 

@@ -46,7 +46,7 @@ def python_keys():
         elif name == "install.py":
             keys.update(re.findall(r'SAMPLES = \(\("[\w-]+", "([^"]+)"\),\)', src))
             for n in ast.walk(ast.parse(src)):  # названия и описания пакетов (PACKAGES), переводятся при показе
-                if isinstance(n, ast.keyword) and n.arg in ("title", "about") and isinstance(n.value, ast.Constant):
+                if isinstance(n, ast.keyword) and n.arg in ("title", "about", "license") and isinstance(n.value, ast.Constant):
                     keys.add(n.value.value)
     return keys
 

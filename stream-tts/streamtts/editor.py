@@ -4,8 +4,11 @@
 - sources/<id>.wav — загруженные записи после ffmpeg (24 кГц моно PCM16, не длиннее MAX_SOURCE_SEC);
 - draft.json — записи, варианты образца, голос для сравнения, имя и набор будущего голоса;
 - cache/<ключ>-<фраза>.mp3 — тестовый синтез, выровненный по громкости, как примеры голосов (ref-<голос>-… —
-  голос для сравнения).
-Вариант образца — отрезок записи, его расшифровка и обработка (шумоподавление ffmpeg afftdn). На cosyvoice-server
+  голос для сравнения);
+- cache/vocals-<хеш отрезка>.wav — отрезок без музыки (separate.py), считается один раз: ~10 с на 20 с записи.
+Вариант образца — отрезок записи, его расшифровка и обработка: по желанию сначала убирается музыка (htdemucs,
+пакет «music»; отрезок берётся с запасом CONTEXT по краям, чтобы сети было что слушать на границах), потом
+шумоподавление ffmpeg afftdn. На cosyvoice-server
 он регистрируется при первом синтезе (POST /speaker?type=extract, нужен ONNX-фронтенд) под служебным именем
 _draft-<ключ>, где ключ — хеш параметров: изменённый вариант регистрируется заново, прежний выгружается.
 Служебные голоса в список голосов не попадают (voices.refresh). Синтез — с приоритетом «послушать» и тем же seed,
@@ -19,7 +22,7 @@ import asyncio, contextlib, glob, hashlib, io, json, logging, math, os, re, secr
 
 import numpy as np
 
-from . import audio, config, install, paths, store
+from . import audio, config, install, paths, separate, store
 from .config import SR
 from .cosy import PREVIEW
 from .i18n import tr
@@ -34,6 +37,7 @@ MAX_PHRASES = 8
 SAMPLE_MIN, SAMPLE_MAX = 2.0, 30.0   # с; советуем 10–20 (docs/voice-pipeline.md), длиннее синтез медленнее
 DENOISE = "afftdn=nf=-25"            # шумоподавление ffmpeg: фон и шипение, музыку не убирает
 FADE = 0.01                          # с: без щелчков на краях отрезка
+CONTEXT = 1.0                        # с: запас записи по краям отрезка для отделения от музыки
 ID = re.compile(r"[\w-]{1,24}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
 
@@ -58,6 +62,8 @@ class Editor:
         self.dir = os.path.join(config.DATA, "draft")
         self.path = os.path.join(self.dir, "draft.json")
         self.registered = {}   # id варианта -> служебное имя на сервере (прежнее выгружается при смене)
+        self.separator = separate.Separator()
+        self._vocals_jobs = {}  # имя в кэше -> задача: синтез всех фраз сразу не запускает отделение повторно
 
     # --- черновик ---
     def _load(self):
@@ -71,12 +77,19 @@ class Editor:
     def _src_path(self, sid):
         return os.path.join(self.dir, "sources", sid + ".wav")
 
-    def _cache(self, name):
-        return os.path.join(self.dir, "cache", name + ".mp3")
+    def _cache(self, name, ext=".mp3"):
+        return os.path.join(self.dir, "cache", name + ext)
 
     @staticmethod
     def key(v):
-        return _hash(v["src"], round(v["start"], 2), round(v["end"], 2), " ".join(v["text"].split()), v["denoise"])
+        parts = [v["src"], round(v["start"], 2), round(v["end"], 2), " ".join(v["text"].split()), v["denoise"]]
+        if v.get("music"):  # без галочки ключ прежний: синтез черновиков до неё не пропадает
+            parts.append("music")
+        return _hash(*parts)
+
+    @staticmethod
+    def vocals_name(v):
+        return "vocals-" + _hash(v["src"], round(v["start"], 2), round(v["end"], 2))
 
     def public(self):
         d = self._load()
@@ -86,6 +99,7 @@ class Editor:
             v["ready"] = ready(self.key(v))
         d["compare_ready"] = ready("ref-" + d["compare"]) if d["compare"] else []
         d["frontend"] = bool(self.cosy.info.get("frontend_available"))
+        d["music"] = separate.available()
         d["sets"] = self.sets()
         d["managed"] = self.runtime is not None
         return d
@@ -108,7 +122,8 @@ class Editor:
             if not (math.isfinite(start) and math.isfinite(end)) or end <= start:
                 raise ValueError(tr("неверный отрезок"))
             variants.append(dict(id=vid, src=src, start=round(start, 2), end=round(end, 2),
-                                 text=str(v.get("text", ""))[:1000], denoise=bool(v.get("denoise"))))
+                                 text=str(v.get("text", ""))[:1000], denoise=bool(v.get("denoise")),
+                                 music=bool(v.get("music"))))
         d["variants"] = variants
         if "compare" in data:
             c = str(data["compare"] or "")
@@ -121,11 +136,17 @@ class Editor:
         return self.public()
 
     def _prune(self, d):
-        """Синтез вариантов, которых больше нет (сравнение с голосами остаётся: он не устаревает)."""
+        """Синтез и дорожки без музыки вариантов, которых больше нет (сравнение с голосами остаётся: он не
+        устаревает)."""
         keep = {self.key(v) for v in d["variants"]}
-        for f in glob.glob(os.path.join(self.dir, "cache", "*.mp3")):
+        vocals = {self.vocals_name(v) + ".wav" for v in d["variants"] if v.get("music")}
+        for f in glob.glob(os.path.join(self.dir, "cache", "*.*")):
             name = os.path.basename(f)
-            if not name.startswith("ref-") and name.split("-")[0] not in keep:
+            if name.startswith("vocals-"):
+                stale = name not in vocals
+            else:
+                stale = name.endswith(".mp3") and not name.startswith("ref-") and name.split("-")[0] not in keep
+            if stale:
                 with contextlib.suppress(OSError):
                     os.remove(f)
 
@@ -174,12 +195,46 @@ class Editor:
             raise ValueError(tr("нет такого варианта"))
         return v
 
-    async def sample(self, v):
-        """Образец варианта: отрезок записи, края с затуханием, по желанию шумоподавление. float32 24 кГц."""
-        with wave.open(self.source_path(v["src"])) as w:
-            a, b = int(v["start"] * SR), min(w.getnframes(), int(v["end"] * SR))
+    def _cut(self, sid, start, end):
+        with wave.open(self.source_path(sid)) as w:
+            a, b = int(start * SR), min(w.getnframes(), int(end * SR))
             w.setpos(a)
-            x = audio.from_pcm16(w.readframes(b - a)).copy()
+            return audio.from_pcm16(w.readframes(b - a)).copy()
+
+    async def _vocals(self, v):
+        """Отрезок варианта без музыки: из кэша или через separate.py (одна задача на отрезок)."""
+        name = self.vocals_name(v)
+        path = self._cache(name, ".wav")
+        if os.path.exists(path):
+            with wave.open(path) as w:
+                return audio.from_pcm16(w.readframes(w.getnframes())).copy()
+        job = self._vocals_jobs.get(name)
+        if not job:
+            job = self._vocals_jobs[name] = asyncio.ensure_future(self._separate(v, path))
+            job.add_done_callback(lambda _: self._vocals_jobs.pop(name, None))
+        return (await asyncio.shield(job)).copy()
+
+    async def _separate(self, v, path):
+        a = max(0.0, v["start"] - CONTEXT)
+        x = await self.separator.vocals(self._cut(v["src"], a, v["end"] + CONTEXT))
+        n = len(self._cut(v["src"], v["start"], v["end"]))
+        off = int(v["start"] * SR) - int(a * SR)
+        y = x[off:off + n]
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + ".tmp", "wb") as f:
+            f.write(_wav_bytes(y))
+        os.replace(path + ".tmp", path)
+        return y
+
+    async def sample(self, v):
+        """Образец варианта: отрезок записи, по желанию без музыки, края с затуханием, по желанию шумоподавление.
+        float32 24 кГц."""
+        if v.get("music"):
+            if not separate.available():
+                raise ValueError(tr("для «убрать музыку» скачайте пакет «Очистка образца от музыки»"))
+            x = await self._vocals(v)
+        else:
+            x = self._cut(v["src"], v["start"], v["end"])
         n = min(len(x) // 2, int(FADE * SR))
         if n:
             x[:n] *= np.linspace(0, 1, n)

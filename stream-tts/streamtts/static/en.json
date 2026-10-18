@@ -558,7 +558,7 @@
  "Файлы записей": "Recording files",
  "2. Варианты образца": "2. Sample variants",
  "<b>Расшифровка — слово в слово то, что звучит в отрезке:</b> каждое слово, повтор, «э-э», оборванное на краю слово. Знаки — как слышится: запятая на паузе, точка в конце фразы, «?» и «!» по интонации. Числа и сокращения — так, как их произносят: «двадцать пять», а не «25». Ошибка в расшифровке — главная причина плохого голоса: синтез начинает глотать слова, повторять их или добавлять лишние звуки. Поэтому резать отрезок лучше по паузам, без обрывков слов на краях.": "<b>The transcript must match the segment word for word:</b> every word, repetition, “uh”, and a word cut off at the edge. Punctuation as you hear it: a comma at a pause, a full stop at the end of a sentence, “?” and “!” by intonation. Numbers and abbreviations as they are spoken: “twenty-five”, not “25”. A wrong transcript is the main cause of a bad voice: the synthesis starts swallowing words, repeating them or adding stray sounds. So cut the segment at pauses, with no word fragments at the edges.",
- "Шумоподавление убирает ровный фон и шипение, но не музыку. Голос с ним иногда звучит глухо — сравните варианты с ним и без.": "Noise reduction removes steady background noise and hiss, but not music. It can make the voice sound muffled — compare variants with and without it.",
+ "«Убрать музыку» отделяет голос от музыки и звуков (нужен пакет «Очистка образца от музыки»), шумоподавление после него убирает ровный фон и шипение. Голос после обработки иногда звучит глухо или с призвуком — сравните варианты с ней и без.": "“Remove music” separates the voice from music and sound effects (requires the “Remove music from samples” package); noise reduction then removes steady background noise and hiss. Processing can make the voice sound muffled or add artifacts — compare variants with and without it.",
  "3. Тестовые фразы": "3. Test phrases",
  "Сравнить с голосом": "Compare with voice",
  "Фразы синтезируются при первом прослушивании, с одним и тем же seed: варианты различаются только образцом. Громкость выровнена, как у примеров голосов.": "Phrases are synthesized on first listen, with the same seed: variants differ only in the sample. Loudness is normalized, as with voice samples.",
@@ -574,5 +574,17 @@
  "Дополнительные пакеты (например, для создания голосов) — в <a href=\"#settings\">настройках</a>.": "Additional packages (for example, for making voices) are in <a href=\"#settings\">settings</a>.",
  "Дополнительные пакеты": "Additional packages",
  "Сторонние модели, которые нужны не для озвучки, а для отдельных функций. Качаются с Hugging Face по кнопке и лежат в папке моделей.": "Third-party models needed not for TTS but for specific features. They download from Hugging Face on request and live in the models folder.",
- "Набор": "Set"
+ "Набор": "Set",
+ "Очистка образца от музыки": "Remove music from samples",
+ "Demucs v4 (htdemucs, int8): отделяет голос от музыки — галочка «убрать музыку» у варианта образца в редакторе голоса. Работает на процессоре: 20 секунд записи — около 10 секунд.": "Demucs v4 (htdemucs, int8): separates the voice from music — the “remove music” checkbox on a sample variant in the voice editor. Runs on the CPU: about 10 seconds per 20 seconds of audio.",
+ "веса — только для исследований": "weights: research use only",
+ "В этой версии программы нет onnxruntime (в образе Docker его нет): пакет работает в программе для Windows и при запуске из исходников.": "This build has no onnxruntime (the Docker image lacks it): the package works in the Windows app and when running from source.",
+ "Голос отделяется от музыки (Demucs) один раз, около 10 секунд на 20 секунд записи": "The voice is separated from music (Demucs) once, about 10 seconds per 20 seconds of audio",
+ "Готово: пакет скачан.": "Done: package downloaded.",
+ "Нужен пакет «Очистка образца от музыки»": "Requires the “Remove music from samples” package",
+ "Сервер синтеза внешний, загрузка пакетов отключена: положите файлы в {dir}.": "The TTS server is external, so package downloads are off: put the files into {dir}.",
+ "для «убрать музыку» скачайте пакет «Очистка образца от музыки»": "to remove music, download the “Remove music from samples” package",
+ "недоступен": "unavailable",
+ "убрать музыку": "remove music",
+ "Удалить пакет «{name}»?": "Delete package “{name}”?"
 }

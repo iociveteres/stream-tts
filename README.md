@@ -309,6 +309,7 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
 │                          # голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
+│                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows),
 │                          # i18n.py (язык интерфейса), static/ (static/en.json — английский словарь, static/i18n.js —
 │                          # перевод страниц, static/quants/ — примеры звука квантов для админки и установщика)
