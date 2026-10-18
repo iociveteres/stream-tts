@@ -1,6 +1,6 @@
 StreamTTS is MIT-licensed, see licenses\StreamTTS-LICENSE.txt. The model
-audio samples (streamtts\static\quants) are synthesized with voices cloned
-from third-party recordings and are not covered by the MIT license.
+audio samples (streamtts\static\quants) are synthesized with a voice from
+the ru_RU-denis dataset, CC0: https://github.com/OHF-Voice/voice-datasets
 
 StreamTTS for Windows includes third-party software. Licenses are listed
 below; full texts are in the program folder: runtime\licenses\

@@ -392,12 +392,12 @@ docker run --rm --gpus all --entrypoint /opt/cosyvoice/cosyvoice-cli cosyvoice-s
 
 Код проекта (скрипты, инструменты, stream-tts, сборка, документация) — MIT, см. [LICENSE](LICENSE). Она не
 распространяется на чужое, что лежит рядом:
-- примеры звука `stream-tts/streamtts/static/quants/*.mp3` — синтез голосами `irina` и `wc3-footman`, клонированными
-  с чужих записей;
 - образцы, голоса и их подбор (`voice-refs/`, `voice-origs/`, `voices/`, `voice-clips/` с расшифровками реплик из
   игр и записей стримеров) в git не входят, у каждого свои права.
 
 Сторонние компоненты:
+- примеры звука `stream-tts/streamtts/static/quants/*.mp3`: синтез голосом из датасета ru_RU-denis
+  ([OHF-Voice/voice-datasets](https://github.com/OHF-Voice/voice-datasets), CC0).
 - cosyvoice.cpp: MIT.
 - Модели CosyVoice3 GGUF: Apache-2.0.
 - FFmpeg из репозиториев Ubuntu может включать GPL-компоненты. Это важно только при публикации образа.

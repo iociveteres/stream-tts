@@ -1,6 +1,6 @@
 StreamTTS — MIT, см. licenses\StreamTTS-LICENSE.txt. Примеры звука
-моделей (streamtts\static\quants) синтезированы голосами, клонированными
-с чужих записей, и под MIT не подпадают.
+моделей (streamtts\static\quants) синтезированы голосом из датасета
+ru_RU-denis, CC0: https://github.com/OHF-Voice/voice-datasets
 
 StreamTTS для Windows включает сторонние программы. Их лицензии ниже,
 полные тексты — в папке программы: runtime\licenses\ (cosyvoice-server

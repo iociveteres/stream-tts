@@ -66,8 +66,7 @@ ru.ModelQ8=Q8_0 — 900 МБ, видеопамять ≈1,5 ГБ (до 1,9) — 
 ru.ModelQ6=Q6_K — 801 МБ, видеопамять ≈1,4 ГБ (до 1,8)
 ru.ModelQ5=Q5_K_M — 651 МБ, видеопамять ≈1,3 ГБ (до 1,7) — для видеокарт с 4 ГБ
 ru.ModelListen=Послушать выбранный вариант:
-ru.ModelFemale=Женский голос
-ru.ModelMale=Мужской голос
+ru.ModelPlay=Пример
 ru.ModelStop=Стоп
 ru.ReadyModel=Модель синтеза (скачается при первом запуске):
 en.TypeFull=Full (with CUDA)
@@ -83,8 +82,7 @@ en.ModelQ8=Q8_0 — 900 MB, video memory ≈1.5 GB (up to 1.9) — recommended
 en.ModelQ6=Q6_K — 801 MB, video memory ≈1.4 GB (up to 1.8)
 en.ModelQ5=Q5_K_M — 651 MB, video memory ≈1.3 GB (up to 1.7) — for 4 GB graphics cards
 en.ModelListen=Listen to the selected variant:
-en.ModelFemale=Female voice
-en.ModelMale=Male voice
+en.ModelPlay=Sample
 en.ModelStop=Stop
 en.ReadyModel=Speech model (downloaded on first launch):
 
@@ -132,6 +130,8 @@ Filename: "{app}\StreamTTS.exe"; Description: "{cm:LaunchProgram,StreamTTS}"; Fl
 [Code]
 const
   SampleAlias = 'streamtts_sample';
+  // голос примеров — SAMPLE_VOICE в install.py
+  SampleVoice = 'ohf-denis';
 
 var
   ModelPage: TInputOptionWizardPage;
@@ -167,14 +167,9 @@ begin
   mciSendString('play ' + SampleAlias, '', 0, 0);
 end;
 
-procedure SampleFemaleClick(Sender: TObject);
+procedure SamplePlayClick(Sender: TObject);
 begin
-  PlaySample('irina');
-end;
-
-procedure SampleMaleClick(Sender: TObject);
-begin
-  PlaySample('wc3-footman');
+  PlaySample(SampleVoice);
 end;
 
 procedure SampleStopClick(Sender: TObject);
@@ -214,9 +209,8 @@ begin
   Hint.Top := Top;
   Hint.Caption := CustomMessage('ModelListen');
   Top := Hint.Top + Hint.Height + ScaleY(6);
-  AddButton(CustomMessage('ModelFemale'), 0, Top, @SampleFemaleClick);
-  AddButton(CustomMessage('ModelMale'), ScaleX(138), Top, @SampleMaleClick);
-  Stop := AddButton(CustomMessage('ModelStop'), ScaleX(276), Top, @SampleStopClick);
+  AddButton(CustomMessage('ModelPlay'), 0, Top, @SamplePlayClick);
+  Stop := AddButton(CustomMessage('ModelStop'), ScaleX(138), Top, @SampleStopClick);
   Stop.Width := ScaleX(80);
 end;
 
