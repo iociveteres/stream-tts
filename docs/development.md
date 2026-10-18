@@ -22,7 +22,8 @@
 │                          # голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
-│                          # i18n.py (язык интерфейса), downloads.json (закреплённые загрузки: CUDA из llama.cpp и кванты
+│                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
+│                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp и кванты
 │                          # модели), static/ (static/en.json — английский словарь, static/i18n.js — перевод
 │                          # страниц, static/quants/ — примеры звука квантов для админки и установщика)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++),

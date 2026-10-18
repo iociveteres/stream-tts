@@ -653,5 +653,26 @@
  "видеокарта": "GPU",
  "Замеры идут, только пока открыта админка.": "Measured only while the admin page is open.",
  "Модели в памяти": "Models in memory",
- "Фронтенд и очистка от музыки загружаются сами, когда создаётся голос, и выгружаются после простоя. Модель синтеза нужна для озвучки: без неё награды возвращаются.": "The frontend and music removal load by themselves when a voice is being created and unload after idling. The speech model is needed for text-to-speech: without it redemptions are refunded."
+ "Фронтенд и очистка от музыки загружаются сами, когда создаётся голос, и выгружаются после простоя. Модель синтеза нужна для озвучки: без неё награды возвращаются.": "The frontend and music removal load by themselves when a voice is being created and unload after idling. The speech model is needed for text-to-speech: without it redemptions are refunded.",
+
+ "Подключение к Twitch": "Twitch connection",
+ "Через приложение Twitch": "Through a Twitch application",
+ "TTS доступен через награды за баллы, команды или озвучку всех сообщений": "TTS via channel point rewards, a command or reading every message",
+ "Только чтение чата": "Chat reading only",
+ "Вход и 2FA не нужны, TTS доступен только через команды и озвучку всех сообщений": "No sign-in or 2FA needed, TTS only via a command or reading every message",
+ "Канал": "Channel",
+ "Подключиться": "Connect",
+ "Подключено к #{ch}": "Connected to #{ch}",
+ "чат: только чтение": "chat: read only",
+ "чат: подключение": "chat: connecting",
+ "чат: канал не найден": "chat: channel not found",
+ "чат: канал не задан": "chat: no channel",
+ "нужно приложение Twitch": "needs a Twitch application",
+ "Чат недоступен: {e}": "Chat unavailable: {e}",
+ "Канал {ch} не найден": "Channel {ch} not found",
+ "Не похоже на ник канала Twitch": "That doesn't look like a Twitch channel name",
+ "неизвестный режим": "unknown mode",
+ "чат очищен модером: убрано фраз — {n}": "chat cleared by a moderator: {n} phrases removed",
+ "{who}: сообщение удалено модером, убрано фраз — {n}": "{who}: message deleted by a moderator, {n} phrases removed",
+ "удалено модером": "deleted by a moderator"
 }

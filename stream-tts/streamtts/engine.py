@@ -20,6 +20,7 @@ R_OFF, R_BAN, R_ACCESS, R_EMPTY, R_FULL = "озвучка выключена", "
 R_NOVOICE, R_SYNTH, R_SKIP, R_CLEAR, R_RESTART = ("нет голосов", "ошибка синтеза", "!ttsskip", "!ttsclear",
                                                   "остались после перезапуска")
 R_COOLDOWN = "кулдаун"
+R_REMOVED = "удалено модером"
 # Ответ зрителю при отказе (настройка reply): бан не объясняется, ошибки синтеза и пропуски — не отказ при приёме
 REPLIES = {R_OFF: "озвучка сейчас выключена", R_ACCESS: "озвучка доступна только {who}",
            R_EMPTY: "после фильтров озвучивать нечего", R_FULL: "очередь озвучки заполнена, попробуйте позже",
@@ -173,7 +174,7 @@ class Engine:
     def privileged(self, item):
         """Стример, модеры и ники из списка способа: мимо уровня доступа и кулдаунов."""
         return bool(item.login in self.src(item).get("allow", [])
-                    or (self.twitch and item.user_id == self.twitch.user_id)
+                    or (self.twitch and item.user_id == self.twitch.channel_id)
                     or self.db.badges(item.user_id) & MODS)
 
     def access_ok(self, item):
@@ -336,6 +337,18 @@ class Engine:
             self.note(tr("{by}: очередь очищена ({n})", by=by or tr("интерфейс"), n=len(self.queue)))
         for item in list(self.queue):
             await self.cancel(item, reason)
+
+    async def removed(self, msg_id=None, user_id=None, who="", all_chat=False):
+        """Модер удалил сообщение, дал зрителю таймаут или бан, очистил чат (CLEARMSG и CLEARCHAT в режиме «Только
+        чтение чата»): такие фразы из чата не читаются."""
+        items = [it for it in self.queue if it.chat and (all_chat or (msg_id and it.msg_id == msg_id)
+                                                          or (user_id and it.user_id == user_id))]
+        if not items:
+            return
+        self.note(tr("чат очищен модером: убрано фраз — {n}" if all_chat else
+                     "{who}: сообщение удалено модером, убрано фраз — {n}", who=who or items[0].display, n=len(items)))
+        for item in items:
+            await self.cancel(item, R_REMOVED)
 
     async def set_enabled(self, on, by=""):
         self.s.update(enabled=bool(on))

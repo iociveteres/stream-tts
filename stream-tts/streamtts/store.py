@@ -6,6 +6,8 @@ from .i18n import CONTENT, REWARD
 
 DEFAULTS = {
     "client_id": "",
+    "twitch_mode": "app",       # app — вход через приложение Twitch, chat — только чтение чата (chat_irc.py)
+    "chat_channel": "",         # канал для режима chat
     "enabled": True,
     "reward": {"id": "", "title": REWARD["title"]["ru"], "cost": 500, "cooldown": 0, "prompt": REWARD["prompt"]["ru"]},
     # Способы заказать озвучку: on, кто может (access: all | subs | vip | mods), allow — ники, которым способ доступен

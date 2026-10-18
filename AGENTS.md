@@ -33,6 +33,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - `post` в `alts.json` и `manifest.json` — `[скрипт, аргументы…]`, путь от корня проекта. stream-tts ищет скрипт в
   `STREAM_TTS_PROJECT` (в контейнере `/project`), грузит через importlib и вызывает `apply(звук, аргументы)`;
   командная строка эффекта нужна `synth.py`.
+- `engine.chat` принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
+  (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах.
 - Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767; из исходников
   `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
   модели) — 8093. Конфигурации — `.claude/launch.json`.

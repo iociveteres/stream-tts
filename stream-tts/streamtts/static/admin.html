@@ -87,6 +87,24 @@
 
 <!-- ============ Twitch ============ -->
 <section id="tab-twitch" class="tab">
+  <div class="card" id="mode-card">
+    <h2>Подключение к Twitch</h2>
+    <div class="modes">
+      <label class="mode"><input type="radio" name="twitch-mode" value="app">
+        <span><b>Через приложение Twitch</b>
+          <span class="muted small">TTS доступен через награды за баллы, команды или озвучку всех сообщений</span></span></label>
+      <label class="mode"><input type="radio" name="twitch-mode" value="chat">
+        <span><b>Только чтение чата</b>
+          <span class="muted small">Вход и 2FA не нужны, TTS доступен только через команды и озвучку всех сообщений</span></span></label>
+    </div>
+    <form id="chat-form" class="row end mt" hidden>
+      <label class="grow">Канал
+        <span class="chan"><span class="muted" translate="no">twitch.tv/</span><input name="channel" required
+          spellcheck="false" translate="no" autocomplete="off"></span></label>
+      <button class="primary">Подключиться</button>
+    </form>
+    <p id="chat-state" hidden></p>
+  </div>
   <div class="card" id="login-card"></div>
   <div class="card" id="sources-card" hidden>
     <h2>Как зрители заказывают озвучку</h2>
@@ -132,6 +150,7 @@
           вместе с наградой, озвучивается один раз, как награда.</p>
       </div>
     </div>
+    <div id="reply-box">
     <h3 class="mt">Если озвучка отклонена</h3>
     <div class="row">
       <label class="grow">Ответ зрителю
@@ -140,6 +159,7 @@
         </select></label>
     </div>
     <p class="small" id="reply-note"></p>
+    </div>
   </div>
   <div class="card" id="guide-card">
     <div class="row between"><h2>Регистрация приложения Twitch</h2>

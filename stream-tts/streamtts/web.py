@@ -352,6 +352,17 @@ async def post_client_id(request, ctx, data):
     return ok()
 
 
+async def post_twitch_mode(request, ctx, data):
+    mode = data.get("mode")
+    if mode not in ("app", "chat"):
+        return fail(tr("неизвестный режим"))
+    try:
+        await ctx.twitch.set_mode(mode, data.get("channel"))
+    except TwitchError as e:
+        return fail(e.message)
+    return ok()
+
+
 async def post_login(request, ctx, data):
     try:
         await ctx.twitch.begin_login()
@@ -659,6 +670,7 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/voice": post_voice,
     "/api/demos/rebuild": post_demos_rebuild,
     "/api/twitch/client_id": post_client_id,
+    "/api/twitch/mode": post_twitch_mode,
     "/api/twitch/login": post_login,
     "/api/twitch/logout": post_logout,
     "/api/reward": post_reward,

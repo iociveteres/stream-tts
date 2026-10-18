@@ -110,11 +110,14 @@ function renderLive() {
 function pill(text, cls, title) { return h("span", { class: "pill", title }, h("i", { class: "dot " + cls }), text); }
 function renderHeader() {
   const t = S.twitch, c = S.cosy, ov = S.engine.overlay;
-  $("#channel").textContent = t.login ? "· " + t.login : "";
-  const tw = { ok: ["Twitch", "good"], connecting: [T("Twitch: подключение"), "warn"],
+  const chat = t.mode === "chat", login = chat ? t.chat.channel : t.login;
+  $("#channel").textContent = login ? "· " + login : "";
+  const tw = chat ? { ok: [T("чат: только чтение"), "good"], connecting: [T("чат: подключение"), "warn"],
+    not_found: [T("чат: канал не найден"), "bad"], off: [T("чат: канал не задан"), "bad"] }[t.chat.state]
+  : { ok: ["Twitch", "good"], connecting: [T("Twitch: подключение"), "warn"],
     device: [T("Twitch: ждёт входа"), "warn"], expired: [T("Twitch: вход истёк"), "bad"],
     logged_out: [T("Twitch: нет входа"), "bad"], no_client: [T("Twitch: нет Client ID"), "bad"] }[t.state] || [t.state, ""];
-  const pills = [pill(...tw, t.error)];
+  const pills = [pill(...tw, chat ? t.chat.error : t.error)];
   if (t.state === "ok") pills.push(pill("EventSub", t.ws === "connected" ? "good" : "warn", t.ws));
   pills.push(pill(c.ok ? (c.busy ? T("cosyvoice: синтез") : "cosyvoice") : T("cosyvoice недоступен"),
     c.ok ? "good" : "bad", c.ok ? c.url + runtimeInfo(c.runtime) : c.error));
@@ -190,12 +193,58 @@ $("#test").onsubmit = async e => {
   if (r.ok) toast(T("Отправлено в очередь"));
 };
 
+// --- Twitch: режим подключения ---
+let pendingMode = "";   // «Только чтение чата» выбрано, но канал ещё не введён: режим на сервере прежний
+const twitchMode = () => pendingMode || S.twitch.mode;
+$$("#mode-card input[name=twitch-mode]").forEach(r => r.onchange = async () => {
+  pendingMode = "";
+  if (r.value === "chat" && !S.twitch.chat.channel) pendingMode = "chat";
+  else if ((await api("/api/twitch/mode", { mode: r.value })).ok) await reload();
+  lastLogin = "";
+  renderLogin(); renderSources(true);
+  if (pendingMode) $("#chat-form").channel.focus();
+});
+$("#chat-form").onsubmit = async e => {
+  e.preventDefault();
+  if (!(await api("/api/twitch/mode", { mode: "chat", channel: e.target.channel.value })).ok) return;
+  pendingMode = "";
+  await reload();
+  e.target.channel.value = S.twitch.chat.channel;   // ссылка или #ник → ник, как его понял сервер
+  lastLogin = "";
+  renderLogin(); renderSources(true);
+};
+$("#chat-form").channel.oninput = () => renderChatState();
+function renderChatState() {
+  const c = S.twitch.chat, f = $("#chat-form"), chat = twitchMode() === "chat";
+  f.hidden = !chat;
+  $("#chat-state").hidden = !chat || !c.channel || pendingMode === "chat";
+  if (!chat) return;
+  if (document.activeElement !== f.channel && f.dataset.saved !== c.channel) f.channel.value = c.channel;
+  f.dataset.saved = c.channel;
+  f.querySelector("button").disabled = !pendingMode && f.channel.value.trim().toLowerCase() === c.channel
+    && c.state !== "not_found";
+  const st = { ok: [T("Подключено к #{ch}", { ch: c.channel }), "good"], connecting: [T("Подключение…"), "warn"],
+    not_found: [c.error, "bad"] }[c.state] || ["", ""];
+  $("#chat-state").replaceChildren(h("span", { class: st[1] }, st[0]),
+    c.state === "connecting" && c.error ? h("span", { class: "muted small" }, " · " + c.error) : "");
+}
+
 // --- Twitch: вход ---
 let lastLogin = "", lastState = null;
 function renderLogin() {
-  const t = S.twitch, key = JSON.stringify([t.state, t.error, t.device, t.login, t.client_id, t.ws, guideOpen]);
+  const t = S.twitch, key = JSON.stringify([twitchMode(), t.chat, t.state, t.error, t.device, t.login, t.client_id,
+    t.ws, guideOpen]);
   if (key === lastLogin) return;
   lastLogin = key;
+  const chat = twitchMode() === "chat";
+  for (const r of $$("#mode-card input[name=twitch-mode]")) r.checked = r.value === twitchMode();
+  renderChatState();
+  $("#login-card").hidden = $("#guide-card").hidden = chat;
+  if (chat) {
+    $("#sources-card").hidden = false;
+    $("#tab-twitch").prepend($("#mode-card"));
+    return;
+  }
   const entered = t.state !== lastState;
   if (entered && t.state === "ok" && lastState !== null && guideOpen) { guideOpen = false; renderGuide(); }  // вошли: гайд не нужен
   lastState = t.state;
@@ -237,6 +286,7 @@ function placeLogin() {
   const below = guideOpen && !["ok", "connecting"].includes(S.twitch.state), tab = $("#tab-twitch");
   if (below) { tab.prepend($("#guide-card")); $("#guide-card").after($("#login-card"), $("#sources-card")); }
   else tab.append($("#guide-card"));
+  tab.prepend($("#mode-card"));
   return below;
 }
 
@@ -344,16 +394,18 @@ $$("#sources-card .src").forEach(box => {
   });
 });
 function renderSources(force) {
-  const src = S.settings.sources;
+  const src = S.settings.sources, chat = twitchMode() === "chat";
   $$("#sources-card .src").forEach(box => {
-    const c = src[box.dataset.src];
-    box.querySelector(".src-body").hidden = !c.on;
+    const c = src[box.dataset.src], off = chat && box.dataset.src === "reward";   // награде нужен вход
+    box.querySelector(".src-body").hidden = !c.on || off;
+    box.querySelector(".src-head input").disabled = off;
     for (const el of box.querySelectorAll("[data-k]")) {
       if (el === document.activeElement && !force) continue;
       const v = c[el.dataset.k];
-      if (el.type === "checkbox") el.checked = !!v; else el.value = Array.isArray(v) ? v.join(", ") : v;
+      if (el.type === "checkbox") el.checked = !!v && !off; else el.value = Array.isArray(v) ? v.join(", ") : v;
     }
   });
+  $("#reply-box").hidden = chat;   // писать в чат без входа нельзя
   $("#cmd-example").textContent = T("Зритель пишет в чат: {cmd} привет, чат!", { cmd: src.command.name });
   $("#reply").value = S.settings.reply;
   lastReply = "";
@@ -393,6 +445,7 @@ function renderReward() {
 const rewardDirty = () => REWARD_KEYS.some(k => $("#reward")[k].value !== String(S.twitch.reward[k] ?? ""));
 function renderRewardState() {
   const r = S.twitch.reward, btn = $("#reward-save"), saved = r.exists && Date.now() < rewardSavedUntil;
+  if (twitchMode() === "chat") { $("#reward-state").textContent = T("нужно приложение Twitch"); return; }
   btn.textContent = !r.exists ? T("Создать награду") : saved ? T("Сохранено") : T("Сохранить");
   btn.disabled = r.exists && (saved || !rewardDirty());
   $("#reward-delete").hidden = !r.exists;
@@ -1489,5 +1542,5 @@ $("#prof-sample").placeholder = T("проверить фразу");   // у по
 
 // --- старт ---
 // Первый запуск: без модели — сразу на вкладку «Сервер»
-const firstTab = () => S.setup && !S.setup.models.length ? "server" : S.twitch.state === "ok" ? "queue" : "twitch";
+const firstTab = () => S.setup && !S.setup.models.length ? "server" : (S.twitch.mode === "chat" ? S.twitch.chat.state : S.twitch.state) === "ok" ? "queue" : "twitch";
 reload().then(() => { showTab(location.hash.slice(1) || firstTab()); connect(); });
