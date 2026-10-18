@@ -210,6 +210,7 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 | `STREAM_TTS_PORT` | `8090` | порт интерфейса и оверлея |
 | `STREAM_TTS_BIND` | `127.0.0.1` | `0.0.0.0`, чтобы OBS на другом ПК дотянулся по сети |
 | `STREAM_TTS_PASSWORD` | — | пароль админки; без него сервис с `BIND` не на localhost не стартует |
+| `STREAM_TTS_LANG` | `ru` | `en` — английский интерфейс с первого запуска; потом язык меняется в шапке админки |
 | `COSYVOICE_URL` | `http://cosyvoice:8080` | синтез на другой машине |
 | `COSYVOICE_API_KEY` | — | ключ, если cosyvoice запущен с `--api-key` |
 | `TWITCH_CLIENT_ID` | — | можно задать и в интерфейсе |
@@ -250,7 +251,8 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 в `.claude/launch.json`). Без `COSYVOICE_URL` stream-tts сам запускает нативный cosyvoice-server из `runtime/` в
 корне проекта (режим managed, [docs/stream-tts.md](docs/stream-tts.md#развёртывание)) с моделью из `models/` и
 голосами из `voices/`; конфигурация `stream-tts-managed` — на порту 8092 и с данными в `stream-tts-data/native/`,
-чтобы не мешать Docker-версии.
+чтобы не мешать Docker-версии. Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
+проверка словаря `python stream-tts/check-i18n.py`.
 
 Программа для Windows без Docker и Python (установщик с рантаймом, модель качается из админки) собирается в
 `packaging/windows/`: [docs/stream-tts.md](docs/stream-tts.md#сборка-для-windows).
@@ -298,9 +300,11 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 │   ├── Dockerfile         # двухстадийная сборка из готовых релизов (GPU=cuda — с CUDA-бэкендом)
 │   └── entrypoint.sh      # собирает аргументы сервера из /models и /voices
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), второй сервис в docker-compose.yml
+│   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
-│                          # голосов из админки), bench.py (скорость устройств), desktop.py (точка входа программы для Windows), static/
-│                          # (static/quants/ — примеры звука квантов для админки и установщика)
+│                          # голосов из админки), bench.py (скорость устройств), desktop.py (точка входа программы для Windows),
+│                          # i18n.py (язык интерфейса), static/ (static/en.json — английский словарь, static/i18n.js —
+│                          # перевод страниц, static/quants/ — примеры звука квантов для админки и установщика)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py, build-exe.py (Nuitka),
 │                          # StreamTTS.iss (Inno Setup); сборка в CI — .github/workflows/windows.yml
 ├── scripts/

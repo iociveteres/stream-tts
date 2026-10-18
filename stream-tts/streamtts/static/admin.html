@@ -11,6 +11,9 @@
 <header>
   <div class="brand">Stream TTS <span id="channel" class="muted"></span></div>
   <div class="row" id="pills"></div>
+  <select id="lang" aria-label="Language / Язык" translate="no">
+    <option value="ru">Русский</option><option value="en">English</option>
+  </select>
   <label class="switch" title="Выключено: награда на паузе, очередь очищена">
     <input type="checkbox" id="enabled"><span>Озвучка</span>
   </label>
@@ -63,14 +66,14 @@
         <h2>Оверлей для OBS</h2>
         <p id="ovstate"></p>
         <div class="row"><code id="ovurl" class="grow"></code><button data-copy="ovurl">Копировать</button></div>
-        <p class="muted small">OBS → Источник → Браузер, адрес выше, ширина и высота как у сцены.
+        <p class="muted small" data-t>OBS → Источник → Браузер, адрес выше, ширина и высота как у сцены.
           В обычной вкладке браузера нужен один клик «Включить звук». Играет только последний подключившийся оверлей.
           <code>?subtitles=0</code> в адресе скрывает субтитры.</p>
       </div>
       <div class="card">
         <h2>Страница голосов для зрителей</h2>
         <div class="row"><code id="vurl" class="grow"></code><button data-copy="vurl">Копировать</button></div>
-        <p class="muted small">Дайте ссылку зрителям (команда бота, панель канала) или
+        <p class="muted small" data-t>Дайте ссылку зрителям (команда бота, панель канала) или
           <a href="/voices.zip">скачайте zip</a> и выложите на любой хостинг.</p>
       </div>
       <div class="card">
@@ -209,7 +212,7 @@
         <p class="muted small">Twitch к наградам такого ограничения не применяет: проверка идёт по бейджам из чата,
           поэтому зритель должен хоть раз написать в чат. Остальным баллы возвращаются.</p>
         <label class="check"><input type="checkbox" name="chat_all"> Озвучивать все сообщения чата, без баллов</label>
-        <p class="muted small">Нужен вход в Twitch. Действуют те же доступ, баны, фильтры и лимит очереди; команды
+        <p class="muted small" data-t>Нужен вход в Twitch. Действуют те же доступ, баны, фильтры и лимит очереди; команды
           (<code>!…</code>) и эмоуты не читаются. Награда работает как раньше.</p>
         <label class="check"><input type="checkbox" name="read_nick"> Читать ник: «&lt;ник&gt; говорит: …»</label>
         <label class="check"><input type="checkbox" name="subtitles"> Субтитры в оверлее</label>
@@ -239,16 +242,16 @@
         <form id="ban" class="row"><input name="login" placeholder="ник" class="grow" required>
           <button>Запретить</button></form>
         <ul id="bans" class="chips"></ul>
-        <p class="muted small">Модеры в чате: <code>!ttsban ник</code>, <code>!ttsunban ник</code>.</p>
+        <p class="muted small" data-t>Модеры в чате: <code>!ttsban ник</code>, <code>!ttsunban ник</code>.</p>
       </div>
     </div>
     <div>
       <div class="card">
         <h2>Корни мата</h2>
-        <p class="muted small">Файл <code>profanity.txt</code> в папке данных. Синтаксис описан в начале файла.</p>
+        <p class="muted small" data-t>Файл <code>profanity.txt</code> в папке данных. Синтаксис описан в начале файла.</p>
         <textarea id="prof" spellcheck="false"></textarea>
         <div class="row mt">
-          <input id="prof-sample" class="grow" placeholder="проверить фразу" value="Ну ты и мудак, х.у.й тебе!">
+          <input id="prof-sample" class="grow" placeholder="проверить фразу" translate="no" value="Ну ты и мудак, х.у.й тебе!">
           <button id="prof-save" class="primary">Сохранить и проверить</button>
         </div>
         <p id="prof-out" class="muted"></p>
@@ -297,6 +300,7 @@
 </dialog>
 <div id="toast"></div>
 <div id="tip" class="tip" hidden></div>
+<script src="/static/i18n.js"></script>
 <script src="/static/admin.js"></script>
 </body>
 </html>

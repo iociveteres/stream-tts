@@ -23,6 +23,7 @@ import asyncio, collections, contextlib, glob, logging, os, re, socket, subproce
 import aiohttp
 
 from . import paths
+from .i18n import tr
 from .paths import EXE, env
 
 log = logging.getLogger("runtime")
@@ -224,17 +225,17 @@ class Managed:
         model = env("MODEL")
         if model:
             if not os.path.isfile(model):
-                raise Unavailable(f"модель не найдена: {model}")
+                raise Unavailable(tr("модель не найдена: {model}", model=model))
             return model
         ggufs = sorted(glob.glob(os.path.join(paths.MODELS, "*.gguf")))
         chosen = os.path.join(paths.MODELS, self.s.get("model", "")) if self.s and self.s.get("model") else ""
         if chosen in ggufs:
             return chosen
         if not ggufs:
-            raise Unavailable("нет модели: скачайте её в админке (вкладка «Сервер») "
-                              f"или положите *.gguf в {paths.MODELS}")
+            raise Unavailable(tr("нет модели: скачайте её в админке (вкладка «Сервер») или положите *.gguf в {dir}",
+                                 dir=paths.MODELS))
         if len(ggufs) > 1:
-            raise Unavailable(f"в {paths.MODELS} несколько моделей: выберите одну в админке (вкладка «Сервер»)")
+            raise Unavailable(tr("в {dir} несколько моделей: выберите одну в админке (вкладка «Сервер»)", dir=paths.MODELS))
         return ggufs[0]
 
     def _voices(self):
@@ -254,9 +255,9 @@ class Managed:
 
     async def _args(self):
         if not has_avx2():
-            raise Unavailable("процессор без AVX2: cosyvoice.cpp на нём не работает")
+            raise Unavailable(tr("процессор без AVX2: cosyvoice.cpp на нём не работает"))
         if not os.path.isfile(self.server):
-            raise Unavailable(f"нет {self.server}")
+            raise Unavailable(tr("нет {path}", path=self.server))
         if self.backends is None:  # до модели: выбор устройства в админке виден и без неё
             self.backends = await self._detect_backends()
         self.backend = choose_backend(self.backends, self.prefer)
@@ -399,7 +400,7 @@ class Managed:
         loop, delay = asyncio.get_running_loop(), 2
         while True:
             if self._hold:
-                self.state, self.error = "stopped", "сервер остановлен: меняются голоса"
+                self.state, self.error = "stopped", tr("сервер остановлен: меняются голоса")
                 await self._sleep(1)
                 continue
             try:
@@ -421,7 +422,7 @@ class Managed:
             code = self.proc.returncode
             code = code - 2 ** 32 if code >= 2 ** 31 else code  # Windows отдаёт код без знака
             last = next((t for t in reversed(self.tail) if "[REQ]" not in t), "")
-            self.state, self.error = "crashed", f"cosyvoice-server завершился (код {code}){': ' + last if last else ''}"
+            self.state, self.error = "crashed", tr("cosyvoice-server завершился (код {code})", code=code) +                 (": " + last if last else "")
             self.restarts += 1
             delay = 2 if loop.time() - started > 60 else min(delay * 2, 60)
             log.warning("%s; перезапуск через %d с", self.error, delay)

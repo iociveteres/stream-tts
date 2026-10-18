@@ -3,7 +3,8 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import bench, config, filters, install, runtime, stats, store, web as webapp
+from . import bench, config, filters, i18n, install, runtime, stats, store, web as webapp
+from .i18n import tr
 from .cosy import Cosy
 from .engine import Engine
 from .twitch import Twitch
@@ -23,7 +24,7 @@ async def cosy_monitor(ctx):
         was = ctx.cosy.ok
         await ctx.cosy.status()
         if not ctx.cosy.ok and ctx.runtime and ctx.runtime.state != "running":
-            ctx.cosy.error = ctx.runtime.error or "cosyvoice-server запускается"
+            ctx.cosy.error = ctx.runtime.error or tr("cosyvoice-server запускается")
         # встроенный сервер перезапущен с новыми голосами (между проверками он мог не успеть пропасть)
         started = ctx.runtime.starts if ctx.runtime else 0
         if ctx.cosy.ok and (not was or started != last_start or asyncio.get_running_loop().time() - last_list > 60):
@@ -91,6 +92,7 @@ def main():
 
     ctx = Ctx()
     ctx.settings = store.Settings(os.path.join(config.DATA, "settings.json"))
+    i18n.init(ctx.settings)
     ctx.db = store.DB(os.path.join(config.DATA, "stream-tts.sqlite"))
     ctx.profanity = filters.Profanity(prof)
     # Режим: external (COSYVOICE_URL задан или встроенного сервера нет) или managed (runtime.py)

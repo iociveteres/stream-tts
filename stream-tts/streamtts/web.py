@@ -3,13 +3,14 @@ import asyncio, contextlib, hashlib, hmac, json, logging, os, secrets, tempfile,
 
 from aiohttp import web
 
-from . import config, install, runtime, stats
+from . import config, i18n, install, runtime, stats
+from .i18n import tr
 from .twitch import TwitchError, explain
 
 log = logging.getLogger("web")
 STATIC = os.path.join(config.HERE, "static")
 COOKIE = "stream_tts"
-PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/login", "/favicon")
+PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/static/i18n.js", "/login", "/favicon")
 # Файлы, которые меняются под тем же адресом: статика при обновлении программы, примеры голосов при смене фразы
 REVALIDATE = ("/static/", "/voices/demos/")
 UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream")}
@@ -65,7 +66,9 @@ async def no_cache(request, response):
 
 def page(name):
     async def handler(request):
-        return web.FileResponse(os.path.join(STATIC, name), headers={"Cache-Control": "no-cache"})
+        with open(os.path.join(STATIC, name), encoding="utf-8") as f:
+            text = i18n.page(f.read())
+        return web.Response(text=text, content_type="text/html", headers={"Cache-Control": "no-cache"})
     return handler
 
 
@@ -75,16 +78,16 @@ async def auth_middleware(request, handler):
     if config.PASSWORD and not path.startswith(PUBLIC):
         if not hmac.compare_digest(request.cookies.get(COOKIE, ""), request.app["token"]):
             if path.startswith("/api/"):
-                raise web.HTTPUnauthorized(text="нужен пароль")
+                raise web.HTTPUnauthorized(text=tr("нужен пароль"))
             raise web.HTTPFound("/login")
     if request.method == "POST" and path.startswith("/api/"):
         # Защита от запросов с чужих страниц: только JSON и только со своего адреса
         origin = request.headers.get("Origin")
         if origin and origin.split("://", 1)[-1] != request.host:
-            raise web.HTTPForbidden(text="чужой Origin")
+            raise web.HTTPForbidden(text=tr("чужой Origin"))
         # Загрузка файла — сырым телом с нестандартным типом: такой запрос с чужой страницы требует CORS-проверки
         if request.content_type != "application/json" and request.content_type not in UPLOADS.get(path, ()):
-            raise web.HTTPUnsupportedMediaType(text="нужен application/json")
+            raise web.HTTPUnsupportedMediaType(text=tr("нужен application/json"))
     return await handler(request)
 
 
@@ -130,7 +133,7 @@ async def voices_zip(request):
 
 # --- состояние ---
 SETTINGS_KEYS = ("enabled", "access", "filter_links", "filter_profanity", "read_nick", "subtitles", "queue_limit",
-                 "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "chat_all")
+                 "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "chat_all", "lang")
 
 
 def state(ctx, full=True):
@@ -198,7 +201,7 @@ async def api_preview(request):
     try:
         path = await ctx.voices.preview(name)
     except Exception as e:
-        raise web.HTTPServiceUnavailable(text=f"синтез: {e}")
+        raise web.HTTPServiceUnavailable(text=tr("синтез: {e}", e=e))
     return web.FileResponse(path, headers={"Cache-Control": "no-cache"})
 
 
@@ -219,7 +222,7 @@ def fail(msg, status=400):
 
 async def post_settings(request, ctx, data):
     s = ctx.settings
-    for k, v in data.items():
+    for k, v in list(data.items()):
         if k not in SETTINGS_KEYS or k == "enabled":
             continue
         if k in ("queue_limit", "max_chars"):
@@ -229,6 +232,10 @@ async def post_settings(request, ctx, data):
         elif k == "chunk_tokens":
             v = min(1000, max(10, int(v)))
         elif k == "access" and v not in ("all", "subs", "vip", "mods"):
+            continue
+        elif k == "lang":
+            if v in i18n.LANGS and v != s["lang"] and i18n.set_lang(s, v):
+                data["demo_phrase"] = s["demo_phrase"]  # фраза примеров была по умолчанию и сменилась с языком
             continue
         s.data[k] = v
     s.save()
@@ -242,7 +249,7 @@ async def post_voice(request, ctx, data):
     many = "names" in data
     names = [str(n) for n in data["names"]] if many else [data["name"]]
     if any(n not in ctx.voices.names() for n in names):
-        return fail("нет такого голоса")
+        return fail(tr("нет такого голоса"))
     for n in names:
         v = ctx.settings.voice(n)
         if "enabled" in data:
@@ -310,7 +317,7 @@ async def post_clear(request, ctx, data):
 
 
 async def post_remove(request, ctx, data):
-    return ok() if await ctx.engine.remove(data.get("id")) else fail("нет в очереди")
+    return ok() if await ctx.engine.remove(data.get("id")) else fail(tr("нет в очереди"))
 
 
 async def post_test(request, ctx, data):
@@ -318,7 +325,7 @@ async def post_test(request, ctx, data):
     login = (data.get("login") or "tester").strip().lower()
     if data.get("voice"):
         if data["voice"] not in ctx.voices.enabled():
-            return fail("голос выключен или не найден")
+            return fail(tr("голос выключен или не найден"))
         ctx.db.set_voice(f"test:{login}", login, data["voice"])
     rid = f"test-{secrets.token_hex(4)}"
     await ctx.engine.redemption(rid, "", f"test:{login}", login, data.get("login") or login, data.get("text", ""),
@@ -329,7 +336,7 @@ async def post_test(request, ctx, data):
 async def post_ban(request, ctx, data):
     login = str(data.get("login", "")).lstrip("@").strip()
     if not login:
-        return fail("ник?")
+        return fail(tr("ник?"))
     ctx.db.ban(login, bool(data.get("on", True)))
     return ok()
 
@@ -339,13 +346,13 @@ async def post_profanity(request, ctx, data):
         f.write(str(data.get("text", "")))
     ctx.profanity.reload()
     sample = str(data.get("sample", ""))
-    return ok(sample=ctx.profanity.clean(sample, beep="[писк]") if sample else "")
+    return ok(sample=ctx.profanity.clean(sample, beep=tr("[писк]")) if sample else "")
 
 
 # --- первый запуск (режим managed): модель, устройство, наборы голосов ---
 def _install(ctx):
     if not ctx.install:
-        raise ValueError("сервер синтеза внешний (COSYVOICE_URL): модель и голоса ставятся на нём")
+        raise ValueError(tr("сервер синтеза внешний (COSYVOICE_URL): модель и голоса ставятся на нём"))
     return ctx.install
 
 
@@ -369,7 +376,7 @@ async def post_backend(request, ctx, data):
     _install(ctx)
     backend = str(data.get("backend", "auto"))
     if backend not in runtime.BACKENDS:
-        return fail("ожидалось auto, cuda, vulkan или cpu")
+        return fail(tr("ожидалось auto, cuda, vulkan или cpu"))
     ctx.settings.update(backend=backend)
     await ctx.runtime.restart()
     return ok()
@@ -401,7 +408,7 @@ async def api_voiceset_import(request):
             async for chunk in request.content.iter_chunked(1 << 20):
                 size += len(chunk)
                 if size > MAX_UPLOAD:
-                    return fail("архив больше 512 МБ")
+                    return fail(tr("архив больше 512 МБ"))
                 f.write(chunk)
         result = await inst.import_set(tmp, filename)
     except ValueError as e:
@@ -420,12 +427,12 @@ def _wrap(fn):
         try:
             data = await request.json() if request.can_read_body else {}
         except ValueError:
-            return fail("неверный JSON")
+            return fail(tr("неверный JSON"))
         ctx = request.app["ctx"]
         try:
             resp = await fn(request, ctx, data or {})
         except (KeyError, ValueError, TypeError) as e:
-            return fail(f"неверный запрос: {e}")
+            return fail(tr("неверный запрос: {e}", e=e))
         ctx.engine.dirty.set()
         return resp
     return handler

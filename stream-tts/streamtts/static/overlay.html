@@ -27,6 +27,7 @@
 <div id="status"></div>
 <button id="unlock">🔊 Включить звук</button>
 <div id="sub"></div>
+<script src="/static/i18n.js"></script>
 <script>
 "use strict";
 // Звук приходит по WebSocket кусками PCM16 и ставится в очередь Web Audio.
@@ -82,7 +83,7 @@ function play(buf) {
 function onMessage(m) {
   if (m.type === "active") { active = true; status(""); reportReady(); }
   else if (m.type === "inactive") { active = false; stopAll(); $unlock.classList.remove("on");
-    status("Оверлей неактивен: звук играет в другом окне"); }
+    status(T("Оверлей неактивен: звук играет в другом окне")); }
   else if (m.type === "start") {
     stopAll();
     cur = { id: m.id, sr: m.sr, next: 0, sources: new Set(), endMsg: false };
@@ -101,7 +102,7 @@ function connect() {
   ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/overlay/ws");
   ws.binaryType = "arraybuffer";
   ws.onmessage = e => typeof e.data === "string" ? onMessage(JSON.parse(e.data)) : play(e.data);
-  ws.onclose = () => { active = false; stopAll(); status("Нет связи с сервером, переподключение…");
+  ws.onclose = () => { active = false; stopAll(); status(T("Нет связи с сервером, переподключение…"));
     setTimeout(connect, 2000); };
 }
 connect();

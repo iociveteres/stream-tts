@@ -7,6 +7,7 @@
 ; %LOCALAPPDATA%\StreamTTS (paths.py) и при удалении не трогаются. Модель в установщик не входит: вариант
 ; квантования выбирается на странице «Модель синтеза» (с примерами звука), пишется в {app}\setup-model.txt, и
 ; программа сама качает его при первом запуске (install.py, Installer.first_run); потом — вкладка «Сервер».
+; Язык установщика пишется в {app}\setup-lang.txt: на нём админка открывается в первый раз (i18n.py).
 ; Тексты — в [CustomMessages] на двух языках; сторонние лицензии — страница «Информация» (THIRD-PARTY*.txt).
 
 #ifndef AppVersion
@@ -110,6 +111,7 @@ Source: "..\..\stream-tts\streamtts\static\quants\*.mp3"; Flags: dontcopy
 
 [UninstallDelete]
 Type: files; Name: "{app}\setup-model.txt"
+Type: files; Name: "{app}\setup-lang.txt"
 
 [InstallDelete]
 ; CUDA сняли при обновлении: без ggml-cuda.dll runtime.py её и не предложит
@@ -275,7 +277,10 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
+  begin
     SaveStringToFile(ExpandConstant('{app}\setup-model.txt'), ModelQuant(ModelPage.SelectedValueIndex), False);
+    SaveStringToFile(ExpandConstant('{app}\setup-lang.txt'), ActiveLanguage, False);
+  end;
 end;
 
 // cosyvoice собран тулсетом VC++ 14.51: с рантаймом старше он не запустится (build-runtime.py)

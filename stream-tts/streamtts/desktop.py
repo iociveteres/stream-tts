@@ -117,7 +117,8 @@ def pause():
     """Чтобы окно консоли с ошибкой не закрылось сразу."""
     if sys.stdin and sys.stdin.isatty():
         try:
-            input("\nНажмите Enter, чтобы закрыть окно…")
+            from .i18n import tr
+            input("\n" + tr("Нажмите Enter, чтобы закрыть окно…"))
         except (EOFError, KeyboardInterrupt):
             pass
 
@@ -129,16 +130,19 @@ def main():
 
     load_env()
     importlib.reload(paths)  # STREAM_TTS_MODELS и др. могли прийти из stream-tts.env
+    from .i18n import preload, tr
+    preload(os.path.join(paths.DATA, "settings.json"))
     url = admin_url()
     if not single_instance():
-        print(f"StreamTTS уже запущен: {url}")
+        print(tr("StreamTTS уже запущен: {url}", url=url))
         if not args.no_browser:
             webbrowser.open(url)
         return
     setup_logging()
     set_title(f"StreamTTS — {url}")
-    print(f"StreamTTS: админка {url}, оверлей для OBS {url}overlay\n"
-          f"Данные: {paths.DATA}\nЗакройте это окно, чтобы выключить озвучку.\n", flush=True)
+    print(tr("StreamTTS: админка {url}, оверлей для OBS {url}overlay", url=url) + "\n" +
+          tr("Данные: {dir}", dir=paths.DATA) + "\n" + tr("Закройте это окно, чтобы выключить озвучку.") + "\n",
+          flush=True)
     if not args.no_browser:
         open_when_ready(url)
 
@@ -153,9 +157,9 @@ def main():
         raise
     except OSError as e:
         # порт занят: run_app падает при bind
-        log.error("не удалось запустить: %s", e)
-        log.error("порт %s занят другой программой? Его можно сменить в %s (STREAM_TTS_PORT)",
-                  url.rsplit(":", 1)[-1].rstrip("/"), ENV_FILE)
+        log.error(tr("не удалось запустить: {e}", e=e))
+        log.error(tr("порт {port} занят другой программой? Его можно сменить в {file} (STREAM_TTS_PORT)",
+                     port=url.rsplit(":", 1)[-1].rstrip("/"), file=ENV_FILE))
         pause()
         sys.exit(1)
     except Exception:

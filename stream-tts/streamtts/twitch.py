@@ -4,6 +4,7 @@ import asyncio, collections, contextlib, json, logging, os, time
 import aiohttp
 
 from . import config, store
+from .i18n import tr
 
 log = logging.getLogger("twitch")
 
@@ -35,7 +36,7 @@ def explain(e):
     msg = getattr(e, "message", str(e))
     for k, v in HELIX_HINTS.items():
         if k.lower() in msg.lower():
-            return f"{v} ({msg})"
+            return f"{tr(v)} ({msg})"
     return msg
 
 
@@ -123,7 +124,7 @@ class Twitch:
         """Новый Client ID сохраняется, только если Twitch начал с ним вход."""
         client_id = client_id.strip()
         if not client_id:
-            raise TwitchError(400, "Вставьте Client ID")
+            raise TwitchError(400, tr("Вставьте Client ID"))
         old = self.s["client_id"]
         if client_id != self.client_id:
             await self.logout()
@@ -144,13 +145,13 @@ class Twitch:
             async with self.http.post(f"{ID}/device", data=dict(client_id=self.client_id, scopes=SCOPES)) as r:
                 data = await r.json(content_type=None)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as e:
-            self.error = f"Twitch недоступен: {e or type(e).__name__}"
+            self.error = tr("Twitch недоступен: {e}", e=e or type(e).__name__)
             raise TwitchError(0, self.error)
         if r.status != 200:
             self.state = "logged_out"
             msg = data.get("message", r.status)
-            self.error = (f"Twitch не принял Client ID ({msg}). Проверьте, что он скопирован целиком."
-                          if r.status in (400, 404) else f"Ошибка Twitch: {msg}")
+            self.error = tr("Twitch не принял Client ID ({msg}). Проверьте, что он скопирован целиком."
+                            if r.status in (400, 404) else "Ошибка Twitch: {msg}", msg=msg)
             raise TwitchError(r.status, self.error)
         self.device = dict(code=data["user_code"], uri=data["verification_uri"],
                            expires=time.time() + data["expires_in"])
@@ -177,12 +178,12 @@ class Twitch:
                 continue
             self.device, self.state = None, "logged_out"
             if "secret" in msg.lower():
-                self.error = ("Приложение создано с типом Confidential. Тип клиента нельзя сменить: "
-                              "зарегистрируйте новое приложение с Client Type: Public.")
+                self.error = tr("Приложение создано с типом Confidential. Тип клиента нельзя сменить: "
+                                "зарегистрируйте новое приложение с Client Type: Public.")
             else:
-                self.error = f"Вход не удался: {msg or r.status}"
+                self.error = tr("Вход не удался: {msg}", msg=msg or r.status)
             return
-        self.device, self.state, self.error = None, "logged_out", "Код истёк, начните вход заново."
+        self.device, self.state, self.error = None, "logged_out", tr("Код истёк, начните вход заново.")
 
     def _token(self, data, user=None):
         tok = dict(access_token=data["access_token"], refresh_token=data.get("refresh_token"),
@@ -243,7 +244,7 @@ class Twitch:
     def _expired(self):
         self.state = "expired"
         self.ws_state = "off"
-        self.error = "Вход в Twitch истёк: войдите заново."
+        self.error = tr("Вход в Twitch истёк: войдите заново.")
         log.warning(self.error)
         t = self.tasks.pop("eventsub", None)
         if t and t is not asyncio.current_task():
@@ -259,7 +260,7 @@ class Twitch:
                 self._expired()
                 return
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                self.error = f"Twitch недоступен ({e or type(e).__name__}), повтор через 15 с"
+                self.error = tr("Twitch недоступен ({e}), повтор через 15 с", e=e or type(e).__name__)
                 await asyncio.sleep(15)
         self.state, self.error = "ok", ""
         log.info("вход: канал %s", self.login)
@@ -285,14 +286,14 @@ class Twitch:
     # --- Helix ---
     async def api(self, method, path, params=None, body=None):
         if self.state not in ("ok", "connecting"):
-            raise TwitchError(0, "нет входа в Twitch")
+            raise TwitchError(0, tr("нет входа в Twitch"))
         for attempt in range(2):
             if self.tok["expires_at"] < time.time() + 60:
                 try:
                     await self.refresh()
                 except AuthExpired:
                     self._expired()
-                    raise TwitchError(401, "вход истёк")
+                    raise TwitchError(401, tr("вход истёк"))
             headers = {"Authorization": f"Bearer {self.tok['access_token']}", "Client-Id": self.client_id}
             async with self.http.request(method, HELIX + path, params=params, json=body, headers=headers,
                                          timeout=aiohttp.ClientTimeout(total=20)) as r:
@@ -307,7 +308,7 @@ class Twitch:
                         msg = text
                     raise TwitchError(r.status, msg)
                 return json.loads(text) if text else None
-        raise TwitchError(401, "вход истёк")
+        raise TwitchError(401, tr("вход истёк"))
 
     # --- награда ---
     async def sync_reward(self):
@@ -425,7 +426,7 @@ class Twitch:
             self.engine.db.log(redemption=r["id"], ts=time.time(), user_id=r["user_id"], login=r["user_login"],
                                text_len=len(r.get("user_input") or ""), outcome="refund", reason="остались после перезапуска")
         if left:
-            self.engine.note(f"возвращены баллы за {len(left)} активаций, оставшихся с прошлого запуска")
+            self.engine.note(tr("возвращены баллы за {n} активаций, оставшихся с прошлого запуска", n=len(left)))
 
     async def catch_up(self):
         """После обрыва EventSub: активации, пришедшие за время переподключения."""
@@ -457,7 +458,7 @@ class Twitch:
             except TwitchError as e:
                 if e.status != 409:  # 409: подписка уже есть (перенесена при session_reconnect)
                     log.warning("подписка %s: %s", kind, e)
-                    self.error = f"Подписка {kind}: {e.message}"
+                    self.error = tr("Подписка {kind}: {e}", kind=kind, e=e.message)
                     continue
             self.subscribed.add(kind)
 

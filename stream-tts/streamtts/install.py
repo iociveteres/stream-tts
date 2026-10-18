@@ -15,6 +15,7 @@ import asyncio, hashlib, json, logging, os, re, shutil, time, zipfile
 import aiohttp
 
 from . import paths
+from .i18n import tr
 
 log = logging.getLogger("install")
 
@@ -72,8 +73,9 @@ class Installer:
 
     # --- состояние для админки ---
     def public(self):
-        quants = [dict(QUANTS[q], quant=q, file=model_name(q)) for q in QUANTS]
-        return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=SAMPLES, sample_phrase=SAMPLE_PHRASE,
+        quants = [dict(QUANTS[q], quant=q, file=model_name(q), note=tr(QUANTS[q]["note"])) for q in QUANTS]
+        samples = [(voice, tr(label)) for voice, label in SAMPLES]
+        return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=samples, sample_phrase=SAMPLE_PHRASE,
                     models=installed_models(),
                     model=os.path.basename(self.runtime.model) if self.runtime.model else self.s.get("model", ""),
                     models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets())
@@ -87,9 +89,9 @@ class Installer:
     # --- модель ---
     def start_download(self, quant, frontend):
         if quant not in QUANTS:
-            raise ValueError(f"неизвестный квант {quant}")
+            raise ValueError(tr("неизвестный квант {quant}", quant=quant))
         if self.task and not self.task.done():
-            raise ValueError("загрузка уже идёт")
+            raise ValueError(tr("загрузка уже идёт"))
         files = [(model_name(quant), model_name(quant))]
         if frontend:
             files += [(f, f) for f in FRONTEND]
@@ -188,17 +190,17 @@ class Installer:
                 log.warning("%s: %s, повтор %d через 3 с", rel, e or type(e).__name__, attempt)
                 await asyncio.sleep(3)
         if sha:
-            self.dl.update(file=f"{rel}: проверка", speed=0.0)
+            self.dl.update(file=tr("{file}: проверка", file=rel), speed=0.0)
             self._push(force=True)
             got = await asyncio.to_thread(_sha256, part)
             if got != sha:
                 os.remove(part)
-                raise RuntimeError(f"{rel}: контрольная сумма не совпала, файл удалён — скачайте ещё раз")
+                raise RuntimeError(tr("{file}: контрольная сумма не совпала, файл удалён — скачайте ещё раз", file=rel))
         os.replace(part, dst)
 
     def use_model(self, name):
         if name not in installed_models():
-            raise ValueError("нет такой модели")
+            raise ValueError(tr("нет такой модели"))
         self.s.update(model=name)
 
     # --- наборы голосов ---
@@ -212,7 +214,7 @@ class Installer:
     async def delete_set(self, name):
         target = os.path.join(paths.VOICES, name)
         if name not in [s["name"] for s in list_sets()]:
-            raise ValueError("нет такого набора")
+            raise ValueError(tr("нет такого набора"))
         async with self.runtime.paused():
             await asyncio.to_thread(shutil.rmtree, target)
         log.info("набор %s удалён", name)
@@ -255,10 +257,10 @@ def _existing_voices(skip_set):
     out = {}
     for f in os.listdir(paths.VOICES) if os.path.isdir(paths.VOICES) else []:
         if f.endswith(".gguf"):
-            out[f[:-5]] = "голоса без набора"
+            out[f[:-5]] = tr("голоса без набора")
     for s in list_sets():
         if s["name"] != skip_set:
-            out.update(dict.fromkeys(s["voices"], f"набор {s['name']}"))
+            out.update(dict.fromkeys(s["voices"], tr("набор {name}", name=s["name"])))
     return out
 
 
@@ -267,11 +269,11 @@ def _check_zip(path, filename):
     try:
         z = zipfile.ZipFile(path)
     except zipfile.BadZipFile:
-        raise ValueError("это не zip")
+        raise ValueError(tr("это не zip"))
     with z:
         entries = [i for i in z.infolist() if not i.is_dir() and not i.filename.startswith("__MACOSX/")]
         if len(entries) > MAX_ZIP_FILES:
-            raise ValueError("слишком много файлов в архиве")
+            raise ValueError(tr("слишком много файлов в архиве"))
         tops = {i.filename.split("/")[0] for i in entries if "/" in i.filename}
         single = len(tops) == 1 and all("/" in i.filename for i in entries)
         raw = tops.pop() if single else os.path.splitext(os.path.basename(filename or "voices"))[0]
@@ -287,17 +289,17 @@ def _check_zip(path, filename):
             elif base.lower().endswith(".gguf"):
                 voice = base[:-5]
                 if not VOICE_NAME.match(voice):
-                    raise ValueError(f"недопустимое имя голоса: {voice}")
+                    raise ValueError(tr("недопустимое имя голоса: {voice}", voice=voice))
                 if i.file_size > MAX_GGUF:
-                    raise ValueError(f"{base}: слишком большой для голоса")
+                    raise ValueError(tr("{file}: слишком большой для голоса", file=base))
                 with z.open(i) as f:
                     if f.read(4) != b"GGUF":
-                        raise ValueError(f"{base}: не GGUF")
+                        raise ValueError(tr("{file}: не GGUF", file=base))
                 voices[voice] = i.filename
             else:
                 ignored.append(i.filename)
         if not voices:
-            raise ValueError("в архиве нет голосов *.gguf")
+            raise ValueError(tr("в архиве нет голосов *.gguf"))
         meta = {}
         if manifest:
             try:
@@ -305,14 +307,14 @@ def _check_zip(path, filename):
             except (ValueError, UnicodeDecodeError) as e:
                 raise ValueError(f"manifest.json: {e}")
             if not isinstance(meta, dict):
-                raise ValueError("manifest.json: ожидался объект {голос: {...}}")
+                raise ValueError(tr("manifest.json: ожидался объект {голос: {...}}"))
     return dict(name=name, voices=voices, manifest=meta, ignored=ignored)
 
 
 def _install_set(path, info):
     name = info["name"]
     taken = _existing_voices(skip_set=name)
-    added, skipped = [], [f"{v} (уже есть: {taken[v]})" for v in sorted(info["voices"]) if v in taken]
+    added, skipped = [], [tr("{voice} (уже есть: {where})", voice=v, where=taken[v]) for v in sorted(info["voices"]) if v in taken]
     os.makedirs(paths.VOICES, exist_ok=True)
     tmp = os.path.join(paths.VOICES, f".{name}.tmp")
     shutil.rmtree(tmp, ignore_errors=True)
@@ -326,7 +328,7 @@ def _install_set(path, info):
             added.append(voice)
     if not added:
         shutil.rmtree(tmp)
-        raise ValueError("все голоса набора уже установлены в других наборах: " + ", ".join(skipped))
+        raise ValueError(tr("все голоса набора уже установлены в других наборах: {voices}", voices=", ".join(skipped)))
     if info["manifest"]:
         with open(os.path.join(tmp, "manifest.json"), "w", encoding="utf-8") as f:
             json.dump({k: v for k, v in info["manifest"].items() if k in added}, f, ensure_ascii=False, indent=1)

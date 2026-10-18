@@ -21,8 +21,8 @@ const svg = (tag, attrs) => {
   for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
   return el;
 };
-const fmtClock = ts => new Date(ts * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const fmtNum = (x, d = 1) => x == null ? "—" : Number(x).toLocaleString("ru-RU", { maximumFractionDigits: d });
+const fmtClock = ts => new Date(ts * 1000).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const fmtNum = (x, d = 1) => x == null ? "—" : Number(x).toLocaleString(LOCALE, { maximumFractionDigits: d });
 
 let S = null;
 
@@ -34,7 +34,7 @@ function toast(msg, bad) {
 
 /** Подтверждение окном на странице: confirm() во встроенных браузерах (панель Claude, некоторые оболочки)
  *  молча возвращает false, и действие не выполнялось. */
-function ask(msg, yes = "Да", danger = false) {
+function ask(msg, yes = T("Да"), danger = false) {
   const dlg = $("#ask");
   $("#ask-text").textContent = msg;
   $("#ask-yes").textContent = yes;
@@ -55,9 +55,9 @@ async function api(path, body) {
       body: JSON.stringify(body || {}) });
     if (r.status === 401) { location.href = "/login"; return { ok: false }; }
     const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
-    if (!j.ok) toast(j.error || "Ошибка", true);
+    if (!j.ok) toast(j.error || T("Ошибка"), true);
     return j;
-  } catch (e) { toast("Сервер недоступен: " + e.message, true); return { ok: false }; }
+  } catch (e) { toast(T("Сервер недоступен: {e}", { e: e.message }), true); return { ok: false }; }
 }
 async function reload() {
   const r = await fetch("/api/state");
@@ -104,69 +104,70 @@ function pill(text, cls, title) { return h("span", { class: "pill", title }, h("
 function renderHeader() {
   const t = S.twitch, c = S.cosy, ov = S.engine.overlay;
   $("#channel").textContent = t.login ? "· " + t.login : "";
-  const tw = { ok: ["Twitch", "good"], connecting: ["Twitch: подключение", "warn"], device: ["Twitch: ждёт входа", "warn"],
-    expired: ["Twitch: вход истёк", "bad"], logged_out: ["Twitch: нет входа", "bad"],
-    no_client: ["Twitch: нет Client ID", "bad"] }[t.state] || [t.state, ""];
+  const tw = { ok: ["Twitch", "good"], connecting: [T("Twitch: подключение"), "warn"],
+    device: [T("Twitch: ждёт входа"), "warn"], expired: [T("Twitch: вход истёк"), "bad"],
+    logged_out: [T("Twitch: нет входа"), "bad"], no_client: [T("Twitch: нет Client ID"), "bad"] }[t.state] || [t.state, ""];
   const pills = [pill(...tw, t.error)];
   if (t.state === "ok") pills.push(pill("EventSub", t.ws === "connected" ? "good" : "warn", t.ws));
-  pills.push(pill(c.ok ? (c.busy ? "cosyvoice: синтез" : "cosyvoice") : "cosyvoice недоступен",
+  pills.push(pill(c.ok ? (c.busy ? T("cosyvoice: синтез") : "cosyvoice") : T("cosyvoice недоступен"),
     c.ok ? "good" : "bad", c.ok ? c.url + runtimeInfo(c.runtime) : c.error));
-  pills.push(pill(!ov.active ? "оверлей не подключён" : ov.ready ? "оверлей" : "оверлей ждёт клика",
+  pills.push(pill(!ov.active ? T("оверлей не подключён") : ov.ready ? T("оверлей") : T("оверлей ждёт клика"),
     !ov.active ? "bad" : ov.ready ? "good" : "warn"));
-  if (!wsOnline) pills.push(pill("нет связи с сервисом", "bad"));
+  if (!wsOnline) pills.push(pill(T("нет связи с сервисом"), "bad"));
   $("#pills").replaceChildren(...pills);
   $("#enabled").checked = S.engine.enabled;
 
   const banner = [];
-  if (t.state === "expired") banner.push("Вход в Twitch истёк: войдите заново на вкладке Twitch. Пока входа нет, " +
-    "активации не обрабатываются, баллы за них вернутся после входа.");
+  if (t.state === "expired") banner.push(T("Вход в Twitch истёк: войдите заново на вкладке Twitch. Пока входа нет, " +
+    "активации не обрабатываются, баллы за них вернутся после входа."));
   if (c.ok === false && S.setup && !S.setup.models.length)
-    banner.push(h("span", {}, "Модель синтеза не установлена: скачайте её на вкладке ",
-      h("a", { href: "#server" }, "«Сервер»"), "."));
-  else if (c.ok === false) banner.push(`cosyvoice недоступен (${c.url}): ${c.error}`);
+    banner.push(h("span", {}, T("Модель синтеза не установлена: скачайте её на вкладке "),
+      h("a", { href: "#server" }, T("«Сервер»")), "."));
+  else if (c.ok === false) banner.push(T("cosyvoice недоступен ({url}): {error}", { url: c.url, error: c.error }));
   $("#banner").hidden = !banner.length;
   $("#banner").replaceChildren(...banner.map(b => h("div", {}, b)));
 }
 $("#enabled").onchange = e => api("/api/enabled", { on: e.target.checked });
 
 // --- очередь ---
-const STATES = { queued: "ждёт", synth: "синтез", ready: "готово", playing: "играет" };
+const STATES = { queued: T("ждёт"), synth: T("синтез"), ready: T("готово"), playing: T("играет") };
 function renderQueue() {
   const q = S.engine.queue;
   const playing = q.find(i => i.state === "playing");
   $("#now").replaceChildren(playing ? h("span", {}, h("b", {}, playing.display + ": "), playing.text,
-    h("span", { class: "muted small" }, `  · ${playing.voice}`)) : "Тишина");
+    h("span", { class: "muted small" }, `  · ${playing.voice}`)) : T("Тишина"));
   $("#now").classList.toggle("muted", !playing);
   $("#qcount").textContent = q.length ? `(${q.length})` : "";
   $("#qempty").hidden = q.length > 0;
   $("#queue").hidden = !q.length;
   $("#queue tbody").replaceChildren(...q.map(i => h("tr", {},
-    h("td", {}, i.display, i.test ? h("span", { class: "tag" }, "тест") : null,
-      i.chat ? h("span", { class: "tag", title: "Сообщение чата, без баллов" }, "чат") : null),
+    h("td", {}, i.display, i.test ? h("span", { class: "tag" }, T("тест")) : null,
+      i.chat ? h("span", { class: "tag", title: T("Сообщение чата, без баллов") }, T("чат")) : null),
     h("td", {}, i.voice),
     h("td", { class: "text" }, i.text),
     h("td", {}, h("span", { class: "state " + i.state }, STATES[i.state] || i.state,
-      i.audio ? ` ${fmtNum(i.audio)} с` : "")),
-    h("td", {}, h("button", { class: "icon danger", title: "Убрать и вернуть баллы",
+      i.audio ? " " + T("{n} с", { n: fmtNum(i.audio) }) : "")),
+    h("td", {}, h("button", { class: "icon danger", title: T("Убрать и вернуть баллы"),
       onclick: () => api("/api/remove", { id: i.id }) }, "✕")))));
   const ov = S.engine.overlay;
-  $("#ovstate").replaceChildren(!ov.active ? h("span", { class: "bad" }, "Оверлей не подключён: фразы ждут в очереди.")
-    : ov.ready ? h("span", { class: "good" }, `Подключён${ov.count > 1 ? ` (окон: ${ov.count}, играет последнее)` : ""}.`)
-    : h("span", { class: "warn" }, "Подключён, но звук не включён: кликните «Включить звук» в окне оверлея."));
+  $("#ovstate").replaceChildren(!ov.active ? h("span", { class: "bad" }, T("Оверлей не подключён: фразы ждут в очереди."))
+    : ov.ready ? h("span", { class: "good" }, ov.count > 1 ? T("Подключён (окон: {n}, играет последнее).", { n: ov.count })
+      : T("Подключён."))
+    : h("span", { class: "warn" }, T("Подключён, но звук не включён: кликните «Включить звук» в окне оверлея.")));
   $("#journal").replaceChildren(...S.engine.journal.map(j => h("li", {}, h("time", {}, fmtClock(j.ts)), j.text)));
 }
 $("#skip").onclick = () => api("/api/skip");
 $("#clear").onclick = async () => {
-  if (await ask("Очистить очередь и вернуть баллы за всё в ней?", "Очистить", true)) api("/api/clear");
+  if (await ask(T("Очистить очередь и вернуть баллы за всё в ней?"), T("Очистить"), true)) api("/api/clear");
 };
 $("#ovurl").textContent = location.origin + "/overlay";
 $("#vurl").textContent = location.origin + "/voices/";
 $$("[data-copy]").forEach(b => b.onclick = () =>
-  navigator.clipboard.writeText($("#" + b.dataset.copy).textContent).then(() => toast("Скопировано")));
+  navigator.clipboard.writeText($("#" + b.dataset.copy).textContent).then(() => toast(T("Скопировано"))));
 
 function renderTestVoices() {
   const sel = $("#test select[name=voice]"), cur = sel.value;
-  sel.replaceChildren(h("option", { value: "" }, "как у зрителя (по нику)"),
+  sel.replaceChildren(h("option", { value: "" }, T("как у зрителя (по нику)")),
     ...S.voices.filter(v => v.enabled).map(v => h("option", { value: v.name }, v.name)));
   sel.value = cur;
 }
@@ -174,7 +175,7 @@ $("#test").onsubmit = async e => {
   e.preventDefault();
   const f = new FormData(e.target);
   const r = await api("/api/test", Object.fromEntries(f));
-  if (r.ok) toast("Отправлено в очередь");
+  if (r.ok) toast(T("Отправлено в очередь"));
 };
 
 // --- Twitch: вход ---
@@ -183,27 +184,29 @@ function renderLogin() {
   const t = S.twitch, key = JSON.stringify([t.state, t.error, t.device, t.login, t.client_id, t.ws]);
   if (key === lastLogin) return;
   lastLogin = key;
-  const card = $("#login-card"), kids = [h("h2", {}, "Вход в Twitch")];
+  const card = $("#login-card"), kids = [h("h2", {}, T("Вход в Twitch"))];
   if (t.state === "no_client") {
-    kids.push(h("p", {}, "Сначала зарегистрируйте своё приложение Twitch по шагам ниже и вставьте его Client ID."));
+    kids.push(h("p", {}, T("Сначала зарегистрируйте своё приложение Twitch по шагам ниже и вставьте его Client ID.")));
   } else if (t.state === "device") {
-    kids.push(h("p", {}, "Откройте страницу активации на любом устройстве, войдите аккаунтом канала и введите код:"),
+    kids.push(h("p", {}, T("Откройте страницу активации на любом устройстве, войдите аккаунтом канала и введите код:")),
       h("div", { class: "code" }, t.device.code),
       h("div", { class: "row" }, h("a", { class: "btn primary", href: t.device.uri, target: "_blank", rel: "noopener" },
-        "Открыть twitch.tv/activate"), h("span", { class: "muted small" },
-        `код действует до ${new Date(t.device.expires * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`)),
-      h("p", { class: "muted small" }, "Страница сама обновится, когда вы подтвердите вход. Разрешения: управление наградами " +
-        "(создать, ставить на паузу, отмечать активации) и чтение чата для команд."));
+        T("Открыть twitch.tv/activate")), h("span", { class: "muted small" },
+        T("код действует до {time}", { time: new Date(t.device.expires * 1000).toLocaleTimeString(LOCALE,
+          { hour: "2-digit", minute: "2-digit" }) }))),
+      h("p", { class: "muted small" }, T("Страница сама обновится, когда вы подтвердите вход. Разрешения: управление " +
+        "наградами (создать, ставить на паузу, отмечать активации) и чтение чата для команд.")));
   } else if (t.state === "ok" || t.state === "connecting") {
-    kids.push(h("p", {}, t.state === "ok" ? "Канал: " : "Подключение… ", h("b", {}, t.login || ""),
-      t.state === "ok" ? h("span", { class: "muted" }, `  · EventSub: ${{ connected: "подключён",
-        connecting: "подключение…", off: "выключен" }[t.ws] || t.ws}`) : null),
-      h("div", { class: "row" }, h("button", { onclick: async () => await ask("Выйти из Twitch? Награда останется на канале.", "Выйти") &&
-        api("/api/twitch/logout") }, "Выйти")));
+    kids.push(h("p", {}, t.state === "ok" ? T("Канал: ") : T("Подключение… "), h("b", {}, t.login || ""),
+      t.state === "ok" ? h("span", { class: "muted" }, `  · EventSub: ${{ connected: T("подключён"),
+        connecting: T("подключение…"), off: T("выключен") }[t.ws] || t.ws}`) : null),
+      h("div", { class: "row" }, h("button", { onclick: async () =>
+        await ask(T("Выйти из Twitch? Награда останется на канале."), T("Выйти")) && api("/api/twitch/logout") },
+        T("Выйти"))));
   } else {
-    if (t.state === "expired") kids.push(h("p", { class: "bad" }, "Вход истёк: refresh-токен больше не действует."));
-    kids.push(h("p", {}, "Client ID: ", h("code", {}, t.client_id), t.client_id_env ? h("span", { class: "muted small" }, " (из .env)") : null),
-      h("button", { class: "primary", onclick: () => api("/api/twitch/login") }, "Войти через Twitch"));
+    if (t.state === "expired") kids.push(h("p", { class: "bad" }, T("Вход истёк: refresh-токен больше не действует.")));
+    kids.push(h("p", {}, "Client ID: ", h("code", {}, t.client_id), t.client_id_env ? h("span", { class: "muted small" }, T(" (из .env)")) : null),
+      h("button", { class: "primary", onclick: () => api("/api/twitch/login") }, T("Войти через Twitch")));
   }
   if (t.error) kids.push(h("p", { class: "bad" }, t.error));
   card.replaceChildren(...kids);
@@ -215,45 +218,47 @@ const mockBar = url => h("div", { class: "bar" }, h("i"), h("i"), h("i"), h("spa
 const mockField = (label, value, hl) => h("div", { class: "field" + (hl ? " hl" : "") }, h("b", {}, label),
   h("div", { class: "input" }, value));
 function copyBtn(text) {
-  return h("button", { type: "button", class: "icon", title: "Копировать",
-    onclick: () => navigator.clipboard.writeText(text).then(() => toast("Скопировано")) }, "⧉");
+  return h("button", { type: "button", class: "icon", title: T("Копировать"),
+    onclick: () => navigator.clipboard.writeText(text).then(() => toast(T("Скопировано"))) }, "⧉");
 }
 function guideSteps() {
-  const name = (S.twitch.login || "канал") + "-stream-tts";
+  const name = (S.twitch.login || T("канал")) + "-stream-tts";
   return [
-    { title: "Включите двухфакторную аутентификацию",
-      body: [h("p", {}, "Без 2FA консоль разработчика Twitch не даст зарегистрировать приложение."),
+    { title: T("Включите двухфакторную аутентификацию"),
+      body: [h("p", {}, T("Без 2FA консоль разработчика Twitch не даст зарегистрировать приложение.")),
         h("a", { class: "btn", href: "https://www.twitch.tv/settings/security", target: "_blank", rel: "noopener" },
-          "Настройки безопасности Twitch ↗"),
-        h("p", { class: "muted small" }, "Раздел «Безопасность и конфиденциальность» → «Двухфакторная аутентификация».")],
+          T("Настройки безопасности Twitch ↗")),
+        h("p", { class: "muted small" }, T("Раздел «Безопасность и конфиденциальность» → «Двухфакторная аутентификация»."))],
       mock: h("div", { class: "mock" }, mockBar("twitch.tv/settings/security"), h("div", { class: "side" },
-        h("div", {}, h("div", {}, "Профиль"), h("div", {}, "Каналы и видео"), h("div", { class: "hl" }, "Безопасность")),
-        h("div", { class: "body" }, h("b", {}, "Безопасность"),
-          h("div", {}, "Пароль"), h("div", { class: "hl" }, "Двухфакторная аутентификация  ",
-            h("span", { class: "btnm" }, "Включить")))))
+        h("div", {}, h("div", {}, T("Профиль")), h("div", {}, T("Каналы и видео")),
+          h("div", { class: "hl" }, T("Безопасность"))),
+        h("div", { class: "body" }, h("b", {}, T("Безопасность")),
+          h("div", {}, T("Пароль")), h("div", { class: "hl" }, T("Двухфакторная аутентификация") + "  ",
+            h("span", { class: "btnm" }, T("Включить"))))))
     },
-    { title: "Откройте консоль разработчика",
-      body: [h("p", {}, "Войдите тем же аккаунтом. Ссылка ведёт сразу на форму «Register Your Application» " +
-        "(в консоли: Applications → «+ Register Your Application»)."),
+    { title: T("Откройте консоль разработчика"),
+      body: [h("p", {}, T("Войдите тем же аккаунтом. Ссылка ведёт сразу на форму «Register Your Application» " +
+        "(в консоли: Applications → «+ Register Your Application»).")),
         h("a", { class: "btn", href: "https://dev.twitch.tv/console/apps/create", target: "_blank", rel: "noopener" },
           "dev.twitch.tv/console ↗"),
-        h("p", { class: "muted small" }, "Консоль открывается в новой вкладке: внутри другой страницы Twitch её не показывает.")],
+        h("p", { class: "muted small" }, T("Консоль открывается в новой вкладке: внутри другой страницы Twitch её не показывает."))],
       mock: h("div", { class: "mock" }, mockBar("dev.twitch.tv/console/apps"), h("div", { class: "side" },
         h("div", {}, h("div", {}, "Dashboard"), h("div", { style: "color:var(--ink)" }, "Applications"), h("div", {}, "Extensions")),
         h("div", { class: "body" }, h("b", {}, "Applications"),
           h("div", {}, h("span", { class: "btnm hl" }, "+ Register Your Application")))))
     },
-    { title: "Заполните форму",
+    { title: T("Заполните форму"),
       body: [h("ul", {},
           h("li", {}, "Name: ", h("code", {}, name), " ", copyBtn(name),
-            h("div", { class: "muted small" }, "Имя должно быть уникальным во всём Twitch. Занято — добавьте что-нибудь.")),
+            h("div", { class: "muted small" }, T("Имя должно быть уникальным во всём Twitch. Занято — добавьте что-нибудь."))),
           h("li", {}, "OAuth Redirect URLs: ", h("code", {}, "http://localhost"), " ", copyBtn("http://localhost"),
-            " и кнопка Add", h("div", { class: "muted small" }, "Поле обязательное, но для входа по коду не используется.")),
-          h("li", {}, "Category: любая, например Broadcaster Suite."),
+            " " + T("и кнопка Add"), h("div", { class: "muted small" },
+              T("Поле обязательное, но для входа по коду не используется."))),
+          h("li", {}, T("Category: любая, например Broadcaster Suite.")),
           h("li", {}, h("b", { class: "warn" }, "Client Type: Public. "),
-            "Тип клиента после создания, вероятно, не поменять: с Confidential вход по коду не работает, " +
-            "придётся регистрировать приложение заново.")),
-        h("p", {}, "Нажмите Create.")],
+            T("Тип клиента после создания, вероятно, не поменять: с Confidential вход по коду не работает, " +
+            "придётся регистрировать приложение заново."))),
+        h("p", {}, T("Нажмите Create."))],
       mock: h("div", { class: "mock" }, mockBar("dev.twitch.tv/console/apps/create"), h("div", { class: "body" },
         h("b", {}, "Register Your Application"),
         mockField("Name", name), mockField("OAuth Redirect URLs", "http://localhost"),
@@ -262,17 +267,17 @@ function guideSteps() {
           h("div", {}, h("span", { class: "radio" }, "Confidential   "), h("span", { class: "radio on" }, "Public"))),
         h("div", {}, h("span", { class: "btnm" }, "Create"))))
     },
-    { title: "Скопируйте Client ID",
-      body: [h("p", {}, "В списке приложений нажмите Manage у нового приложения и скопируйте Client ID. " +
-        "Client Secret не нужен."),
+    { title: T("Скопируйте Client ID"),
+      body: [h("p", {}, T("В списке приложений нажмите Manage у нового приложения и скопируйте Client ID. " +
+        "Client Secret не нужен.")),
         h("form", { class: "row", onsubmit: async e => {
           e.preventDefault();
           const r = await api("/api/twitch/client_id", { client_id: e.target.client_id.value });
-          if (r.ok) { toast("Client ID принят, войдите кодом"); reload(); }
+          if (r.ok) { toast(T("Client ID принят, войдите кодом")); reload(); }
         } }, h("input", { name: "client_id", class: "grow", placeholder: "Client ID", value: S.twitch.client_id || "",
-          autocomplete: "off", spellcheck: "false" }), h("button", { class: "primary" }, "Проверить и войти")),
-        h("p", { class: "muted small" }, "Сервис сразу пробует начать вход: если Twitch не примет ID, здесь будет ошибка. " +
-          "ID можно задать и в .env (TWITCH_CLIENT_ID).")],
+          autocomplete: "off", spellcheck: "false" }), h("button", { class: "primary" }, T("Проверить и войти"))),
+        h("p", { class: "muted small" }, T("Сервис сразу пробует начать вход: если Twitch не примет ID, здесь будет " +
+          "ошибка. ID можно задать и в .env (TWITCH_CLIENT_ID)."))],
       mock: h("div", { class: "mock" }, mockBar("dev.twitch.tv/console/apps/…"), h("div", { class: "body" },
         h("b", {}, name), mockField("OAuth Redirect URLs", "http://localhost"),
         h("div", { class: "field hl" }, h("b", {}, "Client ID"),
@@ -286,7 +291,7 @@ function renderGuide() {
   if (guideOpen === null) guideOpen = !S.twitch.client_id;
   $("#guide").hidden = !guideOpen;
   $("#guide-card > p").hidden = !guideOpen;
-  $("#guide-toggle").textContent = guideOpen ? "Свернуть" : "Показать";
+  $("#guide-toggle").textContent = guideOpen ? T("Свернуть") : T("Показать");
   $("#guide").replaceChildren(...guideSteps().map(s => h("li", {},
     h("div", {}, h("h3", {}, s.title), ...s.body), s.mock)));
 }
@@ -300,20 +305,20 @@ function renderReward() {
 }
 function renderRewardState() {
   const r = S.twitch.reward;
-  $("#reward-save").textContent = r.exists ? "Сохранить" : "Создать награду";
+  $("#reward-save").textContent = r.exists ? T("Сохранить") : T("Создать награду");
   $("#reward-delete").hidden = !r.exists;
-  $("#reward-state").textContent = !r.exists ? "Награда ещё не создана." :
-    r.paused ? "Награда на паузе (озвучка выключена)." : "Награда активна.";
+  $("#reward-state").textContent = !r.exists ? T("Награда ещё не создана.") :
+    r.paused ? T("Награда на паузе (озвучка выключена).") : T("Награда активна.");
 }
 $("#reward").onsubmit = async e => {
   e.preventDefault();
   const f = e.target;
   const r = await api("/api/reward", { title: f.title.value, cost: +f.cost.value, cooldown: +f.cooldown.value,
     prompt: f.prompt.value });
-  if (r.ok) { toast("Награда сохранена"); reload(); }
+  if (r.ok) { toast(T("Награда сохранена")); reload(); }
 };
 $("#reward-delete").onclick = async () => {
-  if (await ask("Удалить награду с канала?", "Удалить", true) && (await api("/api/reward/delete")).ok) reload();
+  if (await ask(T("Удалить награду с канала?"), T("Удалить"), true) && (await api("/api/reward/delete")).ok) reload();
 };
 
 // --- голоса ---
@@ -336,23 +341,23 @@ async function preview(v, btn) {
     psrc.onended = () => { btn.textContent = "▶"; psrc = null; pbtn = null; };
     psrc.start();
     btn.textContent = "■";
-  } catch (e) { btn.textContent = "▶"; pbtn = null; toast("Пример: " + e.message, true); }
+  } catch (e) { btn.textContent = "▶"; pbtn = null; toast(T("Пример: {e}", { e: e.message }), true); }
 }
 function renderVoices() {
   $("#voices tbody").replaceChildren(...S.voices.map(v => {
     const out = h("output", {}, (v.gain_db > 0 ? "+" : "") + v.gain_db);
     const tr = h("tr", { class: v.enabled ? "" : "off", "data-name": v.name },
-      h("td", {}, h("input", { type: "checkbox", checked: v.enabled, "aria-label": "включён",
+      h("td", {}, h("input", { type: "checkbox", checked: v.enabled, "aria-label": T("включён"),
         onchange: async e => { v.enabled = e.target.checked; tr.className = v.enabled ? "" : "off";
           await api("/api/voice", { name: v.name, enabled: v.enabled }); renderTestVoices(); } })),
-      h("td", {}, v.name, v.post ? h("span", { class: "tag", title: v.post }, "эффект") : null,
-        v.demo ? null : h("span", { class: "tag", title: "Пример ещё не синтезирован" }, "без примера")),
-      h("td", {}, h("button", { class: "icon", title: "Послушать пример с поправкой громкости",
+      h("td", {}, v.name, v.post ? h("span", { class: "tag", title: v.post }, T("эффект")) : null,
+        v.demo ? null : h("span", { class: "tag", title: T("Пример ещё не синтезирован") }, T("без примера"))),
+      h("td", {}, h("button", { class: "icon", title: T("Послушать пример с поправкой громкости"),
         onclick: e => preview(v, e.currentTarget) }, "▶")),
       // calib_db — служебное: усиление для стриминга, измеренное по примеру; видно только в подсказке
-      h("td", { title: v.calib_db == null ? null : `Автоматическое выравнивание: ${v.calib_db > 0 ? "+" : ""}` +
-          `${fmtNum(v.calib_db)} дБ` }, h("div", { class: "gain" }, h("input", { type: "range", min: -12, max: 12,
-        step: 0.5, value: v.gain_db, "aria-label": "поправка громкости " + v.name,
+      h("td", { title: v.calib_db == null ? null : T("Автоматическое выравнивание: {db} дБ",
+          { db: (v.calib_db > 0 ? "+" : "") + fmtNum(v.calib_db) }) }, h("div", { class: "gain" }, h("input", {
+        type: "range", min: -12, max: 12, step: 0.5, value: v.gain_db, "aria-label": T("поправка громкости {voice}", { voice: v.name }),
         oninput: e => { out.textContent = (+e.target.value > 0 ? "+" : "") + e.target.value; },
         onchange: e => { v.gain_db = +e.target.value; api("/api/voice", { name: v.name, gain_db: v.gain_db }); } }), out)));
     return tr;
@@ -363,8 +368,8 @@ function renderVoices() {
 function filterVoices() {
   const q = $("#vsearch").value.trim().toLowerCase();
   $$("#voices tbody tr").forEach(tr => tr.hidden = !tr.dataset.name.toLowerCase().includes(q));
-  $("#vall-on").textContent = q ? "Включить найденные" : "Включить все";
-  $("#vall-off").textContent = q ? "Выключить найденные" : "Выключить все";
+  $("#vall-on").textContent = q ? T("Включить найденные") : T("Включить все");
+  $("#vall-off").textContent = q ? T("Выключить найденные") : T("Выключить все");
 }
 $("#vsearch").oninput = filterVoices;
 // Кнопки действуют на голоса, найденные поиском (без поиска — на все)
@@ -374,33 +379,35 @@ $("#vall-off").onclick = async () => {
   const names = shownVoices();
   if (!names.length) return;
   const msg = names.length === S.voices.length
-    ? "Выключить все голоса? Пока ни один не включён, активации будут возвращаться."
-    : `Выключить найденные голоса (${names.length})?`;
-  if (await ask(msg, "Выключить", true)) { await api("/api/voice", { names, enabled: false }); reload(); }
+    ? T("Выключить все голоса? Пока ни один не включён, активации будут возвращаться.")
+    : T("Выключить найденные голоса ({n})?", { n: names.length });
+  if (await ask(msg, T("Выключить"), true)) { await api("/api/voice", { names, enabled: false }); reload(); }
 };
 $("#demo-form").onsubmit = async e => {
   e.preventDefault();
-  if ((await api("/api/settings", { demo_phrase: e.target.demo_phrase.value })).ok) { toast("Сохранено, примеры пересинтезируются"); reload(); }
+  if ((await api("/api/settings", { demo_phrase: e.target.demo_phrase.value })).ok) { toast(T("Сохранено, примеры пересинтезируются")); reload(); }
 };
 $("#demo-rebuild").onclick = async () => {
-  if (await ask("Пересинтезировать примеры всех включённых голосов? Заодно обновится выравнивание громкости.",
-      "Пересинтезировать")) {
+  if (await ask(T("Пересинтезировать примеры всех включённых голосов? Заодно обновится выравнивание громкости."),
+      T("Пересинтезировать"))) {
     await api("/api/demos/rebuild"); reload(); }
 };
 function renderDemoProgress() {
   const d = S.demos;
-  $("#demo-progress").textContent = d.todo ? `Готовятся примеры: осталось ${d.todo}` +
-    (d.current ? `, сейчас ${d.current}` : " (ждут свободного cosyvoice)") : "Примеры всех включённых голосов готовы.";
-  if (d.error) $("#demo-progress").append(h("span", { class: "bad" }, "  Ошибка: " + d.error));
+  $("#demo-progress").textContent = d.todo ? T("Готовятся примеры: осталось {n}", { n: d.todo }) +
+    (d.current ? T(", сейчас {voice}", { voice: d.current }) : T(" (ждут свободного cosyvoice)"))
+    : T("Примеры всех включённых голосов готовы.");
+  if (d.error) $("#demo-progress").append(h("span", { class: "bad" }, "  " + T("Ошибка: {e}", { e: d.error })));
 }
 
 // --- настройки ---
 // --- сервер (режим managed): модель, устройство, наборы голосов ---
-const fmtMB = b => fmtNum(b / 1048576, 0) + " МБ";
-const fmtDur = s => s < 60 ? `${Math.ceil(s)} с` : `${Math.round(s / 60)} мин`;
-const BACKEND_NAMES = { auto: "Автоматически", cuda: "Видеокарта NVIDIA (CUDA)", vulkan: "Видеокарта (Vulkan)", cpu: "Процессор" };
-const RT_STATES = { waiting: "ждёт", starting: "запускается", running: "работает", crashed: "упал, перезапуск",
-  stopped: "остановлен" };
+const fmtMB = b => T("{n} МБ", { n: fmtNum(b / 1048576, 0) });
+const fmtDur = s => s < 60 ? T("{n} с", { n: Math.ceil(s) }) : T("{n} мин", { n: Math.round(s / 60) });
+const BACKEND_NAMES = { auto: T("Автоматически"), cuda: T("Видеокарта NVIDIA (CUDA)"), vulkan: T("Видеокарта (Vulkan)"),
+  cpu: T("Процессор") };
+const RT_STATES = { waiting: T("ждёт"), starting: T("запускается"), running: T("работает"), crashed: T("упал, перезапуск"),
+  stopped: T("остановлен") };
 // Примеры звучания квантов: один плеер на всю вкладку, кнопки переживают перерисовку по ws
 const sample = new Audio();
 let sampleKey = "";
@@ -421,13 +428,13 @@ function renderServer() {
   $("#voices-dir").textContent = st.voices_dir;
   const d = st.download, running = d.state === "running";
   // Модели: варианты квантования с примерами и установленные файлы (в т. ч. положенные вручную)
-  const use = m => m === st.model ? h("span", { class: "tag" }, "используется")
-    : h("button", { disabled: rt.locked.model, onclick: () => api("/api/model/use", { name: m }) }, "Использовать");
+  const use = m => m === st.model ? h("span", { class: "tag" }, T("используется"))
+    : h("button", { disabled: rt.locked.model, onclick: () => api("/api/model/use", { name: m }) }, T("Использовать"));
   const catalog = st.quants.map(q => h("li", { class: q.file === st.model ? "on" : "" },
     h("div", { class: "grow" },
-      h("b", {}, q.quant), q.quant === st.default_quant ? h("span", { class: "tag" }, "рекомендуется") : null,
-      h("div", { class: "small", title: "Замер на видеокарте NVIDIA; на Vulkan примерно на 0,5 ГБ больше" },
-        `${fmtMB(q.size)} · видеопамять ${fmtGB(q.vram)}–${fmtGB(q.vram_max)} ГБ`),
+      h("b", {}, q.quant), q.quant === st.default_quant ? h("span", { class: "tag" }, T("рекомендуется")) : null,
+      h("div", { class: "small", title: T("Замер на видеокарте NVIDIA; на Vulkan примерно на 0,5 ГБ больше") },
+        T("{size} · видеопамять {min}–{max} ГБ", { size: fmtMB(q.size), min: fmtGB(q.vram), max: fmtGB(q.vram_max) })),
       h("div", { class: "muted small" }, q.note),
       h("div", { class: "row samples" }, st.samples.map(([voice, label]) => {
         const key = `${voice}-${q.quant}`;
@@ -435,26 +442,28 @@ function renderServer() {
           title: `«${st.sample_phrase}»`, onclick: () => playSample(key) }, (sampleKey === key ? "■ " : "▶ ") + label);
       }))),
     st.models.includes(q.file) ? use(q.file)
-      : running && d.quant === q.quant ? h("span", { class: "tag" }, "скачивается")
+      : running && d.quant === q.quant ? h("span", { class: "tag" }, T("скачивается"))
       : h("button", { class: "primary", disabled: running, onclick: () =>
-          api("/api/model/download", { quant: q.quant, frontend: $("#frontend").checked }) }, "Скачать")));
+          api("/api/model/download", { quant: q.quant, frontend: $("#frontend").checked }) }, T("Скачать"))));
   const known = st.quants.map(q => q.file);
   const other = st.models.filter(m => !known.includes(m)).map(m => h("li", { class: m === st.model ? "on" : "" },
     h("span", { class: "grow" }, m), use(m)));
-  const empty = st.models.length ? [] : [h("li", { class: "muted" }, "Модель не установлена: послушайте примеры и скачайте вариант.")];
+  const empty = st.models.length ? [] : [h("li", { class: "muted" },
+    T("Модель не установлена: послушайте примеры и скачайте вариант."))];
   $("#models").replaceChildren(...empty, ...catalog, ...other);
   // Загрузка
   $("#model-cancel").hidden = !running;
   $("#dl").hidden = d.state === "idle";
   $("#dl-fill").style.width = (d.total ? Math.min(100, 100 * d.done / d.total) : 0) + "%";
-  const left = d.speed > 0 ? ` · осталось ${fmtDur((d.total - d.done) / d.speed)}` : "";
+  const left = d.speed > 0 ? " · " + T("осталось {time}", { time: fmtDur((d.total - d.done) / d.speed) }) : "";
   $("#dl-text").className = "small " + ({ error: "bad", done: "good" }[d.state] || "");
   $("#dl-text").textContent = {
-    running: `${d.file || "подготовка"}: ${fmtMB(d.done)} из ${fmtMB(d.total)}` +
-      (d.speed > 0 ? ` · ${fmtNum(d.speed / 1048576)} МБ/с` : "") + left,
-    done: `Готово: ${d.quant} скачана, сервер перезапускается.`,
-    cancelled: `Загрузка отменена на ${fmtMB(d.done)} из ${fmtMB(d.total)}: «Скачать» продолжит с этого места.`,
-    error: `Ошибка: ${d.error}. «Скачать» продолжит с того же места.`,
+    running: T("{file}: {done} из {total}", { file: d.file || T("подготовка"), done: fmtMB(d.done), total: fmtMB(d.total) }) +
+      (d.speed > 0 ? " · " + T("{n} МБ/с", { n: fmtNum(d.speed / 1048576) }) : "") + left,
+    done: T("Готово: {quant} скачана, сервер перезапускается.", { quant: d.quant }),
+    cancelled: T("Загрузка отменена на {done} из {total}: «Скачать» продолжит с этого места.",
+      { done: fmtMB(d.done), total: fmtMB(d.total) }),
+    error: T("Ошибка: {e}. «Скачать» продолжит с того же места.", { e: d.error }),
   }[d.state] || "";
   // Устройство: перерисовка только при смене вариантов, чтобы не сбивать выбор
   const key = JSON.stringify([rt.backends, rt.prefer, rt.locked.backend]);
@@ -464,85 +473,89 @@ function renderServer() {
     $("#backend-form").replaceChildren(...Object.entries(BACKEND_NAMES).map(([k, name]) =>
       h("label", { class: have(k) ? "" : "na" }, h("input", { type: "radio", name: "backend", value: k,
         checked: rt.prefer === k, disabled: rt.locked.backend || !have(k) }),
-        h("span", {}, name, have(k) ? "" : h("span", { class: "muted small" }, " — не найдено")))));
+        h("span", {}, name, have(k) ? "" : h("span", { class: "muted small" }, T(" — не найдено"))))));
   }
   $("#backend-lock").hidden = !rt.locked.backend;
-  $("#backend-lock").textContent = "Устройство задано переменной COSYVOICE_BACKEND.";
+  $("#backend-lock").textContent = T("Устройство задано переменной COSYVOICE_BACKEND.");
   // Наборы голосов
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
     h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted small" },
-      ` — голосов: ${s.voices.length}: ${s.voices.slice(0, 8).join(", ")}${s.voices.length > 8 ? "…" : ""}`)),
-    h("button", { class: "icon danger", title: "Удалить набор", onclick: () =>
-      ask(`Удалить набор «${s.name}» (голосов: ${s.voices.length})?`, "Удалить", true)
+      T(" — голосов: {n}: {voices}", { n: s.voices.length,
+        voices: s.voices.slice(0, 8).join(", ") + (s.voices.length > 8 ? "…" : "") }))),
+    h("button", { class: "icon danger", title: T("Удалить набор"), onclick: () =>
+      ask(T("Удалить набор «{name}» (голосов: {n})?", { name: s.name, n: s.voices.length }), T("Удалить"), true)
         .then(yes => yes && api("/api/voicesets/delete", { name: s.name }))
-    }, "✕"))) : [h("li", { class: "muted" }, "Наборов нет.")]));
+    }, "✕"))) : [h("li", { class: "muted" }, T("Наборов нет."))]));
   renderBench(rt);
   // Состояние
   const row = (k, v) => [h("dt", {}, k), h("dd", {}, v)];
   $("#runtime-info").replaceChildren(h("dl", {},
-    row("Состояние", h("span", { class: { running: "good", crashed: "bad", waiting: "warn" }[rt.state] || "" },
+    row(T("Состояние"), h("span", { class: { running: "good", crashed: "bad", waiting: "warn" }[rt.state] || "" },
       RT_STATES[rt.state] || rt.state)),
-    rt.error ? row("Причина", rt.error) : null,
-    row("Устройство", rt.backend || "—"), row("Модель", rt.model || "—"), row("Голосов", rt.voices),
-    row("Адрес", S.cosy.url), rt.restarts ? row("Перезапусков", rt.restarts) : null,
-    row("Программа", rt.server)));
+    rt.error ? row(T("Причина"), rt.error) : null,
+    row(T("Устройство"), rt.backend || "—"), row(T("Модель"), rt.model || "—"), row(T("Голосов"), rt.voices),
+    row(T("Адрес"), S.cosy.url), rt.restarts ? row(T("Перезапусков"), rt.restarts) : null,
+    row(T("Программа"), rt.server)));
 }
 $("#model-cancel").onclick = () => api("/api/model/cancel");
 
 // Скорость синтеза (bench.py): результаты по устройствам и моделям, текущее выделено
 function benchVerdict(rtf) {
-  return rtf <= 0.5 ? ["хватает для стрима с запасом", "good"] : rtf < 0.9 ? ["хватает для стрима, впритык", "warn"]
-    : ["без запаса или медленнее реального времени: для стрима не годится, стриминг выключить", "bad"];
+  return rtf <= 0.5 ? [T("хватает для стрима с запасом"), "good"] : rtf < 0.9 ? [T("хватает для стрима, впритык"), "warn"]
+    : [T("без запаса или медленнее реального времени: для стрима не годится, стриминг выключить"), "bad"];
 }
 function renderBench(rt) {
   const b = S.bench, running = b.state === "running";
   const rows = [...b.results].sort((x, y) => x.rtf - y.rtf);
   const quant = m => (m.match(/_(Q\w+|F16|BF16)\.gguf$/i) || [, m])[1];
   $("#bench-table").replaceChildren(rows.length ? h("div", { class: "table-wrap" }, h("table", { class: "bench" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Устройство"), h("th", {}, "Модель"),
-      h("th", { class: "num", title: "Во сколько раз синтез быстрее звучания фразы" }, "Скорость"),
-      h("th", { class: "num", title: "Через сколько секунд начинает звучать длинная фраза при стриминге" }, "Первый звук"))),
+    h("thead", {}, h("tr", {}, h("th", {}, T("Устройство")), h("th", {}, T("Модель")),
+      h("th", { class: "num", title: T("Во сколько раз синтез быстрее звучания фразы") }, T("Скорость")),
+      h("th", { class: "num", title: T("Через сколько секунд начинает звучать длинная фраза при стриминге") },
+        T("Первый звук")))),
     h("tbody", {}, ...rows.map(r => {
       const [verdict, cls] = benchVerdict(r.rtf);
       return h("tr", { class: r.backend === rt.backend && r.model === rt.model ? "on" : "",
-        title: `${new Date(r.ts * 1000).toLocaleString("ru-RU")}, фраза ${fmtNum(r.audio)} с, кусок ${r.chunk} токенов` },
+        title: T("{date}, фраза {audio} с, кусок {chunk} токенов", { date: new Date(r.ts * 1000).toLocaleString(LOCALE),
+          audio: fmtNum(r.audio), chunk: r.chunk }) },
         h("td", {}, r.backend), h("td", {}, quant(r.model)),
         h("td", { class: "num " + cls, title: verdict }, r.rtf < 1 ? `×${fmtNum(1 / r.rtf)}` : `÷${fmtNum(r.rtf)}`),
-        h("td", { class: "num" }, r.first == null ? "—" : `${fmtNum(r.first)} с`));
+        h("td", { class: "num" }, r.first == null ? "—" : T("{n} с", { n: fmtNum(r.first) })));
     }))))
-    : h("p", { class: "muted small" }, "Замеров ещё нет."),
-    rows.length ? h("p", { class: "muted small" }, "×4 — синтез в 4 раза быстрее звучания фразы. Для стрима нужно " +
-      "быстрее реального времени, лучше вдвое и больше (зелёный).") : null);
+    : h("p", { class: "muted small" }, T("Замеров ещё нет.")),
+    ...(rows.length ? [h("p", { class: "muted small" }, T("×4 — синтез в 4 раза быстрее звучания фразы. Для стрима " +
+      "нужно быстрее реального времени, лучше вдвое и больше (зелёный)."))] : []));   // replaceChildren(null) пишет «null»
   const many = rt.backends.some(n => /^(cuda|vulkan)/i.test(n));
   $("#bench-all").hidden = !many || rt.locked.backend;
   $("#bench-one").disabled = $("#bench-all").disabled = running || !S.cosy.ok;
   $("#bench-state").className = "small " + (b.state === "error" ? "bad" : "muted");
-  $("#bench-state").textContent = running ? `Идёт проверка: ${b.step}…` : b.state === "error" ? `Ошибка: ${b.error}` : "";
+  $("#bench-state").textContent = running ? T("Идёт проверка: {step}…", { step: b.step })
+    : b.state === "error" ? T("Ошибка: {e}", { e: b.error }) : "";
 }
 $("#bench-one").onclick = () => api("/api/bench", { all: false });
 $("#bench-all").onclick = async () => {
-  if (await ask("Сервер синтеза перезапустится на каждом устройстве, на процессоре проверка займёт пару минут. " +
-    "Озвучка всё это время ждёт в очереди.", "Сравнить")) api("/api/bench", { all: true });
+  if (await ask(T("Сервер синтеза перезапустится на каждом устройстве, на процессоре проверка займёт пару минут. " +
+    "Озвучка всё это время ждёт в очереди."), T("Сравнить"))) api("/api/bench", { all: true });
 };
 $("#backend-form").onchange = e => api("/api/backend", { backend: e.target.value });
 $("#set-import").onclick = async () => {
   const f = $("#set-file").files[0], out = $("#set-result");
-  if (!f) { toast("Выберите zip с набором", true); return; }
+  if (!f) { toast(T("Выберите zip с набором"), true); return; }
   const btn = $("#set-import");
   btn.disabled = true;
   out.className = "small muted";
-  out.textContent = `Устанавливаю ${f.name}…`;
+  out.textContent = T("Устанавливаю {file}…", { file: f.name });
   try {
     const r = await fetch("/api/voicesets/import", { method: "POST", body: f,
       headers: { "Content-Type": "application/zip", "X-Filename": encodeURIComponent(f.name) } });
     const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
-    if (!j.ok) { out.className = "small bad"; out.textContent = j.error || "Ошибка"; return; }
+    if (!j.ok) { out.className = "small bad"; out.textContent = j.error || T("Ошибка"); return; }
     out.className = "small good";
-    out.textContent = `Набор «${j.name}»: установлено голосов ${j.added.length}` +
-      (j.skipped.length ? `, пропущено ${j.skipped.length}: ${j.skipped.join(", ")}` : "") +
-      (j.ignored.length ? `. Не голоса, пропущены: ${j.ignored.join(", ")}` : "") + ".";
+    out.textContent = T("Набор «{name}»: установлено голосов {n}", { name: j.name, n: j.added.length }) +
+      (j.skipped.length ? T(", пропущено {n}: {voices}", { n: j.skipped.length, voices: j.skipped.join(", ") }) : "") +
+      (j.ignored.length ? T(". Не голоса, пропущены: {files}", { files: j.ignored.join(", ") }) : "") + ".";
     $("#set-file").value = "";
-  } catch (e) { out.className = "small bad"; out.textContent = "Сервер недоступен: " + e.message; }
+  } catch (e) { out.className = "small bad"; out.textContent = T("Сервер недоступен: {e}", { e: e.message }); }
   finally { btn.disabled = false; }
 };
 
@@ -550,7 +563,8 @@ $("#set-import").onclick = async () => {
 function runtimeInfo(rt) {
   if (!rt) return "";
   const backend = { cpu: "CPU" }[rt.backend.toLowerCase()] || rt.backend.replace(/\d+$/, "") || "…";
-  return ` — встроенный, ${backend}${rt.model ? ", " + rt.model : ""}, голосов: ${rt.voices}`;
+  return T(" — встроенный, {backend}{model}, голосов: {n}", { backend, model: rt.model ? ", " + rt.model : "",
+    n: rt.voices });
 }
 function renderSettings() {
   const f = $("#settings");
@@ -561,29 +575,30 @@ function renderSettings() {
   const c = S.config;
   $("#server-info").replaceChildren(
     h("div", {}, "cosyvoice: ", h("code", {}, S.cosy.url), runtimeInfo(S.cosy.runtime)),
-    h("div", {}, `Интерфейс: ${c.bind}:${c.port}, пароль ${c.password ? "задан" : "не задан (доступ только с этого ПК)"}`));
+    h("div", {}, T(c.password ? "Интерфейс: {addr}, пароль задан" : "Интерфейс: {addr}, пароль не задан (доступ только с этого ПК)",
+      { addr: `${c.bind}:${c.port}` })));
   $("#logout-link").hidden = !c.password;
 }
 $("#settings").onchange = async e => {
   const el = e.target;
   if (!el.name) return;
   const v = el.type === "checkbox" ? el.checked : el.type === "number" ? +el.value : el.value;
-  if ((await api("/api/settings", { [el.name]: v })).ok) { S.settings[el.name] = v; toast("Сохранено"); }
+  if ((await api("/api/settings", { [el.name]: v })).ok) { S.settings[el.name] = v; toast(T("Сохранено")); }
 };
 function renderStreamNote() {
   const rtf = S.engine.rtf, note = $("#stream-note");
   note.classList.toggle("warn", rtf != null && rtf > 0.9);
   note.dataset.rtf = rtf ?? "";
   const extra = rtf == null ? "" : rtf > 0.9
-    ? ` Сейчас синтез в ${fmtNum(rtf)} раза медленнее реального времени: стриминг будет заикаться.`
-    : ` Сейчас синтез в ${fmtNum(1 / rtf)} раза быстрее реального времени.`;
-  note.textContent = "Короткие фразы и голоса с эффектом (post) всегда синтезируются целиком. " +
-    "На CPU синтез медленнее реального времени, и стриминг там будет заикаться: выключите его." + extra;
+    ? " " + T("Сейчас синтез в {n} раза медленнее реального времени: стриминг будет заикаться.", { n: fmtNum(rtf) })
+    : " " + T("Сейчас синтез в {n} раза быстрее реального времени.", { n: fmtNum(1 / rtf) });
+  note.textContent = T("Короткие фразы и голоса с эффектом (post) всегда синтезируются целиком. " +
+    "На CPU синтез медленнее реального времени, и стриминг там будет заикаться: выключите его.") + extra;
 }
 function renderBans() {
-  $("#bans").replaceChildren(...S.bans.map(b => h("li", {}, b, h("button", { title: "Разбанить",
+  $("#bans").replaceChildren(...S.bans.map(b => h("li", {}, b, h("button", { title: T("Разбанить"),
     onclick: async () => { await api("/api/ban", { login: b, on: false }); reload(); } }, "✕"))));
-  if (!S.bans.length) $("#bans").append(h("li", { class: "muted", style: "padding:2px 12px" }, "никого"));
+  if (!S.bans.length) $("#bans").append(h("li", { class: "muted", style: "padding:2px 12px" }, T("никого")));
 }
 $("#ban").onsubmit = async e => {
   e.preventDefault();
@@ -597,7 +612,7 @@ async function loadProfanity() {
 }
 $("#prof-save").onclick = async () => {
   const r = await api("/api/profanity", { text: $("#prof").value, sample: $("#prof-sample").value });
-  if (r.ok) { $("#prof-out").textContent = r.sample ? "→ " + r.sample : "Сохранено"; toast("Список корней сохранён"); }
+  if (r.ok) { $("#prof-out").textContent = r.sample ? "→ " + r.sample : T("Сохранено"); toast(T("Список корней сохранён")); }
 };
 
 // --- статистика ---
@@ -607,12 +622,13 @@ function renderLiveStats() {
   if (!$("#tab-stats").classList.contains("on")) return;
   const q = S.engine.queue, playing = q.find(i => i.state === "playing"), g = S.gpu;
   $("#live").replaceChildren(
-    tile("В очереди", q.length, q.length ? `синтезируется: ${q.filter(i => i.state === "synth").length}` : ""),
-    tile("Играет", playing ? playing.display : "—", playing ? playing.voice : ""),
-    tile("cosyvoice", S.cosy.ok ? "доступен" : "нет", S.cosy.ok ? (S.cosy.busy || "свободен") : S.cosy.error),
-    g ? tile("GPU", `${g.util}%`, `${fmtNum(g.mem_used / 1024)} / ${fmtNum(g.mem_total / 1024)} ГБ · ${g.temp} °C`)
-      : tile("GPU", "нет данных", "nvidia-smi недоступен в контейнере"),
-    tile("Скорость синтеза", S.engine.rtf == null ? "—" : `${fmtNum(S.engine.rtf, 2)}×`, "время синтеза / длина звука"));
+    tile(T("В очереди"), q.length, q.length ? T("синтезируется: {n}", { n: q.filter(i => i.state === "synth").length }) : ""),
+    tile(T("Играет"), playing ? playing.display : "—", playing ? playing.voice : ""),
+    tile("cosyvoice", S.cosy.ok ? T("доступен") : T("нет"), S.cosy.ok ? (S.cosy.busy || T("свободен")) : S.cosy.error),
+    g ? tile("GPU", `${g.util}%`, T("{used} / {total} ГБ · {temp} °C",
+      { used: fmtNum(g.mem_used / 1024), total: fmtNum(g.mem_total / 1024), temp: g.temp }))
+      : tile("GPU", T("нет данных"), T("nvidia-smi недоступен в контейнере")),
+    tile(T("Скорость синтеза"), S.engine.rtf == null ? "—" : `${fmtNum(S.engine.rtf, 2)}×`, T("время синтеза / длина звука")));
 }
 async function loadStats() {
   renderLiveStats();
@@ -622,16 +638,16 @@ async function loadStats() {
   const st = await r.json();
   const t = st.total;
   $("#kpi").replaceChildren(
-    tile("Активаций", t.n || 0),
-    tile("Сыграно", t.played || 0),
-    tile("Возвратов", t.refunded || 0, t.n ? `${fmtNum(100 * (t.refunded || 0) / t.n, 0)}%` : ""),
-    tile("Ожидание до звука", st.wait_ms == null ? "—" : `${fmtNum(st.wait_ms / 1000)} с`, "в среднем"),
-    tile("Синтез / длина аудио", st.synth_ratio == null ? "—" : `${fmtNum(st.synth_ratio, 2)}×`,
-      st.avg_audio_ms ? `средняя фраза ${fmtNum(st.avg_audio_ms / 1000)} с` : ""));
+    tile(T("Активаций"), t.n || 0),
+    tile(T("Сыграно"), t.played || 0),
+    tile(T("Возвратов"), t.refunded || 0, t.n ? `${fmtNum(100 * (t.refunded || 0) / t.n, 0)}%` : ""),
+    tile(T("Ожидание до звука"), st.wait_ms == null ? "—" : T("{n} с", { n: fmtNum(st.wait_ms / 1000) }), T("в среднем")),
+    tile(T("Синтез / длина аудио"), st.synth_ratio == null ? "—" : `${fmtNum(st.synth_ratio, 2)}×`,
+      st.avg_audio_ms ? T("средняя фраза {n} с", { n: fmtNum(st.avg_audio_ms / 1000) }) : ""));
   drawHours(st, hours);
   bars("#top-voices", st.voices.map(x => [x.voice, x.n]));
   bars("#top-viewers", st.viewers.map(x => [x.login, x.n]));
-  bars("#reasons", st.reasons.map(x => [x.reason, x.n]));
+  bars("#reasons", st.reasons.map(x => [T(x.reason), x.n]));   // причины в базе по-русски (engine.R_*)
 }
 $("#period").onchange = loadStats;
 $("#with-test").onchange = loadStats;
@@ -642,7 +658,7 @@ function bars(sel, rows) {
   $(sel).replaceChildren(...(rows.length ? rows.map(([name, n]) => h("div", { class: "b" },
     h("span", { class: "t", title: name }, name), h("span", { class: "n" }, n),
     h("div", { class: "track" }, h("div", { class: "fill", style: `width:${100 * n / max}%` }))))
-    : [h("span", { class: "muted" }, "нет данных")]));
+    : [h("span", { class: "muted" }, T("нет данных"))]));
 }
 
 function drawHours(st, hours) {
@@ -657,7 +673,7 @@ function drawHours(st, hours) {
   const step = niceStep(max), top = Math.ceil(max / step) * step;
   const cw = (W - pad.l - pad.r) / cols.length, gap = cw >= 6 ? 2 : 0, bw = Math.max(1, cw - gap);
   const y = v => pad.t + (H - pad.t - pad.b) * (1 - v / top);
-  const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Активации по часам" });
+  const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": T("Активации по часам") });
   for (let v = 0; v <= top; v += step) {
     s.append(svg("line", { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: "grid" }));
     const tx = svg("text", { x: pad.l - 6, y: y(v) + 4, "text-anchor": "end" }); tx.textContent = v; s.append(tx);
@@ -670,7 +686,7 @@ function drawHours(st, hours) {
     if (label) {
       const tx = svg("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle" });
       tx.textContent = hours <= 24 ? `${String(d.getHours()).padStart(2, "0")}:00`
-        : d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+        : d.toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit" });
       s.append(tx);
     }
     // сыграно снизу, возврат сверху; между сегментами зазор 2px, верх последнего сегмента скруглён
@@ -686,8 +702,8 @@ function drawHours(st, hours) {
     const hit = svg("rect", { x: pad.l + i * cw, y: pad.t, width: cw, height: H - pad.t - pad.b, fill: "transparent" });
     hit.addEventListener("mousemove", e => {
       tip.hidden = false;
-      tip.replaceChildren(h("div", {}, d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })),
-        h("div", {}, `сыграно: ${c.p}`), h("div", {}, `возврат: ${c.f}`));
+      tip.replaceChildren(h("div", {}, d.toLocaleString(LOCALE, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })),
+        h("div", {}, T("сыграно: {n}", { n: c.p })), h("div", {}, T("возврат: {n}", { n: c.f })));
       tip.style.left = Math.min(innerWidth - 160, e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px";
     });
     hit.addEventListener("mouseleave", () => tip.hidden = true);
@@ -695,16 +711,24 @@ function drawHours(st, hours) {
   });
   box.replaceChildren(s);
   const active = cols.filter(c => c.p + c.f);
-  $("#hours-table").replaceChildren(active.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Час"),
-    h("th", { class: "num" }, "Сыграно"), h("th", { class: "num" }, "Возврат"))),
-    h("tbody", {}, ...active.map(c => h("tr", {}, h("td", {}, new Date(c.t * 1000).toLocaleString("ru-RU",
+  $("#hours-table").replaceChildren(active.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, T("Час")),
+    h("th", { class: "num" }, T("Сыграно")), h("th", { class: "num" }, T("Возврат")))),
+    h("tbody", {}, ...active.map(c => h("tr", {}, h("td", {}, new Date(c.t * 1000).toLocaleString(LOCALE,
       { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })),
-      h("td", { class: "num" }, c.p), h("td", { class: "num" }, c.f))))) : h("p", { class: "muted" }, "Активаций не было."));
+      h("td", { class: "num" }, c.p), h("td", { class: "num" }, c.f))))) : h("p", { class: "muted" }, T("Активаций не было.")));
 }
 function niceStep(max) {
   const raw = max / 4, p = 10 ** Math.floor(Math.log10(raw)), n = raw / p;
   return Math.max(1, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p);
 }
+
+// --- язык: страница перезагружается, тексты для зрителей по умолчанию сервер меняет сам (i18n.py) ---
+$("#lang").value = LANG;
+$("#lang").onchange = async e => {
+  if ((await api("/api/settings", { lang: e.target.value })).ok) location.reload();
+  else e.target.value = LANG;
+};
+$("#prof-sample").placeholder = T("проверить фразу");   // у поля translate="no": образец мата остаётся русским
 
 // --- старт ---
 // Первый запуск: без модели — сразу на вкладку «Сервер»

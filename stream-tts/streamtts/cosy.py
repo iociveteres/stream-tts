@@ -4,6 +4,7 @@ import asyncio, contextlib, heapq, itertools, time
 import aiohttp
 
 from . import audio
+from .i18n import tr
 
 LIVE, PREVIEW, BACKGROUND = 0, 1, 2   # приоритеты: озвучка наград, «послушать» в интерфейсе, примеры голосов
 
@@ -71,12 +72,12 @@ class Cosy:
         try:
             async with self.session.get(f"{self.url}/status", timeout=aiohttp.ClientTimeout(total=5)) as r:
                 if r.status == 401:
-                    raise RuntimeError("неверный COSYVOICE_API_KEY")
+                    raise RuntimeError(tr("неверный COSYVOICE_API_KEY"))
                 r.raise_for_status()
                 self.info = await r.json()
             self.ok, self.error = bool(self.info.get("model_loaded")), ""
             if not self.ok:
-                self.error = "модель не загружена"
+                self.error = tr("модель не загружена")
         except Exception as e:
             self.ok, self.error = False, str(e) or type(e).__name__
         self.checked = time.time()

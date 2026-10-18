@@ -32,6 +32,7 @@ services:
       STREAM_TTS_BIND: "${STREAM_TTS_BIND:-127.0.0.1}"
       STREAM_TTS_PORT: "${STREAM_TTS_PORT:-8090}"
       STREAM_TTS_PASSWORD: "${STREAM_TTS_PASSWORD:-}"
+      STREAM_TTS_LANG: "${STREAM_TTS_LANG:-}"      # ru | en: язык при первом запуске, потом — в админке
       COSYVOICE_URL: "${COSYVOICE_URL:-http://cosyvoice:8080}"
       COSYVOICE_API_KEY: "${COSYVOICE_API_KEY:-}"
       TWITCH_CLIENT_ID: "${TWITCH_CLIENT_ID:-}"

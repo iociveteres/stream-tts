@@ -12,9 +12,10 @@
   <label>Пароль админки <input type="password" name="password" autofocus required></label>
   <p class="bad" id="bad" hidden>Неверный пароль.</p>
   <button class="primary">Войти</button>
-  <p class="muted small">Пароль задаётся переменной <code>STREAM_TTS_PASSWORD</code> в <code>.env</code>.
+  <p class="muted small" data-t>Пароль задаётся переменной <code>STREAM_TTS_PASSWORD</code> в <code>.env</code>.
     Оверлей и страница голосов открыты без пароля.</p>
 </form>
+<script src="/static/i18n.js"></script>
 <script>if (location.search.includes("bad")) document.getElementById("bad").hidden = false;</script>
 </body>
 </html>

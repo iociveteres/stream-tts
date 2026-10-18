@@ -2,13 +2,12 @@
 import copy, json, os, sqlite3, threading, time
 
 from . import config
-
-DEFAULT_PROMPT = "Текст прозвучит на стриме твоим голосом. Выбрать голос: !ttssf <имя>"
+from .i18n import CONTENT, REWARD
 
 DEFAULTS = {
     "client_id": "",
     "enabled": True,
-    "reward": {"id": "", "title": "Озвучка голосом", "cost": 500, "cooldown": 0, "prompt": DEFAULT_PROMPT},
+    "reward": {"id": "", "title": REWARD["title"]["ru"], "cost": 500, "cooldown": 0, "prompt": REWARD["prompt"]["ru"]},
     "access": "all",            # all | subs | vip | mods
     "filter_links": True,
     "filter_profanity": True,
@@ -20,8 +19,9 @@ DEFAULTS = {
     "max_chars": 500,
     "token_ratio": 10.0,        # max_token_text_ratio для /tts
     "chunk_tokens": 150,        # токенов в куске стриминга (по умолчанию в cosyvoice.cpp 28: заметно медленнее)
-    "demo_phrase": "Привет, чат! Вот так звучит мой голос.",
+    "demo_phrase": CONTENT["demo_phrase"]["ru"],
     "voices": {},               # имя -> {enabled, gain_db, calib_db, calib_phrase}
+    "lang": "",                 # ru | en, пустой — выбрать при первом запуске (i18n.init)
     "known_voices": [],         # последний список голосов сервера (на случай, если он недоступен)
 }
 

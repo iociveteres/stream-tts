@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Голоса озвучки</title>
+<title>{{t:Голоса озвучки}}</title>
 <style>
   :root { --bg: #f6f6f4; --card: #ffffff; --ink: #141414; --muted: #5d5c58; --line: #e2e1dc;
     --accent: #2a78d6; --code: #eef3fb; }
@@ -29,7 +29,7 @@
   .copy { align-self: flex-start; border: 1px solid var(--line); background: var(--code); color: var(--ink);
     border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; }
   .copy:hover { border-color: var(--accent); }
-  .copy.done::after { content: "  ✓ скопировано"; color: var(--accent); font-size: 14px; }
+  .copy.done::after { content: "  ✓ {{t:скопировано}}"; color: var(--accent); font-size: 14px; }
   audio { width: 100%; height: 36px; }
   .nodemo { color: var(--muted); font-size: 14px; }
   .empty { color: var(--muted); display: none; }
@@ -37,12 +37,12 @@
 </head>
 <body>
 <main>
-  <h1>Голоса озвучки</h1>
-  <p class="lead">Голосов: {{COUNT}}. Выбрать голос — написать в чат команду, например <code>!ttssf dota2-pudge</code>
-    (регистр не важен). Пример звучания каждого: «{{PHRASE}}»</p>
-  <input type="search" id="q" placeholder="Поиск по имени" aria-label="Поиск голоса">
-  <p class="empty" id="empty">Ничего не найдено.</p>
-  {{SECTIONS}}
+  <h1>{{t:Голоса озвучки}}</h1>
+  <p class="lead">{{t:Голосов: %COUNT%. Выбрать голос — написать в чат команду, например <code>!ttssf dota2-pudge</code>
+    (регистр не важен). Пример звучания каждого: «%PHRASE%»}}</p>
+  <input type="search" id="q" placeholder="{{t:Поиск по имени}}" aria-label="{{t:Поиск голоса}}">
+  <p class="empty" id="empty">{{t:Ничего не найдено.}}</p>
+  %SECTIONS%
 </main>
 <script>
   document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", async () => {

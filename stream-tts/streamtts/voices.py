@@ -3,8 +3,9 @@ import asyncio, glob, hashlib, html, importlib.util, io, json, logging, math, os
 
 import numpy as np
 
-from . import audio, config, paths, store
+from . import audio, config, i18n, paths, store
 from .cosy import BACKGROUND, PREVIEW
+from .i18n import tr
 
 log = logging.getLogger("voices")
 
@@ -31,7 +32,7 @@ def load_effect(path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     if not callable(getattr(mod, "apply", None)):
-        raise RuntimeError(f"в эффекте {path} нет функции apply(звук, аргументы)")
+        raise RuntimeError(tr("в эффекте {path} нет функции apply(звук, аргументы)", path=path))
     mod.FFMPEG = paths.ffmpeg()
     _effects[path] = (mtime, mod)
     return mod
@@ -112,13 +113,13 @@ class Voices:
         post = self.post(voice)
         # manifest.json приходит и с наборами голосов из zip: запускать можно только эффекты из effects/
         if not re.fullmatch(r"effects/[\w.-]+\.py", post[0]):
-            raise RuntimeError(f"эффект {post[0]}: допустимы только скрипты effects/*.py")
+            raise RuntimeError(tr("эффект {fx}: допустимы только скрипты effects/*.py", fx=post[0]))
         fx = load_effect(paths.resource(post[0]))
         args = [a.replace("{text}", text) for a in post[1:]]
         try:
             y = await asyncio.to_thread(fx.apply, audio.pcm16(x), args)
         except (Exception, SystemExit) as e:  # SystemExit: argparse в эффекте при неверных аргументах
-            raise RuntimeError(f"эффект {post[0]}: {e}") from e
+            raise RuntimeError(tr("эффект {fx}: {e}", fx=post[0], e=e)) from e
         return audio.pcm16(np.clip(y, -1, 1))
 
     # --- примеры и калибровка ---
@@ -135,7 +136,7 @@ class Voices:
     async def make_demo(self, voice, priority=BACKGROUND):
         """Демо-фраза целиком: по ней же калибруется усиление голоса для стриминга."""
         phrase = self.s["demo_phrase"]
-        async with self.cosy.lane.hold(priority, f"пример {voice}"):
+        async with self.cosy.lane.hold(priority, tr("пример {voice}", voice=voice)):
             self.preempted = False
             x = await self.cosy.synth(voice, phrase, self.s["token_ratio"], seed=DEMO_SEED)
             if self.preempted:  # остановлен ради живой очереди: звук неполный
@@ -205,18 +206,21 @@ class Voices:
             for n in groups[key]:
                 cmd = html.escape(f"!ttssf {n}")
                 player = (f'<audio controls preload="none" src="{demo_prefix}{html.escape(n)}.mp3"></audio>'
-                          if self.has_demo(n) else '<span class="nodemo">пример ещё готовится</span>')
+                          if self.has_demo(n) else f'<span class="nodemo">{tr("пример ещё готовится")}</span>')
                 cards.append(f'<li data-name="{html.escape(n)}"><div class="name">{html.escape(n)}</div>'
-                             f'<button class="copy" data-cmd="{cmd}" title="Скопировать команду"><code>{cmd}</code></button>'
+                             f'<button class="copy" data-cmd="{cmd}" title="{tr('Скопировать команду')}"><code>{cmd}</code></button>'
                              f'{player}</li>')
-            title = GROUPS.get(key, key.upper()) if key else "Другие"
+            title = tr(GROUPS.get(key, key.upper()) if key else "Другие")
             sections.append(f'<section><h2>{html.escape(title)} <span>{len(groups[key])}</span></h2>'
                             f'<ul>{"".join(cards)}</ul></section>')
         with open(os.path.join(config.HERE, "static", "voices.html"), encoding="utf-8") as f:
             tpl = f.read()
-        return (tpl.replace("{{COUNT}}", str(len(names)))
-                .replace("{{PHRASE}}", html.escape(self.s["demo_phrase"]))
-                .replace("{{SECTIONS}}", "\n".join(sections)))
+        # {{t:…}} — текст на языке интерфейса (i18n): страница уходит и в zip, без i18n.js
+        tpl = re.sub(r"\{\{t:(.*?)\}\}", lambda m: tr(" ".join(m[1].split())), tpl, flags=re.S)
+        tpl = tpl.replace('<html lang="ru">', f'<html lang="{i18n.lang}">', 1)
+        return (tpl.replace("%COUNT%", str(len(names)))
+                .replace("%PHRASE%", html.escape(self.s["demo_phrase"]))
+                .replace("%SECTIONS%", "\n".join(sections)))
 
     def zip(self):
         buf = io.BytesIO()

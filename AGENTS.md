@@ -28,7 +28,7 @@
 |---|---|---|
 | `setup.sh`, `docker-compose.yml`, `docker-compose.gpu.yml` | запуск всего стека | да |
 | `cosyvoice/` | `Dockerfile` и `entrypoint.sh` образа cosyvoice-server | да |
-| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели и наборы голосов из админки, `bench.py` — проверка скорости устройств, `desktop.py` — точка входа собранной программы, `static/` — админка, оверлей, страница голосов, `static/quants/` — примеры звука квантов (их же берёт установщик) | да |
+| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели и наборы голосов из админки, `bench.py` — проверка скорости устройств, `desktop.py` — точка входа собранной программы, `i18n.py` — язык интерфейса, `static/` — админка, оверлей, страница голосов, `static/en.json` — английский словарь, `static/i18n.js` — перевод страниц, `static/quants/` — примеры звука квантов (их же берёт установщик); `stream-tts/check-i18n.py` — строки без перевода | да |
 | `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup), `THIRD-PARTY.txt` и `THIRD-PARTY.en.txt` (сторонние лицензии, страница «Информация» установщика); сборочный venv `.venv`, портативный Inno Setup `.inno`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`, `import-voices.sh` | да |
 | `tools/voices/` | общий подбор: `pick.py` + `pick.html` (страница, `--add`, `--add-batch`, `--install`), `synth.py` (синтез и оценки), `emotions.py` (модель эмоций), `emotion-eval.py` + `.html` (сверка моделей эмоций с разметкой на слух), `campplus.py` (эмбеддинги) | да |
@@ -54,7 +54,7 @@
 - `post` выполняется в процессе stream-tts: скрипт эффекта грузится через importlib и должен иметь
   `apply(звук, аргументы)`; интерфейс командной строки остаётся для `tools/voices/synth.py`.
 - Порты: cosyvoice 8080, stream-tts 8090 (`stream-tts-managed` из исходников — 8092, его cosyvoice-server — на
-  свободном порту), `review.py` 8765, `tools/voices/pick.py` 8766, `tools/voices/emotion-eval.py` 8767
+  свободном порту, `stream-tts-en` — английский интерфейс без модели — 8093), `review.py` 8765, `tools/voices/pick.py` 8766, `tools/voices/emotion-eval.py` 8767
   (конфигурации в `.claude/launch.json`).
 
 ## Как запускать
@@ -111,6 +111,10 @@
 ## Соглашения
 
 - Язык проекта — русский: документация, комментарии, тексты интерфейса, сообщения коммитов, ответы пользователю.
+- У stream-tts есть английский интерфейс (`i18n.py`): новые строки для пользователя пишутся по-русски через
+  `tr("…")` в Python и `T("…")` в `admin.js`, разметка переводится сама (абзац со ссылкой или `<code>` — с `data-t`),
+  перевод добавляется в `static/en.json`. Проверка: `python stream-tts/check-i18n.py` и `[...I18N_MISSING]` в
+  консоли админки на английском (`stream-tts-en`). Логи (`log.*`) не переводятся.
 - Коммит: заголовок «область: что сделано» (`stream-tts: короткие фразы целиком…`), в теле — зачем и что
   проверено.
 - Инструменты — самостоятельные скрипты с docstring в начале (назначение, `usage:`, где лежат входы и выходы).

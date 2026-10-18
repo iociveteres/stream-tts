@@ -8,13 +8,14 @@ from . import audio, filters
 from .config import (SR, TARGET_LUFS, CHARS_PER_SEC, MAX_LEN_FACTOR, MAX_SECONDS, MIN_SECONDS, TOKENS_PER_SEC,
                      STREAM_MIN_CHUNKS)
 from .cosy import LIVE
+from .i18n import tr
 
 log = logging.getLogger("engine")
 
 MODS = {"broadcaster", "moderator", "lead_moderator"}
 ACCESS = {"all": None, "mods": MODS, "vip": MODS | {"vip"}, "subs": MODS | {"vip", "subscriber", "founder"}}
 
-# Причины возврата баллов (в статистике и интерфейсе)
+# Причины возврата баллов (в статистике и интерфейсе): в базе по-русски, перевод при показе
 R_OFF, R_BAN, R_ACCESS, R_EMPTY, R_FULL = "озвучка выключена", "бан", "уровень доступа", "пустой текст", "очередь полна"
 R_NOVOICE, R_SYNTH, R_SKIP, R_CLEAR, R_RESTART = ("нет голосов", "ошибка синтеза", "!ttsskip", "!ttsclear",
                                                   "остались после перезапуска")
@@ -215,14 +216,14 @@ class Engine:
         if reason:
             if item.chat:  # чат не засоряет журнал и историю: без доступа, бана и т. п. сообщение просто не читается
                 if reason == R_FULL:
-                    self.note(f"{item.display}: сообщение чата не озвучено ({reason})")
+                    self.note(tr("{who}: сообщение чата не озвучено ({reason})", who=item.display, reason=tr(reason)))
                 return
-            self.note(f"{item.display}: возврат ({reason})")
+            self.note(tr("{who}: возврат ({reason})", who=item.display, reason=tr(reason)))
             await self.resolve(item, "refund", reason)
             return
         if self.s["read_nick"]:
             nick = self.profanity.clean(item.display) if self.s["filter_profanity"] else item.display
-            spoken = f"{nick} говорит: {spoken}"
+            spoken = tr("{nick} говорит: {text}", nick=nick, text=spoken)
         item.speak = spoken
         self.queue.append(item)
         self.note(f"{item.display} [{item.voice}]: {item.text}")
@@ -259,7 +260,7 @@ class Engine:
     async def skip(self, by=""):
         if self.queue:
             item = self.queue[0]
-            self.note(f"{by or 'интерфейс'}: пропуск фразы {item.display}")
+            self.note(tr("{by}: пропуск фразы {who}", by=by or tr("интерфейс"), who=item.display))
             await self.cancel(item, R_SKIP)
 
     async def remove(self, rid):
@@ -271,13 +272,13 @@ class Engine:
 
     async def clear(self, by="", reason=R_CLEAR):
         if self.queue:
-            self.note(f"{by or 'интерфейс'}: очередь очищена ({len(self.queue)})")
+            self.note(tr("{by}: очередь очищена ({n})", by=by or tr("интерфейс"), n=len(self.queue)))
         for item in list(self.queue):
             await self.cancel(item, reason)
 
     async def set_enabled(self, on, by=""):
         self.s.update(enabled=bool(on))
-        self.note(f"{by or 'интерфейс'}: озвучка {'включена' if on else 'выключена'}")
+        self.note(tr("{by}: озвучка включена" if on else "{by}: озвучка выключена", by=by or tr("интерфейс")))
         if not on:
             await self.clear(by, R_OFF)
         if self.twitch:
@@ -304,7 +305,7 @@ class Engine:
             v = self.voices.find(arg)
             if v:  # неизвестный или выключенный голос молча игнорируется
                 self.db.set_voice(uid, login, v)
-                self.note(f"{login} выбрал голос {v}")
+                self.note(tr("{who} выбрал голос {voice}", who=login, voice=v))
             return
         if not (badges & MODS or uid == ev.get("broadcaster_user_id")):
             return
@@ -316,7 +317,7 @@ class Engine:
         elif cmd in ("!ttsban", "!ttsunban") and arg:
             nick = arg.lstrip("@").lower()
             self.db.ban(nick, cmd == "!ttsban")
-            self.note(f"{who}: {'бан' if cmd == '!ttsban' else 'разбан'} {nick}")
+            self.note(tr("{by}: бан {who}" if cmd == "!ttsban" else "{by}: разбан {who}", by=who, who=nick))
             if cmd == "!ttsban":
                 for item in [it for it in self.queue if it.login == nick and it is not self.current]:
                     await self.cancel(item, R_BAN)
@@ -437,7 +438,8 @@ class Engine:
                 await self.cond.wait_for(self._playable)
                 item, ov = self.queue[0], self.overlay.active
             if item.synth_done and not item.chunks:
-                self.note(f"{item.display}: ошибка синтеза, возврат ({item.error or 'пустой звук'})")
+                self.note(tr("{who}: ошибка синтеза, возврат ({error})", who=item.display,
+                                error=item.error or tr("пустой звук")))
                 await self.resolve(item, "refund", R_SYNTH)
                 continue
             self.current = item

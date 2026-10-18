@@ -11,6 +11,7 @@ import asyncio, contextlib, logging, os, time
 
 from .config import SR
 from .cosy import PREVIEW
+from .i18n import tr
 
 log = logging.getLogger("bench")
 
@@ -35,15 +36,15 @@ class Bench:
 
     def start(self, every):
         if self.task and not self.task.done():
-            raise ValueError("проверка уже идёт")
+            raise ValueError(tr("проверка уже идёт"))
         if self.engine.busy():
-            raise ValueError("идёт озвучка: проверьте, когда очередь пуста")
+            raise ValueError(tr("идёт озвучка: проверьте, когда очередь пуста"))
         if not self.cosy.ok:
-            raise ValueError("cosyvoice недоступен")
+            raise ValueError(tr("cosyvoice недоступен"))
         if every and self.runtime.public()["locked"]["backend"]:
-            raise ValueError("устройство задано переменной COSYVOICE_BACKEND")
+            raise ValueError(tr("устройство задано переменной COSYVOICE_BACKEND"))
         if not self._voice():
-            raise ValueError("нет голосов")
+            raise ValueError(tr("нет голосов"))
         self.task = asyncio.create_task(self._run(self.devices() if every else [None]))
 
     def _voice(self):
@@ -57,11 +58,11 @@ class Bench:
     async def _run(self, devices):
         switched = False
         # Прежнее устройство возвращается, пока доступ ещё занят: иначе озвучка попала бы на перезапуск
-        async with self.cosy.lane.hold(PREVIEW, "проверка скорости"):
+        async with self.cosy.lane.hold(PREVIEW, tr("проверка скорости")):
             try:
                 for dev in devices:
                     if dev:
-                        self._step(f"{dev.upper()}: перезапуск сервера")
+                        self._step(tr("{dev}: перезапуск сервера", dev=dev.upper()))
                         self.runtime.override = dev   # settings не трогаются: результат сохраняется в них
                         switched = True
                         await self._restart()
@@ -73,7 +74,7 @@ class Bench:
             finally:
                 if switched:
                     self.runtime.override = ""
-                    self.state["step"] = "возврат прежнего устройства"
+                    self.state["step"] = tr("возврат прежнего устройства")
                     self.engine.dirty.set()
                     with contextlib.suppress(Exception):
                         await self._restart()
@@ -91,18 +92,18 @@ class Bench:
                 return
             if self.runtime.state == "crashed":
                 raise RuntimeError(self.runtime.error)
-        raise RuntimeError("сервер не запустился за 5 минут")
+        raise RuntimeError(tr("сервер не запустился за 5 минут"))
 
     async def _measure(self):
         voice, name = self._voice(), self.runtime.backend
         ratio, chunk = self.s["token_ratio"], int(self.s["chunk_tokens"])
-        self._step(f"{name}: разогрев")
+        self._step(tr("{dev}: разогрев", dev=name))
         await self.cosy.synth(voice, WARMUP, ratio, seed=1)
-        self._step(f"{name}: фраза целиком")
+        self._step(tr("{dev}: фраза целиком", dev=name))
         t0 = time.monotonic()
         x = await self.cosy.synth(voice, PHRASE, ratio, seed=1)
         whole, audio = time.monotonic() - t0, len(x) / SR
-        self._step(f"{name}: стриминг")
+        self._step(tr("{dev}: стриминг", dev=name))
         first = None
         t0 = time.monotonic()
         # Нужен только первый кусок: дальше синтез останавливается, как при пропуске фразы в engine
