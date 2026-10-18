@@ -16,7 +16,7 @@ from . import paths
 ENV_FILE = os.path.join(paths.DATA, "stream-tts.env")
 ENV_EXAMPLE = """\
 # Настройки stream-tts: KEY=VALUE, строки с # пропускаются. Действуют после перезапуска программы.
-# Полный список — docs/stream-tts.md, «Развёртывание». Переменные окружения Windows важнее этого файла.
+# Полный список — docs/stream-tts-deploy.md, «Переменные». Переменные окружения Windows важнее этого файла.
 
 # Порт админки и оверлея (http://127.0.0.1:8090/)
 #STREAM_TTS_PORT=8090

@@ -53,7 +53,7 @@ BASE = f"https://huggingface.co/{REPO}/resolve/main"
 # сходство CAM++ у всех трёх в пределах шума. Ниже Q5 не проверяли, F16 не лучше Q8_0 и вдвое больше.
 # Примеры звука — static/quants/<голос>-<квант>.mp3 (одна фраза, seed 42), те же файлы берёт установщик. Голос
 # ohf-denis — из датасета ru_RU-denis (OHF-Voice/voice-datasets, CC0), чтобы примеры можно было распространять;
-# как он собран — docs/stream-tts.md.
+# как он собран — docs/stream-tts-deploy.md, «Первый запуск».
 QUANTS = {
     "Q8_0": dict(vram=1500, vram_max=1900),
     "Q6_K": dict(vram=1450, vram_max=1800),

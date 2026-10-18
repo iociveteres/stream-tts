@@ -11,7 +11,7 @@ usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--cr
                 Их адреса, размеры и sha256 — в stream-tts/streamtts/downloads.json (cuda.archives), отсюда же их
                 берёт и этот скрипт, так что версия CUDA закреплена в одном месте.
 --flat DIR собирает core и файлы CUDA в одну папку: так выглядит runtime/ в корне проекта для запуска stream-tts
-из исходников в режиме managed (docs/stream-tts.md). По умолчанию out — packaging/windows/build/runtime, загрузки
+из исходников в режиме managed (docs/stream-tts-deploy.md). По умолчанию out — packaging/windows/build/runtime, загрузки
 кешируются в packaging/windows/build/cache. Нужен только Python 3 (стандартная библиотека).
 
 CRT (msvcp140*, vcruntime140*, concrt140) кладётся рядом с cosyvoice-server.exe, чтобы не ставить VC++
@@ -21,7 +21,7 @@ CRT_MIN: папки Microsoft.VC14*.CRT установленных Visual Studio
 его ставит VC++ Redistributable; на windows-latest в GitHub Actions — VS 2022 с redist 14.44, а в System32 —
 14.51.36247), или папка из --crt.
 
-Версии проверены 17.10.2026 на RTX 3060 Ti (docs/stream-tts.md, «Развёртывание»): GGML в релизах cosyvoice.cpp не
+Версии проверены 17.10.2026 на RTX 3060 Ti (docs/stream-tts-deploy.md, «Рантайм и пути»): GGML в релизах cosyvoice.cpp не
 поставляется, его берут из llama.cpp; общие файлы GGML во всех архивах llama.cpp одинаковы, поэтому ядро берётся
 из Vulkan-архива (в нём есть и все ggml-cpu-*), а из CUDA-архива — только ggml-cuda.dll. Сборки FFmpeg у BtbN
 со временем удаляются: если ссылка пропала, взять свежую autobuild-* n8.1 lgpl-shared и обновить sha256.
