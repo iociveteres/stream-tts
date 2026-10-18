@@ -1,10 +1,13 @@
 # syntax=docker/dockerfile:1
-# cosyvoice-server (FFmpeg, WebUI) из готовых релизов; GPU=cuda добавляет CUDA-бэкенд.
-# Базовый образ 26.04: бинарники собраны в CI на ubuntu-26.04 (glibc 2.43, ICU 78).
+# Два образа из готовых релизов cosyvoice.cpp и llama.cpp (цель выбирает docker-compose.yml):
+# - stream-tts (по умолчанию): озвучка наград Twitch со встроенным cosyvoice-server (режим managed, runtime.py);
+# - cosyvoice: только cosyvoice-server (профиль server-only), аргументы собирает entrypoint.sh.
+# GPU=cuda добавляет CUDA-бэкенд. Обе цели на ubuntu 26.04: бинарники собраны в CI на ubuntu-26.04
+# (glibc 2.43, ICU 78), а в python:*-slim glibc 2.41.
 
 ARG UBUNTU=ubuntu:26.04
 
-# --- Стадия загрузки: curl нужен только здесь, в итоговый образ не попадает ---
+# --- Стадия загрузки: curl нужен только здесь, в итоговые образы не попадает ---
 FROM ${UBUNTU} AS fetch
 
 ARG COSYVOICE_TAG=v0.2.0
@@ -39,13 +42,13 @@ RUN set -eux; \
     ls /opt/cosyvoice/libggml-cpu-*.so >/dev/null; \
     chmod +x /opt/cosyvoice/cosyvoice-server /opt/cosyvoice/cosyvoice-cli /opt/cosyvoice/quantize
 
-# --- Итоговый образ: только рантайм-библиотеки ---
-FROM ${UBUNTU}
+# --- Общая основа: рантайм-библиотеки сервера ---
+FROM ${UBUNTU} AS base
 
 # GGML_CUDA_DISABLE_GRAPHS: с CUDA Graphs cosyvoice.cpp молча считает неверно
 # (тихий шумный звук, мусор вместо речи; ср. Lourdle/cosyvoice.cpp#15). На CPU ни на что не влияет.
+# runtime.py задаёт его серверу и сам, здесь — для запуска сервера и cosyvoice-cli вручную.
 ENV DEBIAN_FRONTEND=noninteractive \
-    LD_LIBRARY_PATH=/opt/cosyvoice \
     GGML_CUDA_DISABLE_GRAPHS=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -54,7 +57,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=fetch /opt/cosyvoice /opt/cosyvoice
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# --- Только сервер (профиль server-only) ---
+FROM base AS cosyvoice
+
+ENV LD_LIBRARY_PATH=/opt/cosyvoice
+COPY cosyvoice/entrypoint.sh /usr/local/bin/entrypoint.sh
 # sed: страховка от CRLF, если файл сохранили на Windows
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
@@ -63,3 +71,35 @@ EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["--host", "0.0.0.0", "--port", "8080", "--webui"]
+
+# --- stream-tts со встроенным сервером ---
+FROM base AS stream-tts
+
+# Python из apt (в 26.04 — 3.14) ставит пакеты только в venv (PEP 668).
+# ffmpeg: mp3 для примеров голосов и чтение звука в эффектах (post).
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/venv
+
+WORKDIR /app
+COPY stream-tts/requirements.txt .
+# --only-binary: без компилятора в образе сборка из исходников всё равно не удалась бы, пусть падает сразу
+RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+COPY stream-tts/streamtts ./streamtts
+
+# LD_LIBRARY_PATH не задаётся: в /opt/cosyvoice свой libonnxruntime.so (1.30), он перебил бы onnxruntime из venv;
+# серверу путь добавляет runtime.py. COSYVOICE_URL не задан — режим managed; COSYVOICE_HOST=0.0.0.0 открывает
+# сервер для порта 8080 контейнера (WebUI и инструменты), stream-tts ходит к нему по 127.0.0.1.
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    STREAM_TTS_DATA=/data \
+    STREAM_TTS_PROJECT=/project \
+    STREAM_TTS_RUNTIME=/opt/cosyvoice \
+    STREAM_TTS_MODELS=/models \
+    STREAM_TTS_VOICES=/voices \
+    STREAM_TTS_LISTEN_HOST=0.0.0.0 \
+    STREAM_TTS_LISTEN_PORT=8090 \
+    COSYVOICE_HOST=0.0.0.0 \
+    COSYVOICE_PORT=8080
+EXPOSE 8090 8080
+CMD ["python", "-m", "streamtts"]

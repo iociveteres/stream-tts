@@ -388,7 +388,7 @@ def package_installed(pid):
 
 
 def package_usable(pid):
-    """Программа умеет работать с пакетом: очистке от музыки нужен onnxruntime (в образе Docker его нет)."""
+    """Программа умеет работать с пакетом: очистке от музыки нужен onnxruntime."""
     if pid == "music":
         from . import separate
         return separate.runtime_ok()

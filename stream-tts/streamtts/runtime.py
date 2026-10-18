@@ -1,4 +1,4 @@
-"""Встроенный cosyvoice-server (режим managed): stream-tts сам запускает сервер на 127.0.0.1 и следит за ним.
+"""Встроенный cosyvoice-server (режим managed): stream-tts сам запускает сервер и следит за ним.
 
 Включается, если COSYVOICE_URL не задан, а cosyvoice-server(.exe) лежит в рантайме (paths.RUNTIME, рядом с
 программой) или путь к нему (или к его папке) указан в COSYVOICE_SERVER. Иначе режим external, как раньше.
@@ -15,7 +15,9 @@
   CUDA, если есть ggml-cuda.dll и видеокарта NVIDIA, иначе Vulkan (дискретная видеокарта приоритетнее
   встроенной), иначе CPU. Набор, где лежат и ggml-cuda, и ggml-vulkan, на машине без них уходит на CPU;
 - всегда GGML_CUDA_DISABLE_GRAPHS=1, а на CUDA ещё --llm-flash-attn 0: без них вместо речи шум (AGENTS.md).
-Порт: COSYVOICE_PORT или любой свободный. Упавший сервер перезапускается (пауза растёт до минуты, если он
+Порт: COSYVOICE_PORT или любой свободный; адрес, на котором сервер слушает, — COSYVOICE_HOST (по умолчанию 127.0.0.1;
+образ Docker задаёт 0.0.0.0, чтобы порт сервера был виден снаружи контейнера), а сам stream-tts всегда ходит к нему
+по 127.0.0.1. Упавший сервер перезапускается (пауза растёт до минуты, если он
 падает сразу после старта). Сервер завершается вместе с stream-tts: на Windows через Job Object (даже если
 stream-tts убит), на Linux через PR_SET_PDEATHSIG. Выгрузка модели синтеза (вкладка «Статистика») — остановка сервера:
 так освобождается и контекст видеокарты; загрузка — новый запуск."""
@@ -154,6 +156,7 @@ class Managed:
         self.server, self.dir = server, os.path.dirname(os.path.abspath(server))
         self.s = settings
         self.port = int(env("COSYVOICE_PORT", "0")) or free_port()
+        self.host = env("COSYVOICE_HOST", "127.0.0.1")  # только --host сервера
         self.url = f"http://127.0.0.1:{self.port}"
         self.backend = ""          # выбранный бэкенд: CUDA0, Vulkan0, CPU
         self.backends = None       # [(имя, встроенная)] из --list-backends, на время работы stream-tts
@@ -268,7 +271,7 @@ class Managed:
         self.model = self._model()
         if self.prefer not in ("auto", "cpu") and not self.backend.lower().startswith(self.prefer):
             log.warning("бэкенд %s не найден, работаю на CPU", self.prefer)
-        args = [self.server, "--model", self.model, "--host", "127.0.0.1", "--port", str(self.port), "--webui",
+        args = [self.server, "--model", self.model, "--host", self.host, "--port", str(self.port), "--webui",
                 *backend_args(self.backend)]
         fe = os.path.join(paths.MODELS, "frontend-onnx")
         self.frontend = (first_existing(os.path.join(fe, "speech_tokenizer_v3.onnx"),

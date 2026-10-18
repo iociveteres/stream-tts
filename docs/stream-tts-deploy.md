@@ -6,16 +6,18 @@
 ## Режимы
 
 Два режима работы с cosyvoice-server, ядро одно:
-- **external** — задан `COSYVOICE_URL`: сервер запущен отдельно (Docker, другая машина). Так работает
-  `docker-compose.yml`.
+- **external** — задан `COSYVOICE_URL`: сервер запущен отдельно (другая машина, профиль `server-only`). Модель и
+  голоса ставятся на нём, вкладки «Сервер» нет.
 - **managed** — `COSYVOICE_URL` не задан, а рядом есть нативный `cosyvoice-server(.exe)` (папка `runtime/` рядом с
-  программой, в исходниках — в корне проекта, или путь в `COSYVOICE_SERVER`). stream-tts сам запускает его на
-  `127.0.0.1` (свободный порт или `COSYVOICE_PORT`), перезапускает при падении и завершает при выходе (на Windows
-  через Job Object, даже если stream-tts убит). Аргументы — как в `cosyvoice/entrypoint.sh` (`runtime.py`): модель
+  программой, в исходниках — в корне проекта, в образе Docker — `/opt/cosyvoice` через `STREAM_TTS_RUNTIME`, или
+  путь в `COSYVOICE_SERVER`). Так работают программа для Windows и `docker-compose.yml`. stream-tts сам запускает
+  сервер (адрес `COSYVOICE_HOST`, по умолчанию `127.0.0.1`; порт — свободный или `COSYVOICE_PORT`), ходит к нему по
+  `127.0.0.1`, перезапускает при падении и завершает при выходе (на Windows через Job Object, даже если stream-tts
+  убит, на Linux через `PR_SET_PDEATHSIG`). Аргументы — как в `cosyvoice/entrypoint.sh` (`runtime.py`): модель
   (`MODEL` или единственный `*.gguf` в папке моделей; без модели сервер ждёт её появления), голоса `*.gguf` из папки
   голосов и её подпапок-наборов (имя голоса — имя файла), пути ONNX-фронтенда из `<модели>/frontend-onnx` (сам
   фронтенд грузится, только когда создаётся голос), проверка AVX2.
-  Бэкенд выбирается по `cosyvoice-cli --list-backends`: CUDA, если есть `ggml-cuda.dll` и видеокарта NVIDIA, иначе
+  Бэкенд выбирается по `cosyvoice-cli --list-backends`: CUDA, если есть `ggml-cuda` и видеокарта NVIDIA, иначе
   Vulkan (дискретная раньше встроенной), иначе CPU; `COSYVOICE_BACKEND=cuda|vulkan|cpu` задаёт его явно. Всегда
   `GGML_CUDA_DISABLE_GRAPHS=1`, на CUDA ещё `--llm-flash-attn 0`. В админке рядом с адресом сервера видны
   «встроенный», бэкенд, модель и число голосов.
@@ -82,14 +84,32 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 
 ## Docker
 
-Второй сервис `stream-tts` в `docker-compose.yml`, стартует параллельно cosyvoice, `restart: unless-stopped`.
+Сервис `stream-tts` в `docker-compose.yml` — режим managed со встроенным сервером из того же образа (корневой
+`Dockerfile`, цель `stream-tts`), `restart: unless-stopped`. Возможности те же, что у программы для Windows:
+вкладка «Сервер», наборы голосов из zip, загрузка пакетов, выгрузка модели, очистка образца от музыки; CUDA уже в
+образе `stream-tts:cuda` (`docker-compose.gpu.yml`), скачивать её не нужно. Проверка обновлений выключена:
+обновление — `git pull && docker compose up -d --build`.
 
-- Образ: `python:3.15-slim` (аргумент `PYTHON` в `stream-tts/Dockerfile`; если колёс под новую версию нет —
-  вернуть 3.14), ffmpeg, aiohttp, numpy.
-- Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `voice-refs/` и `effects/` (скрипты
-  эффектов) только для чтения. Режим `cut` в `effects/villager-fx.py` звуки жителя не читает. Остальным режимам нужна
+- Образ: `ubuntu:26.04` (glibc 2.43 для cosyvoice.cpp), Python 3.14 из apt в venv `/opt/venv`, ffmpeg, aiohttp,
+  numpy, onnxruntime; сервер — `/opt/cosyvoice`. На CUDA образ больше на объём рантайма CUDA.
+- Пути: `STREAM_TTS_RUNTIME=/opt/cosyvoice`, `STREAM_TTS_MODELS=/models`, `STREAM_TTS_VOICES=/voices`,
+  `STREAM_TTS_DATA=/data`, `STREAM_TTS_PROJECT=/project`.
+- Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `./models:/models` и `./voices:/voices`
+  с записью (админка качает модели и ставит наборы), `voice-refs/` и `effects/` (скрипты эффектов) только для
+  чтения. Режим `cut` в `effects/villager-fx.py` звуки жителя не читает. Остальным режимам нужна
   `voice-origs/minecraft-villager/`.
-- cosyvoice доступен по docker-сети (`http://cosyvoice:8080`), его порт остаётся на `127.0.0.1`.
+- Порты: 8090 — интерфейс и оверлей, 8080 (`PORT`) — WebUI и API сервера для `scripts/` и `tools/`, оба на
+  `127.0.0.1`. Сервер в контейнере слушает `0.0.0.0` (`COSYVOICE_HOST`), порт `COSYVOICE_PORT=8080`.
+- Перезапуск stream-tts перезапускает и сервер (модель и голоса грузятся за несколько секунд), `docker stop`
+  завершает оба. Сервер ненадолго останавливается и при установке или удалении набора, выгрузке модели, смене
+  модели или устройства и проверке скорости.
+- `MODEL` в stream-tts не передаётся: он закрепил бы модель и отключил выбор в админке. При нескольких `*.gguf` в
+  `models/` модель выбирается на вкладке «Сервер» (`settings.model`).
+
+**Профиль `server-only`** — только cosyvoice-server, как раньше: `docker compose up -d cosyvoice` (цель
+`cosyvoice`, `cosyvoice/entrypoint.sh`). Он занимает тот же порт 8080 и видеокарту, поэтому stream-tts перед ним
+останавливают. Модель — `MODEL` или единственный `*.gguf`, голоса из подпапок получают имя через `_`
+(`voices/wc3/thrall.gguf` → `wc3_thrall`), а у встроенного сервера имя голоса — имя файла.
 
 ## Переменные
 
@@ -101,13 +121,15 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 | `STREAM_TTS_BIND` | `127.0.0.1` | `0.0.0.0`, чтобы OBS на другом ПК дотянулся по сети |
 | `STREAM_TTS_PASSWORD` | — | пароль админки; обязателен, если `BIND` не localhost |
 | `STREAM_TTS_LANG` | язык установщика, иначе `ru` | `ru` или `en`: язык при первом запуске, дальше — переключатель в админке |
-| `COSYVOICE_URL` | `http://cosyvoice:8080` в compose | внешний сервер; без него — режим managed |
+| `COSYVOICE_URL` | — | внешний сервер; без него — режим managed |
 | `COSYVOICE_SERVER` | `runtime/cosyvoice-server(.exe)` | managed: путь к серверу или его папке |
 | `COSYVOICE_BACKEND` | `auto` | managed: `cuda`, `vulkan` или `cpu` |
-| `COSYVOICE_PORT` | свободный | managed: порт сервера на `127.0.0.1` |
-| `MODEL` | единственный `*.gguf` | managed: файл модели |
+| `COSYVOICE_PORT` | свободный, `8080` в Docker | managed: порт сервера |
+| `COSYVOICE_HOST` | `127.0.0.1`, `0.0.0.0` в Docker | managed: адрес, на котором слушает сервер (stream-tts ходит к нему по `127.0.0.1`) |
+| `MODEL` | выбранный в админке или единственный `*.gguf` | managed: файл модели, выбор в админке отключается (в compose передаётся только профилю `server-only`) |
 | `COSYVOICE_API_KEY` | — | ключ, если сервер запущен с `--api-key` |
 | `COSYVOICE_VOICES` | `/voices` | external: папка голосов на машине сервера, куда сохраняются голоса из записи |
+| `PORT` | `8080` | Docker: порт сервера на хосте |
 | `TWITCH_CLIENT_ID` | — | можно задать и в интерфейсе |
 
 ## Отдельный домашний сервер

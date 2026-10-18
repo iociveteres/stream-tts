@@ -12,7 +12,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 
 | Путь | Что | В git |
 |---|---|---|
-| `setup.sh`, `docker-compose*.yml`, `cosyvoice/` | cosyvoice-server на :8080; образ из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
+| `setup.sh`, `Dockerfile`, `docker-compose*.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server (:8090 и :8080), профиль `server-only` — только сервер (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
 | `stream-tts/streamtts/` | stream-tts на :8090: озвучка наград Twitch, админка, оверлей OBS (спецификация [docs/stream-tts.md](docs/stream-tts.md), развёртывание `stream-tts-deploy.md`, Windows `stream-tts-windows.md`) | да |
 | `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
@@ -33,14 +33,16 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - `post` в `alts.json` и `manifest.json` — `[скрипт, аргументы…]`, путь от корня проекта. stream-tts ищет скрипт в
   `STREAM_TTS_PROJECT` (в контейнере `/project`), грузит через importlib и вызывает `apply(звук, аргументы)`;
   командная строка эффекта нужна `synth.py`.
-- Порты: cosyvoice 8080, stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767; из исходников
+- Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767; из исходников
   `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
   модели) — 8093. Конфигурации — `.claude/launch.json`.
 
 ## Запуск
 
-- Стек: `docker compose up -d --build` (`.env` уже настроен на модель и GPU); после правок — `--build stream-tts`
-  или `--build cosyvoice`. Сервисы могут быть в работе (стрим): перезапуск контейнеров согласовывать с пользователем.
+- Стек: `docker compose up -d --build` (`.env` уже настроен на GPU) — stream-tts со встроенным сервером; после правок —
+  `--build stream-tts`. Только сервер — `docker compose up -d cosyvoice` (профиль `server-only`, stream-tts сначала
+  остановить: оба занимают 8080 и видеокарту). Сервисы могут быть в работе (стрим): перезапуск контейнеров
+  согласовывать с пользователем.
 - Инструменты — из корня проекта: `python tools/wc3/review.py b02`. `review.py` и `pick.py` — только стандартная
   библиотека; остальным (numpy, onnxruntime, faster-whisper, torch cu124 и др.) нужен `.venv/Scripts/python.exe`
   (3.11), cuBLAS/cuDNN для faster-whisper — из `torch/lib`. Везде нужны `ffmpeg`/`ffprobe` в PATH; звук в
@@ -66,12 +68,23 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   `import-voices.sh`, `synth.py` и `editor.py`; stream-tts выгружает его после 10 минут простоя.
 - Повторная регистрация имени даёт 409: сначала `DELETE /speaker/<имя>` (так делает `import-voices.sh --force`).
   `POST /model/load` ждёт поле `model`; после выгрузки модели голоса сбрасываются.
-- Не убирать `GGML_CUDA_DISABLE_GRAPHS=1` (образ) и `--llm-flash-attn 0` (`docker-compose.gpu.yml`): без них на GPU
-  тихий шум или мусор вместо речи, причём без ошибок в логах.
-- Замеры скорости — по `elapsed_ms` из `docker compose logs cosyvoice` или через `127.0.0.1`: `localhost` из Python
-  на Windows добавляет ~2 с (сначала пробует IPv6).
-- stream-tts без `COSYVOICE_URL` при наличии `runtime/cosyvoice-server.exe` запускает свой сервер (режим managed) —
-  второй на той же видеокарте (1,5–1,9 ГБ видеопамяти на Q8_0).
+- Не убирать `GGML_CUDA_DISABLE_GRAPHS=1` (образ, `runtime.py`) и `--llm-flash-attn 0` (`runtime.py`,
+  `docker-compose.gpu.yml` для `server-only`): без них на GPU тихий шум или мусор вместо речи, причём без ошибок в
+  логах.
+- Замеры скорости — по `elapsed_ms` из `docker compose logs stream-tts` (вывод сервера — логгер `cosyvoice`) или
+  через `127.0.0.1`: `localhost` из Python на Windows добавляет ~2 с (сначала пробует IPv6).
+- stream-tts без `COSYVOICE_URL` запускает свой сервер (режим managed): в Docker — из образа (`/opt/cosyvoice`), из
+  исходников — `runtime/cosyvoice-server.exe`, и тогда это второй сервер на той же видеокарте (1,5–1,9 ГБ
+  видеопамяти на Q8_0).
+- Встроенный сервер останавливается, пока ставится или удаляется набор голосов, и перезапускается при выгрузке
+  модели, смене модели или устройства и проверке скорости: `import-voices.sh` и `synth.py` в это время получат
+  обрыв соединения. Сохранение голоса в редакторе сервер не останавливает.
+- Имя голоса у встроенного сервера — имя файла (`voices/<имя>.gguf` или `voices/<набор>/<имя>.gguf`, один уровень
+  подпапок); `entrypoint.sh` профиля `server-only` склеивает путь через `_` (`wc3/thrall.gguf` → `wc3_thrall`).
+- `MODEL` закрепляет модель и отключает выбор в админке, поэтому в stream-tts не передаётся; он нужен только
+  профилю `server-only`. Выбор модели stream-tts хранит в `settings.json` (`model`), при нескольких `*.gguf` без
+  выбора сервер не запускается. В `/opt/cosyvoice` свой `libonnxruntime.so`: `LD_LIBRARY_PATH` в образе stream-tts
+  не задавать, путь серверу добавляет `runtime.py`.
 - Nuitka: собранную программу `paths.py` узнаёт по `__compiled__` (`sys.frozen` не задаётся); данные пакета и
   `effects/` лежат рядом с exe. Импорты эффектов Nuitka не видит: новые зависимости — в `--include-module` в
   `build-exe.py`.

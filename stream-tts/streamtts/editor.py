@@ -17,8 +17,8 @@ _draft-<ключ>, где ключ — хеш параметров: изменё
 FRONTEND_IDLE простоя.
 
 Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет .gguf. Со встроенным сервером —
-в paths.VOICES/<набор>/ с manifest.json набора; с внешним (Docker) — в COSYVOICE_VOICES (по умолчанию /voices) без
-подпапки (cosyvoice/entrypoint.sh склеивает имя голоса из подпапок), а набор записывается в
+в paths.VOICES/<набор>/ с manifest.json набора (так и в Docker); с внешним (COSYVOICE_URL) — в COSYVOICE_VOICES (по
+умолчанию /voices) без подпапки (cosyvoice/entrypoint.sh склеивает имя голоса из подпапок), а набор записывается в
 <данные>/sets/<набор>/manifest.json. Образец и расшифровка остаются в <данные>/samples/<голос>.wav и .txt."""
 import asyncio, contextlib, glob, hashlib, io, json, logging, math, os, re, secrets, shutil, wave
 

@@ -2,6 +2,23 @@
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
 # (или ./setup.sh --gpu, который прописывает оба файла в .env)
 services:
+  # Встроенный сервер сам выбирает CUDA и добавляет --llm-flash-attn 0 (runtime.py). compute — для CUDA,
+  # utility — для nvidia-smi на странице статистики.
+  stream-tts:
+    build:
+      args:
+        GPU: cuda
+    image: stream-tts:cuda
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
   cosyvoice:
     build:
       args:
@@ -17,15 +34,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
-  # stream-tts видит видеокарту только ради nvidia-smi (загрузка, память, температура на странице статистики)
-  stream-tts:
-    environment:
-      NVIDIA_DRIVER_CAPABILITIES: utility
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu, utility]

@@ -992,8 +992,8 @@ function renderPackages() {
           cancelled: T("Загрузка отменена: «Скачать» продолжит с того же места.") }[d.state] || "")
       : null;
     if (!p.usable) action = h("span", { class: "tag" }, T("недоступен"));
-    const hint = !p.usable ? T("В этой версии программы нет onnxruntime (в образе Docker его нет): пакет работает " +
-        "в программе для Windows и при запуске из исходников.")
+    const hint = !p.usable ? T("В этой версии программы нет onnxruntime: пакет работает в программе для Windows, в Docker " +
+        "и при запуске из исходников с пакетами из requirements.txt.")
       : S.setup || p.installed ? ""
       : p.restart ? T("Сервер синтеза внешний: скачайте фронтенд на нём (scripts/download-model.sh --frontend int8) " +
         "и перезапустите cosyvoice.")

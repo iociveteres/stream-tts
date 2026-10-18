@@ -32,7 +32,7 @@ def model_path():
 
 
 def runtime_ok():
-    """onnxruntime есть в программе (в образе Docker его нет)."""
+    """onnxruntime установлен (его нет, только если ставили не по requirements.txt)."""
     return importlib.util.find_spec("onnxruntime") is not None
 
 

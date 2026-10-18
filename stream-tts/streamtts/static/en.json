@@ -577,7 +577,7 @@
  "Очистка образца от музыки": "Remove music from samples",
  "Demucs v4 (htdemucs, int8): отделяет голос от музыки — галочка «убрать музыку» у варианта образца в редакторе голоса. Работает на процессоре: 20 секунд записи — около 10 секунд.": "Demucs v4 (htdemucs, int8): separates the voice from music — the “remove music” checkbox on a sample variant in the voice editor. Runs on the CPU: about 10 seconds per 20 seconds of audio.",
  "веса — только для исследований": "weights: research use only",
- "В этой версии программы нет onnxruntime (в образе Docker его нет): пакет работает в программе для Windows и при запуске из исходников.": "This build has no onnxruntime (the Docker image lacks it): the package works in the Windows app and when running from source.",
+ "В этой версии программы нет onnxruntime: пакет работает в программе для Windows, в Docker и при запуске из исходников с пакетами из requirements.txt.": "This build has no onnxruntime: the package works in the Windows app, in Docker and when running from source with the packages from requirements.txt.",
  "Голос отделяется от музыки (Demucs) один раз, около 10 секунд на 20 секунд записи": "The voice is separated from music (Demucs) once, about 10 seconds per 20 seconds of audio",
  "Готово: пакет скачан.": "Done: package downloaded.",
  "Нужен пакет «Очистка образца от музыки»": "Requires the “Remove music from samples” package",

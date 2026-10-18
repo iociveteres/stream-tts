@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Единая точка входа: ./setup.sh [КВАНТ] [--frontend int8|full|none] [--gpu]
-# Работает из Linux, WSL2 и Git Bash на Windows.
+# Скачивает модель (её можно скачать и в админке stream-tts), пишет в .env порт и набор compose-файлов, собирает и
+# запускает stream-tts со встроенным cosyvoice-server. Работает из Linux, WSL2 и Git Bash на Windows.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -30,25 +31,33 @@ echo "==> Модель"
 bash scripts/download-model.sh "$QUANT" "${dl_args[@]}"
 mkdir -p voices
 
-# .env читается compose автоматически: последующие 'docker compose up' возьмут ту же модель
-# (а с --gpu и тот же набор compose-файлов)
-printf 'MODEL=/models/CosyVoice3-2512_%s.gguf\nPORT=%s\n' "$QUANT" "$PORT" > .env
+# .env читается compose автоматически: последующие 'docker compose up' возьмут тот же порт (а с --gpu и тот же
+# набор compose-файлов). Остальные строки (пароль, Client ID, MODEL для профиля server-only) не трогаются.
+# Модель в .env не пишется: stream-tts берёт выбранную в админке, а если в models/ она одна — её.
+touch .env
+sed -i -E '/^(PORT|COMPOSE_FILE|COMPOSE_PATH_SEPARATOR)=/d' .env
+printf 'PORT=%s\n' "$PORT" >> .env
 if [ "$GPU" -eq 1 ]; then
     printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml\nCOMPOSE_PATH_SEPARATOR=:\n' >> .env
 fi
 
 echo "==> Собираю и запускаю контейнер"
+# Отдельный cosyvoice (профиль server-only или старая схема) занял бы порт сервера и видеокарту
+docker compose rm -sf cosyvoice >/dev/null 2>&1 || true
 docker compose up --build -d
 
 echo "==> Жду сервер"
+UI_PORT="$(sed -n 's/^STREAM_TTS_PORT=//p' .env | tail -n 1)"
+UI_PORT="${STREAM_TTS_PORT:-${UI_PORT:-8090}}"
 for _ in $(seq 1 90); do
-    if curl -fs -o /dev/null "http://localhost:${PORT}/ping"; then
-        echo "Готово. WebUI: http://localhost:${PORT}"
+    if curl -fs -o /dev/null "http://127.0.0.1:${PORT}/ping"; then
+        echo "Готово. Админка: http://localhost:${UI_PORT} | WebUI сервера: http://localhost:${PORT}"
         echo "Логи: docker compose logs -f | Стоп: docker compose down"
         exit 0
     fi
     sleep 2
 done
-echo "Сервер не ответил за 3 минуты. Логи:" >&2
+echo "Сервер не ответил за 3 минуты. Если в models/ несколько моделей, выберите одну в админке" >&2
+echo "(http://localhost:${UI_PORT}, вкладка «Сервер»). Логи:" >&2
 docker compose logs --tail 50 >&2
 exit 1
