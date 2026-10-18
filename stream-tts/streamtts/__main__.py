@@ -3,7 +3,7 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import bench, config, filters, i18n, install, runtime, stats, store, web as webapp
+from . import bench, config, editor, filters, i18n, install, runtime, stats, store, web as webapp
 from .i18n import tr
 from .cosy import Cosy
 from .engine import Engine
@@ -113,6 +113,7 @@ def main():
     ctx.gpu = stats.GPU()
     # Первый запуск через админку (модель, устройство, наборы голосов) — только для встроенного сервера
     ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set) if ctx.runtime else None
+    ctx.editor = editor.Editor(ctx.settings, ctx.cosy, ctx.voices, ctx.runtime)
     ctx.bench = bench.Bench(ctx.settings, ctx.cosy, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
 
     app = webapp.make_app(ctx)

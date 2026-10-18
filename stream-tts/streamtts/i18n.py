@@ -19,6 +19,17 @@ lang = "ru"
 # Тексты по умолчанию, которые видят зрители: меняются вместе с языком, только если их не трогали
 CONTENT = {
     "demo_phrase": {"ru": "Привет, чат! Вот так звучит мой голос.", "en": "Hi chat! This is how my voice sounds."},
+    # Тестовые фразы редактора голоса (editor.py): обращение, вопрос, напор, длинная фраза
+    "test_phrases": {
+        "ru": ["Привет, чат! Сегодня играем до победного, никто не уходит.",
+               "Подожди, а ты уверен? Мне кажется, мы что-то упустили.",
+               "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет.",
+               "Спасибо за подписку! Это лучший подарок за весь вечер, честное слово, я даже не ожидал."],
+        "en": ["Hi chat! Today we play until we win, nobody leaves.",
+               "Wait, are you sure? I think we missed something.",
+               "Alright, I'm going in! If I don't come back, I was right and you were wrong.",
+               "Thanks for the sub! Best gift of the whole evening, honestly, I didn't expect that at all."],
+    },
 }
 REWARD = {
     "title": {"ru": "Озвучка голосом", "en": "Text to speech"},

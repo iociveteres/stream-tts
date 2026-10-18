@@ -26,6 +26,7 @@ DEFAULTS = {
     "token_ratio": 10.0,        # max_token_text_ratio для /tts
     "chunk_tokens": 150,        # токенов в куске стриминга (по умолчанию в cosyvoice.cpp 28: заметно медленнее)
     "demo_phrase": CONTENT["demo_phrase"]["ru"],
+    "test_phrases": CONTENT["test_phrases"]["ru"],   # редактор голоса: фразы для сравнения вариантов образца
     "voices": {},               # имя -> {enabled, gain_db, calib_db, calib_phrase}
     "lang": "",                 # ru | en, пустой — выбрать при первом запуске (i18n.init)
     "known_voices": [],         # последний список голосов сервера (на случай, если он недоступен)

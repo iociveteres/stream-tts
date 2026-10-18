@@ -151,11 +151,13 @@
 
 <!-- ============ Голоса ============ -->
 <section id="tab-voices" class="tab">
+ <div id="voices-list">
   <div class="card">
     <div class="row">
       <input type="search" id="vsearch" placeholder="Поиск" class="grow" aria-label="Поиск голоса">
       <button id="vall-on">Включить все</button>
       <button id="vall-off">Выключить все</button>
+      <button id="ed-open" class="primary">+ Добавить голос</button>
     </div>
     <p class="muted small">Выключенный голос нельзя выбрать командой, зрители с ним получат случайный.
       Громкость голосов выравнивается сама; поправка — если голос всё равно тише или громче остальных.</p>
@@ -172,6 +174,76 @@
     </form>
     <p id="demo-progress" class="muted small"></p>
   </div>
+ </div>
+
+ <!-- Новый голос из записи (editor.py): черновик хранится на сервере, закрытие редактора его не удаляет -->
+ <div id="editor" hidden>
+  <div class="card">
+    <div class="row between">
+      <h2>Новый голос</h2>
+      <div class="row">
+        <button type="button" id="ed-close">← К списку голосов</button>
+        <button type="button" id="ed-discard" class="danger">Удалить черновик</button>
+      </div>
+    </div>
+    <ul id="ed-packages" class="setlist"></ul>
+    <p class="muted small">Голос — это образец: 10–20 секунд записи и её точная расшифровка. Хороший образец — один
+      голос без музыки и эффектов, с ровной подачей: если спокойная реплика стоит рядом с криком, синтез скачет. Из
+      одного персонажа лучше сделать два голоса, спокойный и с напором. Сделайте несколько вариантов из разных мест
+      записи и сравните их на тестовых фразах: разница на слух бывает большой.</p>
+  </div>
+  <div class="card">
+    <h2>1. Записи</h2>
+    <p class="muted small">Аудио или видео (из видео берётся звук), до 15 минут и 512 МБ. Выделите отрезок мышью на
+      волне и добавьте его как вариант. Колесо мыши — масштаб, Shift + колесо — прокрутка, щелчок — послушать с этого
+      места.</p>
+    <div class="row"><input type="file" id="ed-file" accept="audio/*,video/*" multiple class="grow"
+      aria-label="Файлы записей"><span id="ed-upload-state" class="small muted"></span></div>
+    <div id="ed-sources"></div>
+  </div>
+  <div class="card">
+    <h2>2. Варианты образца</h2>
+    <div class="hint small" data-t><b>Расшифровка — слово в слово то, что звучит в отрезке:</b> каждое слово, повтор,
+      «э-э», оборванное на краю слово. Знаки — как слышится: запятая на паузе, точка в конце фразы, «?» и «!» по
+      интонации. Числа и сокращения — так, как их произносят: «двадцать пять», а не «25». Ошибка в расшифровке —
+      главная причина плохого голоса: синтез начинает глотать слова, повторять их или добавлять лишние звуки.
+      Поэтому резать отрезок лучше по паузам, без обрывков слов на краях.</div>
+    <div id="ed-variants" class="mt"></div>
+    <p class="muted small">Шумоподавление убирает ровный фон и шипение, но не музыку. Голос с ним иногда звучит
+      глухо — сравните варианты с ним и без.</p>
+  </div>
+  <div class="card">
+    <h2>3. Тестовые фразы</h2>
+    <div class="row">
+      <label class="grow">Сравнить с голосом <select id="ed-compare"></select></label>
+      <button type="button" id="ed-synth-all">Синтезировать всё</button>
+      <span id="ed-progress" class="small muted"></span>
+    </div>
+    <p class="muted small">Фразы синтезируются при первом прослушивании, с одним и тем же seed: варианты различаются
+      только образцом. Громкость выровнена, как у примеров голосов.</p>
+    <div class="table-wrap"><table id="ed-matrix"></table></div>
+    <details class="mt">
+      <summary class="muted small">Изменить фразы</summary>
+      <p class="muted small">По одной на строку, до 8. Полезно взять то, что обычно пишут в чате на вашем канале.</p>
+      <textarea id="ed-phrases" class="short" spellcheck="false"></textarea>
+      <div class="row mt"><button type="button" id="ed-phrases-save">Сохранить фразы</button></div>
+    </details>
+  </div>
+  <div class="card">
+    <h2>4. Сохранение</h2>
+    <form id="ed-save" class="rgrid">
+      <label>Вариант <select name="variant" required></select></label>
+      <label>Имя голоса <input name="name" required maxlength="64" spellcheck="false" translate="no"
+        placeholder="например, game-hero"></label>
+      <label>Набор <input name="set" required maxlength="64" list="ed-sets" spellcheck="false" translate="no"
+        placeholder="my-voices"></label>
+      <datalist id="ed-sets"></datalist>
+      <p class="wide muted small">Имя — латиница, цифры, «-», «_» и «.»: его зрители пишут в команде выбора голоса.
+        Набор — группа на странице голосов для зрителей; новый набор создаётся сам.</p>
+      <div class="wide row"><button class="primary">Сохранить голос</button><span id="ed-save-result" class="small"></span></div>
+    </form>
+  </div>
+ </div>
 </section>
 
 <!-- ============ Сервер (встроенный cosyvoice-server: модель, устройство, наборы голосов) ============ -->
@@ -185,9 +257,9 @@
         <div class="row end mt">
           <details class="grow">
             <summary class="muted small">Дополнительно</summary>
-            <label class="check small mt"><input type="checkbox" id="frontend"> Скачать и фронтенд для создания
-              голосов из аудио (~240 МБ, для озвучки не нужен)</label>
             <p class="muted small">Папка: <code id="models-dir"></code></p>
+            <p class="muted small" data-t>Дополнительные пакеты (например, для создания голосов) — в
+              <a href="#settings">настройках</a>.</p>
           </details>
           <button type="button" id="model-cancel" class="danger" hidden>Отменить загрузку</button>
         </div>
@@ -283,6 +355,12 @@
           <button id="prof-save" class="primary">Сохранить и проверить</button>
         </div>
         <p id="prof-out" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Дополнительные пакеты</h2>
+        <p class="muted small">Сторонние модели, которые нужны не для озвучки, а для отдельных функций. Качаются с
+          Hugging Face по кнопке и лежат в папке моделей.</p>
+        <ul id="packages" class="setlist"></ul>
       </div>
       <div class="card">
         <h2>Сервер</h2>

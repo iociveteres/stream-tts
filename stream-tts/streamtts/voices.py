@@ -10,6 +10,7 @@ from .i18n import tr
 log = logging.getLogger("voices")
 
 DEMO_SEED = 7
+DRAFT_PREFIX = "_draft-"   # служебные голоса черновика (editor.py): в список голосов не попадают
 # Группы на странице для зрителей — наборы voice-refs/<набор>/ (docs/voice-pipeline.md)
 GROUPS = {"wc3": "Warcraft III", "games": "Игры", "streamers": "Стримеры"}
 
@@ -77,7 +78,7 @@ class Voices:
 
     async def refresh(self):
         """Список голосов с сервера. При изменении досинтезируются примеры."""
-        names = await self.cosy.speakers()
+        names = [n for n in await self.cosy.speakers() if not n.startswith(DRAFT_PREFIX)]
         if names != self.s["known_voices"]:
             added = set(names) - set(self.s["known_voices"])
             for n in names:
@@ -89,10 +90,12 @@ class Voices:
 
     # --- эффекты ---
     def _read_manifests(self):
-        """voice-refs/*/manifest.json проекта и <голоса>/<набор>/manifest.json установленных наборов
+        """voice-refs/*/manifest.json проекта, <голоса>/<набор>/manifest.json установленных наборов и
+        <данные>/sets/<набор>/manifest.json голосов из записи на внешнем сервере (editor.py)
         (перечитываются при изменении файлов): post и набор голоса."""
         files = (glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "manifest.json"))
-                 + glob.glob(os.path.join(paths.VOICES, "*", "manifest.json")))
+                 + glob.glob(os.path.join(paths.VOICES, "*", "manifest.json"))
+                 + glob.glob(os.path.join(config.DATA, "sets", "*", "manifest.json")))
         stamp = sum(os.path.getmtime(f) for f in files)
         if stamp != self._manifests[0]:
             merged, sets = {}, {}

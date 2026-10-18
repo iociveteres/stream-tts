@@ -118,6 +118,27 @@ table.bench tr.on td { background: color-mix(in srgb, var(--accent) 12%, transpa
 .tag { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted);
   margin-left: 6px; }
 
+/* Новый голос (редактор) */
+#ed-packages:not(:empty) { margin-bottom: 10px; }
+.hint { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.source { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 12px; background: var(--bg);
+  display: grid; gap: 8px; }
+canvas.wave { width: 100%; height: 96px; display: block; border-radius: 6px; background: var(--surface-2); cursor: crosshair;
+  touch-action: none; }
+.variant { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); display: grid;
+  gap: 8px; }
+.variant + .variant { margin-top: 10px; }
+label.inline { display: inline-flex; align-items: center; gap: 6px; }
+input.num { width: 84px; padding: 4px 6px; }
+textarea.short { min-height: 0; font-family: inherit; font-size: 14px; resize: vertical; }
+#ed-phrases.short { min-height: 110px; }
+#ed-matrix td.phrase { min-width: 260px; }
+#ed-matrix .cell { text-align: center; width: 1%; white-space: nowrap; }
+#ed-matrix th.ref { color: var(--ink-2); }
+#ed-matrix button.ready { border-color: var(--good); color: var(--good); }
+#ed-matrix button.playing, #editor button.playing { border-color: var(--accent); color: var(--accent); }
+
 /* Статистика */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .tile { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }

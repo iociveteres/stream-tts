@@ -308,7 +308,8 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), второй сервис в docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
-│                          # голосов из админки), bench.py (скорость устройств), desktop.py (точка входа программы для Windows),
+│                          # голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
+│                          # desktop.py (точка входа программы для Windows),
 │                          # i18n.py (язык интерфейса), static/ (static/en.json — английский словарь, static/i18n.js —
 │                          # перевод страниц, static/quants/ — примеры звука квантов для админки и установщика)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py, build-exe.py (Nuitka),

@@ -2,7 +2,7 @@
 
 Модель качается как в scripts/download-model.sh: Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF с Hugging Face, квант на
 выбор (по умолчанию Q8_0), по желанию ONNX-фронтенд int8 (нужен только для извлечения голоса из аудио, для озвучки
-не нужен). Файл пишется в <имя>.part с докачкой (Range) и повторами, сверяется с sha256 из x-linked-etag и только
+не нужен; он же — дополнительный пакет из PACKAGES, качается и удаляется из настроек админки). Файл пишется в <имя>.part с докачкой (Range) и повторами, сверяется с sha256 из x-linked-etag и только
 потом переименовывается. Папка моделей — paths.MODELS.
 
 Набор голосов — zip с *.gguf и manifest.json (ключи — имена голосов: title, post…) в корне или в одной папке.
@@ -10,7 +10,7 @@
 paths.VOICES/<набор>/ целиком, старая версия заменяется. Голос с именем, которое уже есть в другом наборе,
 пропускается. Пока файлы меняются, cosyvoice-server остановлен (на Windows он держит открытые .gguf), потом
 запускается с новым списком голосов."""
-import asyncio, hashlib, json, logging, os, re, shutil, time, zipfile
+import asyncio, contextlib, hashlib, json, logging, os, re, shutil, time, zipfile
 
 import aiohttp
 
@@ -39,6 +39,16 @@ SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не верну�
 # Квант, выбранный в установщике (StreamTTS.iss): при первом запуске без модели он качается сам
 SETUP_CHOICE = os.path.join(paths.APP, "setup-model.txt")
 FRONTEND = ("frontend-onnx/campplus.int8.onnx", "frontend-onnx/speech_tokenizer_v3.int8.onnx")
+# Необязательные пакеты: качаются из админки (настройки и редактор голоса), лежат в paths.MODELS. size — байт.
+# alt — те же файлы в полной точности (scripts/download-model.sh --frontend full): тоже считаются установленными.
+PACKAGES = {
+    "frontend": dict(
+        title="Создание голосов из записи",
+        about="ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса). Нужен, чтобы сделать "
+              "голос из записи; для озвучки не нужен.",
+        files=FRONTEND, size=252891972, license="Apache-2.0", source=REPO,
+        alt=("frontend-onnx/campplus.onnx", "frontend-onnx/speech_tokenizer_v3.onnx")),
+}
 CHUNK = 1 << 20
 RETRIES = 5
 
@@ -67,7 +77,7 @@ class Installer:
     def __init__(self, settings, runtime, changed):
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
         self.task = None
-        self.dl = dict(state="idle", quant="", file="", done=0, total=0, speed=0.0, error="")
+        self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
         self._last_push = 0.0
 
     # --- состояние для админки ---
@@ -77,7 +87,8 @@ class Installer:
         return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=samples, sample_phrase=SAMPLE_PHRASE,
                     models=installed_models(),
                     model=os.path.basename(self.runtime.model) if self.runtime.model else self.s.get("model", ""),
-                    models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets())
+                    models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets(),
+                    packages=packages())
 
     def _push(self, force=False):
         now = time.monotonic()
@@ -94,8 +105,25 @@ class Installer:
         files = [(model_name(quant), model_name(quant))]
         if frontend:
             files += [(f, f) for f in FRONTEND]
-        self.dl = dict(state="running", quant=quant, file="", done=0, total=0, speed=0.0, error="")
+        self.dl = dict(state="running", quant=quant, package="", file="", done=0, total=0, speed=0.0, error="")
         self.task = asyncio.create_task(self._download(quant, files))
+
+    def start_package(self, pid):
+        if pid not in PACKAGES:
+            raise ValueError(tr("нет такого пакета"))
+        if self.task and not self.task.done():
+            raise ValueError(tr("загрузка уже идёт"))
+        self.dl = dict(state="running", quant="", package=pid, file="", done=0, total=0, speed=0.0, error="")
+        self.task = asyncio.create_task(self._download("", [(f, f) for f in PACKAGES[pid]["files"]]))
+
+    async def delete_package(self, pid):
+        if pid not in PACKAGES:
+            raise ValueError(tr("нет такого пакета"))
+        async with self.runtime.paused():  # сервер держит открытыми файлы фронтенда
+            for rel in PACKAGES[pid]["files"] + PACKAGES[pid]["alt"]:
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(os.path.join(paths.MODELS, *rel.split("/")))
+        log.info("пакет %s удалён", pid)
 
     def first_run(self):
         """Модели нет, а в установщике выбран квант: качаем его сам, один раз (отмена не перезапускает)."""
@@ -131,15 +159,18 @@ class Installer:
                 for rel, dst, size, sha in plan:
                     await self._fetch(session, rel, dst, size, sha)
             self.dl.update(state="done", file="", speed=0.0)
-            log.info("модель %s скачана", quant)
-            self.s.update(model=model_name(quant))
-            await self.runtime.restart()
+            if quant:
+                log.info("модель %s скачана", quant)
+                self.s.update(model=model_name(quant))
+            else:
+                log.info("пакет %s скачан", self.dl["package"])
+            await self.runtime.restart()  # новая модель или фронтенд подхватываются только при запуске
         except asyncio.CancelledError:
             self.dl.update(state="cancelled", speed=0.0, error="")
-            log.info("загрузка модели отменена (докачается со следующей попытки)")
+            log.info("загрузка отменена (докачается со следующей попытки)")
         except Exception as e:
             self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
-            log.warning("загрузка модели: %s", self.dl["error"])
+            log.warning("загрузка: %s", self.dl["error"])
         finally:
             self._push(force=True)
 
@@ -217,6 +248,20 @@ class Installer:
         async with self.runtime.paused():
             await asyncio.to_thread(shutil.rmtree, target)
         log.info("набор %s удалён", name)
+
+
+def package_installed(pid):
+    p = PACKAGES[pid]
+    have = lambda files: all(os.path.isfile(os.path.join(paths.MODELS, *f.split("/"))) for f in files)
+    # фронтенд: каждый файл в int8 или в полной точности (как выбирает runtime.py)
+    return all(have([a]) or have([b]) for a, b in zip(p["files"], p["alt"]))
+
+
+def packages(installed=None):
+    """Необязательные пакеты для админки. installed — словарь id -> bool, когда файлов не видно (внешний сервер)."""
+    return [dict(id=pid, title=tr(p["title"]), about=tr(p["about"]), size=p["size"], license=p["license"],
+                 source=p["source"], installed=installed[pid] if installed else package_installed(pid))
+            for pid, p in PACKAGES.items()]
 
 
 def _part_size(dst):

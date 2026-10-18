@@ -2,7 +2,7 @@
 
 Ищет строки, которым нужен перевод: tr("…") в streamtts/*.py, T("…") в static/admin.js и static/overlay.html,
 {{t:…}} в static/voices.html, плюс константы, которые переводятся при показе (причины возврата R_*, REPLIES и ACCESS_WHO в engine.py,
-HELIX_HINTS, GROUPS, подписи примеров в install.py). Печатает ключи без перевода, переводы с кириллицей и
+HELIX_HINTS, GROUPS, подписи примеров и пакеты в install.py). Печатает ключи без перевода, переводы с кириллицей и
 расхождения подстановок {имя}. Код выхода 1, если что-то нашлось.
 
 Текст из разметки (admin.html, login.html) так не виден: его проверяет страница. Открыть админку на английском
@@ -45,6 +45,9 @@ def python_keys():
             keys.update(re.findall(r'"\w+": "([^"]+)"', src.split("GROUPS = ")[1].split("\n")[0]))
         elif name == "install.py":
             keys.update(re.findall(r'SAMPLES = \(\("[\w-]+", "([^"]+)"\),\)', src))
+            for n in ast.walk(ast.parse(src)):  # названия и описания пакетов (PACKAGES), переводятся при показе
+                if isinstance(n, ast.keyword) and n.arg in ("title", "about") and isinstance(n.value, ast.Constant):
+                    keys.add(n.value.value)
     return keys
 
 

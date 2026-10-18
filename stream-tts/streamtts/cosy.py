@@ -129,6 +129,30 @@ class Cosy:
                     yield audio.from_pcm16(buf[:n])
                     buf = buf[n:]
 
+    # --- голоса из записи (editor.py): нужен ONNX-фронтенд на сервере ---
+    async def extract(self, name, text, wav):
+        """POST /speaker?type=extract: голос из образца (WAV) и его расшифровки, сразу доступен для синтеза."""
+        form = aiohttp.FormData()
+        form.add_field("name", name)
+        form.add_field("text", text)
+        form.add_field("audio", wav, filename="sample.wav", content_type="audio/wav")
+        async with self.session.post(f"{self.url}/speaker", params={"type": "extract"}, data=form,
+                                     timeout=aiohttp.ClientTimeout(total=300)) as r:
+            if r.status != 200:
+                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+
+    async def save_speaker(self, name, path):
+        """POST /speaker/save: голос в .gguf; path — на машине сервера."""
+        async with self.session.post(f"{self.url}/speaker/save", json=dict(name=name, path=path),
+                                     timeout=aiohttp.ClientTimeout(total=60)) as r:
+            if r.status != 200:
+                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+
+    async def delete_speaker(self, name):
+        with contextlib.suppress(aiohttp.ClientError, asyncio.TimeoutError):
+            async with self.session.delete(f"{self.url}/speaker/{name}", timeout=aiohttp.ClientTimeout(total=15)):
+                pass
+
     async def stop(self):
         """POST /tts/stop: сервер дорабатывает текущий шаг и останавливается (только в режиме --webui)."""
         try:
