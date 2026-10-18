@@ -378,24 +378,33 @@ function renderReplyNote() {
 }
 
 // --- награда ---
+const REWARD_KEYS = ["title", "cost", "cooldown", "prompt"];
+let rewardSavedUntil = 0;   // «Сохранено» на кнопке, мс; renderRewardState идёт каждые 2 с и не должен его стереть
 function renderReward() {
   const r = S.twitch.reward, f = $("#reward");
-  for (const k of ["title", "cost", "cooldown", "prompt"]) f[k].value = r[k] ?? "";
+  for (const k of REWARD_KEYS) f[k].value = r[k] ?? "";
   renderRewardState();
 }
+const rewardDirty = () => REWARD_KEYS.some(k => $("#reward")[k].value !== String(S.twitch.reward[k] ?? ""));
 function renderRewardState() {
-  const r = S.twitch.reward;
-  $("#reward-save").textContent = r.exists ? T("Сохранить") : T("Создать награду");
+  const r = S.twitch.reward, btn = $("#reward-save"), saved = r.exists && Date.now() < rewardSavedUntil;
+  btn.textContent = !r.exists ? T("Создать награду") : saved ? T("Сохранено") : T("Сохранить");
+  btn.disabled = r.exists && (saved || !rewardDirty());
   $("#reward-delete").hidden = !r.exists;
   $("#reward-state").textContent = !r.exists ? T("Награда ещё не создана.") :
     r.paused ? T("Награда на паузе (озвучка выключена).") : T("Награда активна.");
 }
+$("#reward").oninput = () => { rewardSavedUntil = 0; renderRewardState(); };
 $("#reward").onsubmit = async e => {
   e.preventDefault();
-  const f = e.target;
+  const f = e.target, existed = S.twitch.reward.exists;
   const r = await api("/api/reward", { title: f.title.value, cost: +f.cost.value, cooldown: +f.cooldown.value,
     prompt: f.prompt.value });
-  if (r.ok) { toast(T("Награда сохранена")); reload(); }
+  if (!r.ok) return;
+  if (!existed) toast(T("Награда создана"));
+  rewardSavedUntil = Date.now() + 3000;
+  setTimeout(() => S && renderRewardState(), 3050);
+  reload();
 };
 $("#reward-delete").onclick = async () => {
   if (await ask(T("Удалить награду с канала?"), T("Удалить"), true) && (await api("/api/reward/delete")).ok) reload();
