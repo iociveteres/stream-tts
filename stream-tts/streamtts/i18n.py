@@ -48,7 +48,7 @@ def catalog():
         return {}
 
 
-def tr(text, **kw):
+def tr(text, /, **kw):   # / — чтобы подстановка {text} не сталкивалась с аргументом
     s = catalog().get(" ".join(text.split()), text) if lang == "en" else text
     return s.format(**kw) if kw else s
 

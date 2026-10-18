@@ -38,6 +38,9 @@
 │   ├── wc3/               # реплики Warcraft III: нарезка кандидатов, проверка текстов (docs/voices-wc3.md)
 │   └── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
 ├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts
+├── tests/                 # автотесты (раздел «Тесты»); requirements.txt — pytest для stream-tts/.venv
+│   └── e2e/               # e2e stream-tts: fake_cosyvoice.py (поддельный сервер), harness.py (процесс, API,
+│                          # тестовый оверлей), conftest.py (фикстуры), test_*.py (сценарии)
 ├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md
 │
@@ -131,3 +134,32 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 чтобы не мешать Docker-версии (её сервер на 8080 — внешний для конфигурации `stream-tts`). Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
 проверка словаря `python stream-tts/check-i18n.py`. Программа для Windows —
 [stream-tts-windows.md](stream-tts-windows.md).
+
+## Тесты
+
+e2e-тесты stream-tts — `tests/e2e/`, pytest в `stream-tts/.venv`:
+
+```bash
+stream-tts/.venv/Scripts/pip install -r tests/requirements.txt
+stream-tts/.venv/Scripts/python -m pytest tests/e2e
+```
+
+Тест запускает настоящий процесс stream-tts (`python -m streamtts`) на свободном порту, данные, модели, голоса и
+проект у него во временной папке. Вместо cosyvoice-server — поддельный (`fake_cosyvoice.py`): те же адреса API, а
+вместо речи синус, у каждого голоса своя частота и громкость. Так тест узнаёт голос фразы и проверяет писк 800 Гц
+и выравнивание громкости. Видеокарта, модель и сеть не нужны (нужен только `ffmpeg` в PATH, для mp3 примеров),
+Docker-версию на 8090 тесты не трогают, весь набор идёт ~20 с. Оверлей играет сам тест: подключается к
+`/overlay/ws`, сообщает `ready` и `ended`, собирает звук.
+
+- Фикстура `tts` — общий на сессию процесс, перед каждым тестом приведённый в исходное состояние (настройки,
+  очередь, баны, голоса). После теста она проверяет, что к cosyvoice не шло двух синтезов одновременно. `spawn` —
+  отдельный процесс для другого окружения (пароль, адрес) или перезапуска.
+- Ожидание — `wait_for` с опросом `/api/state` и истории в SQLite (`StreamTTS.event`), без фиксированных пауз.
+- Поддельным сервером тест управляет на ходу: `hold` (синтез ждёт, чтобы застать фразу на синтезе), `fail`
+  (ошибка 500), `down` (сервер недоступен), `length_factor` (звук длиннее расчётного).
+- Процесс останавливается `terminate`, то есть без `on_cleanup`: корректную остановку проверят тесты Twitch.
+
+Сценарии: `test_access.py` — запуск, голоса и примеры, пароль, защита POST, `STREAM_TTS_BIND` без пароля,
+настройки после перезапуска, пропажа cosyvoice; `test_queue.py` — очередь через `/api/test`: голос и порядок,
+громкость, отказы, фильтры, стриминг и `chunk_tokens`, обрезка, ошибка синтеза, пропуск и очистка, оверлеи.
+Twitch (EventSub, IRC), редактор голоса, админка в браузере и проверка с настоящей моделью пока не покрыты.

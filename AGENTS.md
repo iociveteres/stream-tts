@@ -18,6 +18,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: общий (`pick.py`, `synth.py`, оценки), реплики WC3, прочие источники ([docs/voice-pipeline.md](docs/voice-pipeline.md), [docs/voices-wc3.md](docs/voices-wc3.md)) | да |
 | `effects/` | эффекты поверх синтеза (`post`) | да |
+| `tests/e2e/` | e2e-тесты stream-tts на поддельном cosyvoice-server (раздел «Тесты» в `docs/development.md`) | да |
 | `voice-clips/<набор>/` | варианты образцов, их синтез, оценки и выбор | нет (тексты реплик из игр) |
 | `voice-refs/<набор>/` | итоговые образцы и `manifest.json` | нет |
 | `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `runtime/`, `.env` | данные, секреты, нативный cosyvoice-server для Windows | нет |
@@ -125,7 +126,10 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 
 ## Проверка
 
-Автотестов нет. Минимум после правок:
+Минимум после правок:
+- stream-tts: `stream-tts/.venv/Scripts/python -m pytest tests/e2e` (~20 с, без видеокарты и модели; свой процесс на
+  свободном порту, Docker-версию не трогает). Новое поведение очереди, фильтров, синтеза, доступа — сценарием в
+  `tests/e2e/`; новый запрос к cosyvoice-server — и в `fake_cosyvoice.py`.
 - Python: `python -m py_compile <файлы>`; страницы инструментов и stream-tts — через preview (`.claude/launch.json`)
   с проверкой консоли и запросов.
 - Compose: `docker compose config -q`; образ — `docker compose build <сервис>`.

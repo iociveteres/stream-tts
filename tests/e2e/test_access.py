@@ -1,0 +1,93 @@
+"""Запуск и доступ: сервис поднимается с внешним cosyvoice, пароль закрывает админку и API, но не оверлей и страницу
+голосов, POST в API только JSON со своего адреса, настройки переживают перезапуск."""
+import subprocess
+
+from harness import Api, wait_for
+
+
+def test_startup_voices_and_demos(tts):
+    """Голоса берутся из GET /speaker, примеры синтезируются сами, страница голосов и mp3 отдаются."""
+    s = tts.api.state()
+    assert s["cosy"]["ok"] and s["cosy"]["url"] == tts.cosy.url
+    assert s["config"]["password"] is False
+    assert [v["name"] for v in s["voices"]] == sorted(tts.cosy.voices)
+    assert all(v["enabled"] and v["demo"] for v in s["voices"])
+    page = tts.api.get("/voices/")
+    assert page.status == 200
+    for name in tts.cosy.voices:
+        assert f"!ttssf {name}" in page.text
+        mp3 = tts.api.get(f"/voices/demos/{name}.mp3")
+        assert mp3.status == 200 and len(mp3.body) > 1000
+    assert tts.api.get("/").status == 200
+    assert tts.api.get("/overlay").status == 200
+
+
+def test_cosy_down_and_back(tts):
+    """Пропажа cosyvoice видна в состоянии, после возвращения сервис снова готов (проверка раз в 5 с)."""
+    tts.cosy.down = True
+    wait_for(lambda: tts.api.state()["cosy"]["ok"] is False, 12, "cosy.ok = false")
+    assert tts.api.state()["cosy"]["error"]
+    tts.cosy.down = False
+    wait_for(lambda: tts.api.state()["cosy"]["ok"], 12, "cosy.ok = true")
+
+
+def test_password(spawn):
+    server, _ = spawn(env=dict(STREAM_TTS_PASSWORD="secret"), password="secret")
+    api = Api(server.base)
+    # без входа: API — 401, админка — на страницу входа, открытые страницы доступны
+    assert api.get("/api/state").status == 401
+    r = api.get("/")
+    assert r.status == 302 and r.headers["Location"] == "/login"
+    for path in ("/login", "/overlay", "/voices/", "/static/overlay.html"):
+        assert api.get(path).status == 200, path
+    assert api.post("/api/enabled", dict(on=False)).status == 401
+    # неверный пароль
+    r = api.login("wrong")
+    assert r.status == 302 and r.headers["Location"] == "/login?bad=1"
+    assert api.get("/api/state").status == 401
+    # верный: cookie, дальше API доступно
+    r = api.login("secret")
+    assert r.status == 302 and r.headers["Location"] == "/"
+    s = api.state()
+    assert s["config"]["password"] is True
+    # выход стирает cookie
+    assert api.get("/logout").status == 302
+    assert api.get("/api/state").status == 401
+
+
+def test_post_guard(tts):
+    """POST в API: чужой Origin — 403, не JSON — 415; свой Origin проходит."""
+    r = tts.api.post("/api/enabled", dict(on=False), headers={"Origin": "http://evil.example"})
+    assert r.status == 403
+    r = tts.api.request("POST", "/api/enabled", data=b'{"on": false}', headers={"Content-Type": "text/plain"})
+    assert r.status == 415
+    assert tts.api.state()["engine"]["enabled"] is True
+    r = tts.api.post("/api/enabled", dict(on=True), headers={"Origin": tts.server.base})
+    assert r.status == 200
+
+
+def test_public_bind_needs_password(spawn):
+    """Адрес не localhost без пароля: сервис не стартует и объясняет почему."""
+    server, _ = spawn(env=dict(STREAM_TTS_BIND="0.0.0.0"), start=False)
+    server.spawn()
+    try:
+        code = server.proc.wait(30)
+    except subprocess.TimeoutExpired:
+        raise AssertionError("stream-tts запустился без пароля на 0.0.0.0")
+    assert code == 1
+    assert "STREAM_TTS_PASSWORD" in server.tail()
+
+
+def test_settings_survive_restart(spawn):
+    server, _ = spawn()
+    api = Api(server.base)
+    api.ok("/api/settings", dict(queue_limit=7, read_nick=True))
+    api.ok("/api/voice", dict(name="bravo", enabled=False))
+    api.ok("/api/ban", dict(login="troll"))
+    server.stop()
+
+    again, _ = spawn(workdir=server.dir)
+    s = Api(again.base).state()
+    assert s["settings"]["queue_limit"] == 7 and s["settings"]["read_nick"] is True
+    assert {v["name"]: v["enabled"] for v in s["voices"]}["bravo"] is False
+    assert s["bans"] == ["troll"]

@@ -1,0 +1,309 @@
+"""Обвязка e2e-тестов: процесс stream-tts, клиент его API, тестовый оверлей, ожидание и разбор звука.
+
+Тесты синхронные. Всё асинхронное (поддельный cosyvoice, WebSocket оверлея) живёт в цикле событий фонового
+потока (Loop), тест зовёт его через Loop.run. stream-tts — отдельный процесс со своими портом и папками данных,
+моделей и голосов во временной папке: Docker-версию на 8090 и stream-tts-data/ он не трогает."""
+import asyncio, http.cookiejar, json, os, socket, sqlite3, subprocess, sys, threading, time, urllib.error, \
+    urllib.parse, urllib.request
+
+import aiohttp
+import numpy as np
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+STREAM_TTS = os.path.join(ROOT, "stream-tts")
+SR = 24000
+
+
+def wait_for(fn, timeout=10.0, what="условие", step=0.05):
+    """Ждать, пока fn() не вернёт истину; вернуть её. Вместо sleep: тесты не зависят от скорости машины."""
+    deadline = time.monotonic() + timeout
+    while True:
+        v = fn()
+        if v:
+            return v
+        if time.monotonic() > deadline:
+            raise AssertionError(f"не дождались за {timeout} с: {what}")
+        time.sleep(step)
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class Loop:
+    """Цикл событий в фоновом потоке."""
+
+    def __init__(self):
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
+        self.thread.start()
+
+    def run(self, coro, timeout=30):
+        return asyncio.run_coroutine_threadsafe(coro, self.loop).result(timeout)
+
+    def close(self):
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join(5)
+
+
+class Response:
+    def __init__(self, status, headers, body):
+        self.status, self.headers, self.body = status, headers, body
+
+    @property
+    def text(self):
+        return self.body.decode("utf-8", "replace")
+
+    def json(self):
+        return json.loads(self.body)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **kw):
+        return None
+
+
+class Api:
+    """HTTP-клиент stream-tts со своими cookie; перенаправления не выполняет (их проверяют тесты доступа).
+    Адрес — 127.0.0.1: localhost из Python на Windows сначала пробует IPv6 и добавляет ~2 с."""
+
+    def __init__(self, base):
+        self.base = base
+        self.jar = http.cookiejar.CookieJar()
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar), _NoRedirect)
+
+    def request(self, method, path, json_body=None, data=None, headers=None, timeout=15):
+        headers = dict(headers or {})
+        if json_body is not None:
+            data = json.dumps(json_body).encode()
+            headers.setdefault("Content-Type", "application/json")
+        req = urllib.request.Request(self.base + path, data=data, method=method, headers=headers)
+        try:
+            with self.opener.open(req, timeout=timeout) as r:
+                return Response(r.status, r.headers, r.read())
+        except urllib.error.HTTPError as e:
+            return Response(e.code, e.headers, e.read())
+
+    def get(self, path, **kw):
+        return self.request("GET", path, **kw)
+
+    def post(self, path, body=None, **kw):
+        return self.request("POST", path, json_body={} if body is None else body, **kw)
+
+    def ok(self, path, body=None):
+        """POST в API, который должен пройти."""
+        r = self.post(path, body)
+        assert r.status == 200 and r.json().get("ok"), f"POST {path}: {r.status} {r.text}"
+        return r.json()
+
+    def login(self, password):
+        """Форма входа, как login.html."""
+        return self.request("POST", "/login", data=urllib.parse.urlencode(dict(password=password)).encode(),
+                            headers={"Content-Type": "application/x-www-form-urlencoded"})
+
+    def state(self):
+        r = self.get("/api/state")
+        assert r.status == 200, f"/api/state: {r.status} {r.text}"
+        return r.json()
+
+    def test(self, text, login="tester", voice=None):
+        """Тестовая активация (как кнопка «Тест» в админке): весь путь, кроме Twitch. Возвращает ID активации."""
+        body = dict(text=text, login=login)
+        if voice:
+            body["voice"] = voice
+        return self.ok("/api/test", body)["id"]
+
+
+class StreamTTS:
+    """Процесс stream-tts. Окружение очищено от переменных проекта: Client ID Twitch, пароль, адрес cosyvoice
+    задаются только тестом."""
+
+    def __init__(self, workdir, cosy_url, env=None):
+        self.dir = workdir
+        self.data = os.path.join(workdir, "data")
+        self.cosy_url = cosy_url
+        self.extra = env or {}
+        self.port = None
+        self.proc = None
+        self.log_path = os.path.join(workdir, "stream-tts.log")
+
+    def env(self):
+        env = {k: v for k, v in os.environ.items()
+               if not k.startswith(("STREAM_TTS_", "COSYVOICE_", "TWITCH_")) and k not in ("MODEL", "FFMPEG")}
+        for d in ("models", "voices", "project", "runtime"):
+            os.makedirs(os.path.join(self.dir, d), exist_ok=True)
+        env.update(
+            STREAM_TTS_PORT=str(self.port), STREAM_TTS_DATA=self.data,
+            STREAM_TTS_MODELS=os.path.join(self.dir, "models"), STREAM_TTS_VOICES=os.path.join(self.dir, "voices"),
+            # без voice-refs/ проекта: наборы и эффекты голосов задаёт тест
+            STREAM_TTS_PROJECT=os.path.join(self.dir, "project"),
+            STREAM_TTS_RUNTIME=os.path.join(self.dir, "runtime"),
+            STREAM_TTS_LANG="ru", COSYVOICE_URL=self.cosy_url, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+        env.update(self.extra)
+        return env
+
+    @property
+    def base(self):
+        return f"http://127.0.0.1:{self.port}"
+
+    def spawn(self):
+        """Запустить, не дожидаясь готовности."""
+        if self.port is None:
+            self.port = free_port()
+        self.log = open(self.log_path, "ab")
+        self.proc = subprocess.Popen([sys.executable, "-m", "streamtts"], cwd=STREAM_TTS, env=self.env(),
+                                     stdout=self.log, stderr=subprocess.STDOUT)
+        return self
+
+    def start(self, password=None):
+        """Запустить и дождаться, когда он ответит и увидит cosyvoice."""
+        self.spawn()
+        api = Api(self.base)
+        wait_for(lambda: self._up(api) and self._login(api, password) and api.state()["cosy"]["ok"], 30,
+                 f"запуск stream-tts\n{self.tail()}")
+        return self
+
+    def _up(self, api):
+        if self.proc.poll() is not None:
+            raise AssertionError(f"stream-tts завершился с кодом {self.proc.returncode}\n{self.tail()}")
+        try:
+            api.get("/login", timeout=2)
+            return True
+        except OSError:
+            return False
+
+    def _login(self, api, password):
+        return not password or api.get("/api/state").status == 200 or api.login(password).status == 302 \
+            and api.get("/api/state").status == 200
+
+    def stop(self):
+        """Остановка без on_cleanup: на Windows terminate — это TerminateProcess. Корректную остановку (награда на
+        паузу) проверят тесты Twitch."""
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            self.proc.wait(10)
+        if self.proc:
+            self.log.close()
+        self.proc = None
+
+    def tail(self, n=40):
+        try:
+            with open(self.log_path, encoding="utf-8", errors="replace") as f:
+                return "".join(f.readlines()[-n:])
+        except OSError:
+            return ""
+
+    def event(self, rid, timeout=10):
+        """Итог активации из истории (SQLite stream-tts): outcome, reason и остальное. Ждёт, пока он появится."""
+        path = os.path.join(self.data, "stream-tts.sqlite")
+
+        def row():
+            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            con.row_factory = sqlite3.Row
+            try:
+                r = con.execute("SELECT * FROM events WHERE redemption=?", (rid,)).fetchone()
+                return dict(r) if r else None
+            finally:
+                con.close()
+        return wait_for(row, timeout, f"итог активации {rid}")
+
+
+class Played:
+    def __init__(self, id, subtitle):
+        self.id, self.subtitle = id, subtitle
+        self.chunks = []
+        self.ended = False      # пришёл end: всё аудио отправлено
+        self.stopped = False    # пришёл stop: фразу прервали
+
+    @property
+    def audio(self):
+        return np.frombuffer(b"".join(self.chunks), "<i2").astype(np.float32) / 32768
+
+    @property
+    def seconds(self):
+        return sum(len(c) for c in self.chunks) / 2 / SR
+
+
+class Overlay:
+    """Тестовый оверлей: WebSocket /overlay/ws, как overlay.html. Сообщает ready и, если auto_end, ended сразу после
+    end (звук «проигран» мгновенно). Методы вызываются из потока теста."""
+
+    def __init__(self, loop, base):
+        self.loop, self.url = loop, base.replace("http", "ws", 1) + "/overlay/ws"
+        self.active = None
+        self.items = []         # Played по порядку начала
+        self.auto_end = True
+        self.session = self.ws = self.reader = None
+
+    def connect(self, ready=True):
+        self.loop.run(self._connect())
+        wait_for(lambda: self.active is not None, 5, "ответ оверлею: active/inactive")
+        if ready:
+            self.ready()
+        return self
+
+    async def _connect(self):
+        self.session = aiohttp.ClientSession()
+        self.ws = await self.session.ws_connect(self.url)
+        self.reader = asyncio.create_task(self._read())
+
+    async def _read(self):
+        cur = None
+        async for msg in self.ws:
+            if msg.type == aiohttp.WSMsgType.BINARY:
+                if cur:
+                    cur.chunks.append(msg.data)
+                continue
+            if msg.type != aiohttp.WSMsgType.TEXT:
+                continue
+            d = json.loads(msg.data)
+            t = d.get("type")
+            if t in ("active", "inactive"):
+                self.active = t == "active"
+            elif t == "start":
+                cur = Played(d["id"], d.get("subtitle", ""))
+                self.items.append(cur)
+            elif t == "end" and cur and cur.id == d["id"]:
+                cur.ended = True
+                if self.auto_end:
+                    await self.ws.send_json(dict(type="ended", id=d["id"]))
+            elif t == "stop":
+                for it in self.items:
+                    if it.id == d["id"]:
+                        it.stopped = True
+
+    def ready(self, on=True):
+        self.loop.run(self.ws.send_json(dict(type="ready", ready=on)))
+
+    def ended(self, rid):
+        self.loop.run(self.ws.send_json(dict(type="ended", id=rid)))
+
+    def played(self, rid, timeout=10):
+        """Фраза rid, дошедшая до конца (end)."""
+        return wait_for(lambda: next((it for it in self.items if it.id == rid and it.ended), None), timeout,
+                        f"фраза {rid} в оверлее")
+
+    def close(self):
+        async def _close():
+            if self.ws:
+                await self.ws.close()
+            if self.reader:
+                self.reader.cancel()
+            if self.session:
+                await self.session.close()
+        self.loop.run(_close())
+
+
+# --- разбор звука ---
+def dominant_hz(x):
+    spec = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+    return float(np.fft.rfftfreq(len(x), 1 / SR)[np.argmax(spec)])
+
+
+def band_share(x, hz, width=30):
+    """Доля энергии сигнала в полосе hz ± width."""
+    spec = np.abs(np.fft.rfft(x)) ** 2
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    return float(spec[(f > hz - width) & (f < hz + width)].sum() / spec.sum())
