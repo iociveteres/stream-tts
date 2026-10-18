@@ -12,6 +12,10 @@ ID = "https://id.twitch.tv/oauth2"
 HELIX = "https://api.twitch.tv/helix"
 EVENTSUB = "wss://eventsub.wss.twitch.tv/ws"
 SCOPES = "channel:manage:redemptions user:read:chat"
+# Для ответов зрителю в чат при отказе. Не обязателен: вход, сделанный до его появления, продолжает работать, а
+# ответы включаются после повторного входа (интерфейс подсказывает)
+REPLY_SCOPE = "user:write:chat"
+LOGIN_SCOPES = f"{SCOPES} {REPLY_SCOPE}"
 REDEMPTION = "channel.channel_points_custom_reward_redemption.add"
 CHAT = "channel.chat.message"
 
@@ -56,6 +60,7 @@ class Twitch:
         self.msg_ids = collections.deque(maxlen=200)
         self.refresh_lock = asyncio.Lock()
         self.tasks = {}
+        self.reply_error = ""        # последняя ошибка ответа зрителю (показывается у настройки)
 
     @property
     def client_id(self):
@@ -73,6 +78,7 @@ class Twitch:
         return dict(state=self.state, error=self.error, client_id=self.client_id,
                     client_id_env=bool(config.TWITCH_CLIENT_ID and not self.s["client_id"]),
                     login=self.login, device=self.device, ws=self.ws_state,
+                    scopes=(self.tok or {}).get("scopes", []), reply_error=self.reply_error,
                     reward=dict(self.s["reward"], exists=bool(self.reward),
                                 paused=(self.reward or {}).get("is_paused")))
 
@@ -142,7 +148,7 @@ class Twitch:
         """Device Code Flow: код для twitch.tv/activate. Ошибка здесь почти всегда — неверный Client ID."""
         self.error = ""
         try:
-            async with self.http.post(f"{ID}/device", data=dict(client_id=self.client_id, scopes=SCOPES)) as r:
+            async with self.http.post(f"{ID}/device", data=dict(client_id=self.client_id, scopes=LOGIN_SCOPES)) as r:
                 data = await r.json(content_type=None)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as e:
             self.error = tr("Twitch недоступен: {e}", e=e or type(e).__name__)
@@ -162,7 +168,7 @@ class Twitch:
         while time.time() < self.device["expires"]:
             await asyncio.sleep(interval)
             async with self.http.post(f"{ID}/token", data=dict(
-                    client_id=self.client_id, scopes=SCOPES, device_code=device_code,
+                    client_id=self.client_id, scopes=LOGIN_SCOPES, device_code=device_code,
                     grant_type="urn:ietf:params:oauth:grant-type:device_code")) as r:
                 data = await r.json(content_type=None)
             if r.status == 200:
@@ -190,7 +196,7 @@ class Twitch:
                    expires_at=time.time() + data.get("expires_in", 3600), client_id=self.client_id)
         if user or self.tok:
             src = user or self.tok
-            tok.update(user_id=src.get("user_id"), login=src.get("login"))
+            tok.update(user_id=src.get("user_id"), login=src.get("login"), scopes=src.get("scopes", []))
         return tok
 
     async def logout(self):
@@ -233,7 +239,7 @@ class Twitch:
                 missing = set(SCOPES.split()) - set(data.get("scopes") or [])
                 if missing:
                     raise AuthExpired()
-                self.tok.update(user_id=data["user_id"], login=data["login"])
+                self.tok.update(user_id=data["user_id"], login=data["login"], scopes=data.get("scopes") or [])
                 self._save_token(self.tok)
                 return data
             if attempt == 0:
@@ -330,7 +336,7 @@ class Twitch:
             self.s.save()
             return
         await self.refund_leftovers()
-        await self.set_paused(not self.s["enabled"])
+        await self.set_paused(self.want_paused())
 
     def _reward_body(self, cfg):
         cooldown = max(0, int(cfg.get("cooldown") or 0))
@@ -356,7 +362,7 @@ class Twitch:
             self.s.save()
             log.info("награда создана: %s", self.s["reward"]["id"])
         self.reward = data["data"][0]
-        await self.set_paused(not self.s["enabled"])
+        await self.set_paused(self.want_paused())
         if self.session_id:
             await self._subscribe(self.session_id)
 
@@ -369,6 +375,10 @@ class Twitch:
         self.s.save()
         self.reward = None
         self.subscribed.discard(REDEMPTION)
+
+    def want_paused(self):
+        """Награда на паузе, пока озвучка выключена или способ «награда» отключён: баллы не тратятся впустую."""
+        return not (self.s["enabled"] and self.s["sources"]["reward"]["on"])
 
     async def set_paused(self, paused, force=False):
         rid = self.s["reward"]["id"]
@@ -383,6 +393,24 @@ class Twitch:
         except TwitchError as e:
             log.warning("пауза награды: %s", e)
             self.error = explain(e)
+
+    # --- ответ зрителю ---
+    async def tell(self, display, text, reply_to=""):
+        """Ответ об отказе в чат: ответом на сообщение с командой, иначе с @ником. Личные сообщения отвергнуты:
+        у Twitch на них много ограничений (подтверждённый телефон, около 40 новых собеседников в день), и они
+        забивали бы личку стримера незнакомцами."""
+        body = dict(broadcaster_id=self.user_id, sender_id=self.user_id, message=text if reply_to else f"@{display} {text}")
+        if reply_to:
+            body["reply_parent_message_id"] = reply_to
+        try:
+            data = await self.api("POST", "/chat/messages", None, body)
+            drop = ((data or {}).get("data") or [{}])[0].get("drop_reason")
+            if drop:   # Twitch принял запрос, но не пропустил сообщение (AutoMod, режим чата)
+                raise TwitchError(200, drop.get("message") or drop.get("code"))
+            self.reply_error = ""
+        except (TwitchError, aiohttp.ClientError) as e:
+            log.warning("ответ в чат %s: %s", display, e)
+            self.reply_error = tr("Ответ в чат не отправлен: {e}", e=explain(e))
 
     # --- активации ---
     async def set_status(self, reward_id, ids, status):

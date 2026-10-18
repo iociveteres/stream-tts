@@ -34,10 +34,13 @@ def period(db, hours, include_test=False):
     voices = q(f"SELECT voice, COUNT(*) n FROM events WHERE {where} AND outcome='played' "
                f"GROUP BY voice ORDER BY n DESC LIMIT 10")
     viewers = q(f"SELECT login, COUNT(*) n FROM events WHERE {where} GROUP BY login ORDER BY n DESC LIMIT 10")
+    # source появился позже chat и test: у старых записей способ восстанавливается по ним
+    sources = q(f"SELECT COALESCE(source, CASE WHEN test=1 THEN 'test' WHEN chat=1 THEN 'chat' ELSE 'reward' END) "
+                f"source, COUNT(*) n FROM events WHERE {where} AND outcome='played' GROUP BY 1 ORDER BY n DESC")
     reasons = q(f"SELECT reason, COUNT(*) n FROM events WHERE {where} AND outcome!='played' "
                 f"GROUP BY reason ORDER BY n DESC")
     timing = q(f"SELECT AVG(wait_ms) wait_ms, SUM(synth_ms) synth_ms, SUM(audio_ms) audio_ms, AVG(audio_ms) avg_audio "
                f"FROM events WHERE {where} AND outcome='played'")[0]
     ratio = (timing["synth_ms"] / timing["audio_ms"]) if timing["audio_ms"] else None
     return dict(hours=hours, since=since, total=total, by_hour=by_hour, voices=voices, viewers=viewers,
-                reasons=reasons, wait_ms=timing["wait_ms"], avg_audio_ms=timing["avg_audio"], synth_ratio=ratio)
+                sources=sources, reasons=reasons, wait_ms=timing["wait_ms"], avg_audio_ms=timing["avg_audio"], synth_ratio=ratio)

@@ -50,6 +50,12 @@ class Voices:
         self.progress = dict(todo=0, current="", error="")
         self._manifests = (0, {}, {})
         self.preempted = False
+        self.rev = 0   # меняется вместе со списком голосов и примерами: админка получает новый список по ws
+
+    def changed(self):
+        self.rev += 1
+        if self.engine:
+            self.engine.dirty.set()
 
     # --- список ---
     def names(self):
@@ -78,6 +84,7 @@ class Voices:
                 self.s.voice(n)
             self.s.update(known_voices=names)
             log.info("голоса: %d (новые: %s)", len(names), ", ".join(sorted(added)) or "нет")
+            self.changed()
             self.wake.set()
 
     # --- эффекты ---
@@ -154,6 +161,7 @@ class Voices:
         self.index[voice] = dict(phrase=phrase, lufs=round(lufs, 2) if math.isfinite(lufs) else None, ts=time.time())
         store.write_json(self.index_path, self.index)
         log.info("пример %s: %.1f LUFS, %d КБ", voice, lufs, len(mp3) // 1024)
+        self.changed()
 
     async def demo_worker(self):
         """Досинтезирует недостающие примеры, пока нет живой очереди."""

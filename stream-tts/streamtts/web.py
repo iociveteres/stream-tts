@@ -1,10 +1,11 @@
 """HTTP: админка (под паролем), оверлей и страница голосов (открыты), API и WebSocket."""
-import asyncio, contextlib, hashlib, hmac, json, logging, os, secrets, tempfile, time, urllib.parse
+import asyncio, contextlib, hashlib, hmac, json, logging, os, re, secrets, tempfile, time, urllib.parse
 
 from aiohttp import web
 
 from . import config, i18n, install, runtime, stats
 from .i18n import tr
+from .engine import SERVICE_COMMANDS
 from .twitch import TwitchError, explain
 
 log = logging.getLogger("web")
@@ -132,8 +133,9 @@ async def voices_zip(request):
 
 
 # --- состояние ---
-SETTINGS_KEYS = ("enabled", "access", "filter_links", "filter_profanity", "read_nick", "subtitles", "queue_limit",
-                 "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "chat_all", "lang")
+SETTINGS_KEYS = ("enabled", "sources", "reply", "filter_links", "filter_profanity", "read_nick", "subtitles",
+                 "queue_limit", "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "lang")
+ACCESS_LEVELS = ("all", "subs", "vip", "mods")
 
 
 def state(ctx, full=True):
@@ -170,6 +172,7 @@ async def admin_ws(request):
     await ws.prepare(request)
     ctx.admins += 1
     try:
+        rev = ctx.voices.rev
         await ws.send_json(state(ctx))
         reader = asyncio.create_task(ws.receive())
         while not ws.closed:
@@ -179,7 +182,11 @@ async def admin_ws(request):
             await asyncio.sleep(0.15)  # пачка изменений одним сообщением
             if reader.done():
                 break
-            await ws.send_json(state(ctx, full=False))
+            part = state(ctx, full=False)
+            if ctx.voices.rev != rev:  # набор установлен или удалён, готов пример: без этого нужна перезагрузка страницы
+                rev = ctx.voices.rev
+                part["voices"] = ctx.voices.public()
+            await ws.send_json(part)
         reader.cancel()
     except (ConnectionResetError, RuntimeError):
         pass
@@ -223,7 +230,7 @@ def fail(msg, status=400):
 async def post_settings(request, ctx, data):
     s = ctx.settings
     for k, v in list(data.items()):
-        if k not in SETTINGS_KEYS or k == "enabled":
+        if k not in SETTINGS_KEYS or k in ("enabled", "sources"):
             continue
         if k in ("queue_limit", "max_chars"):
             v = max(1, int(v))
@@ -231,7 +238,7 @@ async def post_settings(request, ctx, data):
             v = max(0.0, float(v))
         elif k == "chunk_tokens":
             v = min(1000, max(10, int(v)))
-        elif k == "access" and v not in ("all", "subs", "vip", "mods"):
+        elif k == "reply" and v not in ("off", "chat"):
             continue
         elif k == "lang":
             if v in i18n.LANGS and v != s["lang"] and i18n.set_lang(s, v):
@@ -242,6 +249,36 @@ async def post_settings(request, ctx, data):
     if "demo_phrase" in data:
         ctx.voices.wake.set()
     return ok()
+
+
+async def post_source(request, ctx, data):
+    """Способ заказа озвучки (sources в настройках): включён ли, кто может, список ников, у команды — имя и кулдауны."""
+    name = data.get("source")
+    src = ctx.settings["sources"].get(name)
+    if src is None:
+        return fail(tr("нет такого способа"))
+    for k, v in data.items():
+        if k == "on":
+            src["on"] = bool(v)
+        elif k == "access" and v in ACCESS_LEVELS:
+            src["access"] = v
+        elif k == "allow":
+            items = v if isinstance(v, list) else re.split(r"[\s,;]+", str(v))
+            src["allow"] = sorted({n.strip().lstrip("@").lower() for n in items if n.strip().lstrip("@")})
+        elif name == "command" and k == "name":
+            cmd = "!" + str(v).strip().lstrip("!").lower()
+            if not re.fullmatch(r"![\w-]{1,25}", cmd):
+                return fail(tr("команда — «!» и одно слово, например !tts"))
+            if cmd in SERVICE_COMMANDS:
+                return fail(tr("{cmd} — служебная команда, выберите другое имя", cmd=cmd))
+            src["name"] = cmd
+        elif name == "command" and k in ("user_cd", "global_cd"):
+            src[k] = min(3600, max(0, int(v)))
+    ctx.settings.save()
+    if name == "reward" and "on" in data:
+        await ctx.twitch.set_paused(ctx.twitch.want_paused())
+    ctx.engine.dirty.set()
+    return ok(source=src)
 
 
 async def post_voice(request, ctx, data):
@@ -440,6 +477,7 @@ def _wrap(fn):
 
 POSTS = {path: _wrap(fn) for path, fn in {
     "/api/settings": post_settings,
+    "/api/source": post_source,
     "/api/voice": post_voice,
     "/api/demos/rebuild": post_demos_rebuild,
     "/api/twitch/client_id": post_client_id,

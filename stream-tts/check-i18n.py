@@ -1,8 +1,8 @@
 """Проверка английского словаря stream-tts (streamtts/static/en.json, механизм — streamtts/i18n.py).
 
 Ищет строки, которым нужен перевод: tr("…") в streamtts/*.py, T("…") в static/admin.js и static/overlay.html,
-{{t:…}} в static/voices.html, плюс константы, которые переводятся при показе (причины возврата R_* в engine.py,
-HELIX_HINTS, GROUPS, note и подписи примеров в install.py). Печатает ключи без перевода, переводы с кириллицей и
+{{t:…}} в static/voices.html, плюс константы, которые переводятся при показе (причины возврата R_*, REPLIES и ACCESS_WHO в engine.py,
+HELIX_HINTS, GROUPS, подписи примеров в install.py). Печатает ключи без перевода, переводы с кириллицей и
 расхождения подстановок {имя}. Код выхода 1, если что-то нашлось.
 
 Текст из разметки (admin.html, login.html) так не виден: его проверяет страница. Открыть админку на английском
@@ -37,12 +37,13 @@ def python_keys():
         if name == "engine.py":
             for m in re.finditer(r'^R_\w+(?:, R_\w+)* = \(?((?:"[^"]*"(?:,\s*)?)+)', src, re.M):
                 keys.update(re.findall(r'"([^"]*)"', m[1]))
+            for d in ("REPLIES", "ACCESS_WHO"):  # ответы зрителю при отказе
+                keys.update(re.findall(r': "([^"]+)"', re.search(d + r" = \{(.*?)\}\n", src, re.S)[1]))
         elif name == "twitch.py":
             keys.update(re.findall(r'^\s+"[^"]+": "([^"]+)",$', src.split("HELIX_HINTS")[1].split("}")[0], re.M))
         elif name == "voices.py":
             keys.update(re.findall(r'"\w+": "([^"]+)"', src.split("GROUPS = ")[1].split("\n")[0]))
         elif name == "install.py":
-            keys.update(re.findall(r'note="([^"]+)"', src))
             keys.update(re.findall(r'SAMPLES = \(\("[\w-]+", "([^"]+)"\),\)', src))
     return keys
 

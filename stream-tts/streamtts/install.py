@@ -29,10 +29,9 @@ BASE = f"https://huggingface.co/{REPO}/resolve/main"
 # ohf-denis — из датасета ru_RU-denis (OHF-Voice/voice-datasets, CC0), чтобы примеры можно было распространять;
 # как он собран — docs/stream-tts.md.
 QUANTS = {
-    "Q8_0": dict(size=943933536, vram=1500, vram_max=1900, note="Лучшее качество, рекомендация автора модели"),
-    "Q6_K": dict(size=839539424, vram=1450, vram_max=1800, note="На слух как Q8_0, видеопамяти на ~0,1 ГБ меньше"),
-    "Q5_K_M": dict(size=682814464, vram=1300, vram_max=1700,
-                   note="Для видеокарт с 4 ГБ: видеопамяти на ~0,2 ГБ меньше"),
+    "Q8_0": dict(size=943933536, vram=1500, vram_max=1900),
+    "Q6_K": dict(size=839539424, vram=1450, vram_max=1800),
+    "Q5_K_M": dict(size=682814464, vram=1300, vram_max=1700),
 }
 DEFAULT_QUANT = "Q8_0"  # рекомендация автора модели
 SAMPLES = (("ohf-denis", "Пример"),)  # голос в установщике — SampleVoice в StreamTTS.iss
@@ -73,7 +72,7 @@ class Installer:
 
     # --- состояние для админки ---
     def public(self):
-        quants = [dict(QUANTS[q], quant=q, file=model_name(q), note=tr(QUANTS[q]["note"])) for q in QUANTS]
+        quants = [dict(QUANTS[q], quant=q, file=model_name(q)) for q in QUANTS]
         samples = [(voice, tr(label)) for voice, label in SAMPLES]
         return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=samples, sample_phrase=SAMPLE_PHRASE,
                     models=installed_models(),

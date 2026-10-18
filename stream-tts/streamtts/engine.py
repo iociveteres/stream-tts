@@ -1,5 +1,5 @@
 """Очередь озвучки: приём активаций, синтез (одна фраза вперёд), воспроизведение через оверлей, команды чата."""
-import asyncio, collections, contextlib, json, logging, time
+import asyncio, collections, contextlib, json, logging, math, time
 
 import numpy as np
 from aiohttp import WSMsgType, web
@@ -19,6 +19,15 @@ ACCESS = {"all": None, "mods": MODS, "vip": MODS | {"vip"}, "subs": MODS | {"vip
 R_OFF, R_BAN, R_ACCESS, R_EMPTY, R_FULL = "озвучка выключена", "бан", "уровень доступа", "пустой текст", "очередь полна"
 R_NOVOICE, R_SYNTH, R_SKIP, R_CLEAR, R_RESTART = ("нет голосов", "ошибка синтеза", "!ttsskip", "!ttsclear",
                                                   "остались после перезапуска")
+R_COOLDOWN = "кулдаун"
+# Ответ зрителю при отказе (настройка reply): бан не объясняется, ошибки синтеза и пропуски — не отказ при приёме
+REPLIES = {R_OFF: "озвучка сейчас выключена", R_ACCESS: "озвучка доступна только {who}",
+           R_EMPTY: "после фильтров озвучивать нечего", R_FULL: "очередь озвучки заполнена, попробуйте позже",
+           R_NOVOICE: "нет доступных голосов", R_COOLDOWN: "озвучка снова будет доступна через {n} с"}
+ACCESS_WHO = {"subs": "сабам, VIP и модерам", "vip": "VIP и модерам", "mods": "модерам"}
+REPLY_EVERY = 30   # с: не чаще одного ответа зрителю, иначе спам командой во время кулдауна превращается в спам ответами
+# Команды сервиса: имя команды озвучки не может с ними совпадать
+SERVICE_COMMANDS = ("!ttssf", "!ttsskip", "!ttsclear", "!ttsban", "!ttsunban", "!ttson", "!ttsoff")
 
 
 def max_samples(text):
@@ -27,10 +36,10 @@ def max_samples(text):
 
 
 class Item:
-    def __init__(self, rid, reward_id, user_id, login, display, raw, test=False, chat=False):
+    def __init__(self, rid, reward_id, user_id, login, display, raw, source="reward", msg_id=""):
         self.id, self.reward_id, self.user_id, self.login, self.display = rid, reward_id, user_id, login, display
-        self.raw, self.test = raw, test
-        self.chat = chat        # сообщение чата (режим chat_all): баллов нет, возвращать нечего
+        self.raw, self.source = raw, source   # source: reward | command | chat | test
+        self.msg_id = msg_id    # сообщение чата с командой: на него отвечают при отказе
         self.text = ""          # после фильтров
         self.speak = ""         # что синтезируется (с «<ник> говорит:»)
         self.voice = ""
@@ -44,9 +53,18 @@ class Item:
         self.synth_ms = None
         self.play_start = None
 
+    @property
+    def test(self):
+        return self.source == "test"
+
+    @property
+    def chat(self):
+        """Команда и сообщения чата: баллов нет, возвращать нечего."""
+        return self.source in ("command", "chat")
+
     def public(self, playing=False):
         return dict(id=self.id, login=self.login, display=self.display, text=self.text, voice=self.voice,
-                    state="playing" if playing else self.state, test=self.test, chat=self.chat,
+                    state="playing" if playing else self.state, source=self.source,
                     age=round(time.time() - self.received),
                     audio=round(self.samples / SR, 1))
 
@@ -124,6 +142,8 @@ class Engine:
         self.rtf = collections.deque(maxlen=20)  # время синтеза / длина аудио
         self.journal = collections.deque(maxlen=50)
         self.dirty = asyncio.Event()
+        self.cd_user, self.cd_global = {}, 0.0   # кулдауны команды: user_id -> время приёма
+        self.replied = {}                         # user_id -> время последнего ответа об отказе
 
     # --- общее ---
     async def poke(self):
@@ -147,11 +167,27 @@ class Engine:
                     rtf=round(sum(self.rtf) / len(self.rtf), 2) if self.rtf else None)
 
     # --- приём активаций ---
-    def access_ok(self, user_id):
-        need = ACCESS.get(self.s["access"])
-        if need is None or (self.twitch and user_id == self.twitch.user_id):
-            return True
-        return bool(self.db.badges(user_id) & need)
+    def src(self, item):
+        return self.s["sources"].get(item.source, {})
+
+    def privileged(self, item):
+        """Стример, модеры и ники из списка способа: мимо уровня доступа и кулдаунов."""
+        return bool(item.login in self.src(item).get("allow", [])
+                    or (self.twitch and item.user_id == self.twitch.user_id)
+                    or self.db.badges(item.user_id) & MODS)
+
+    def access_ok(self, item):
+        need = ACCESS.get(self.src(item).get("access", "all"))
+        return need is None or self.privileged(item) or bool(self.db.badges(item.user_id) & need)
+
+    def cooldown_left(self, item):
+        """Секунд до конца кулдауна команды (на зрителя и общего); 0 — можно."""
+        if item.source != "command" or self.privileged(item):
+            return 0
+        c, now = self.src(item), time.time()
+        left = max(self.cd_user.get(item.user_id, 0) + int(c.get("user_cd") or 0),
+                   self.cd_global + int(c.get("global_cd") or 0)) - now
+        return max(0, math.ceil(left))
 
     def voice_for(self, user_id, login):
         u = self.db.user(user_id)
@@ -176,32 +212,36 @@ class Engine:
         if rid in self.seen:
             return
         self.seen.add(rid)
-        item = Item(rid, reward_id, user_id, login.lower(), display or login, raw or "", test)
+        item = Item(rid, reward_id, user_id, login.lower(), display or login, raw or "", "test" if test else "reward")
         if not test:
             self.db.touch_user(user_id, item.login)
         await self._accept(item)
 
-    async def chat_message(self, ev):
-        """Режим «все сообщения чата»: сообщение проходит тот же путь, что награда, но без баллов."""
+    async def chat_message(self, ev, source="chat", prefix=""):
+        """Сообщение чата (все сообщения или команда озвучки): тот же путь, что награда, но без баллов."""
         frags = ev.get("message", {}).get("fragments") or []
         if ev.get("reply") and frags and frags[0].get("type") == "mention":
             frags = frags[1:]   # ответ начинается с @ника того, кому отвечают: его не читаем
         # эмоуты и cheer-эмоуты — это имена картинок (Kappa, Cheer100), читаются только текст и упоминания
-        raw = "".join(f.get("text", "") for f in frags if f.get("type") in ("text", "mention"))
+        raw = "".join(f.get("text", "") for f in frags if f.get("type") in ("text", "mention")).strip()
+        if prefix and raw.lower().startswith(prefix):
+            raw = raw[len(prefix):].strip()
         login = ev["chatter_user_login"].lower()
-        item = Item("chat-" + ev["message_id"], "", ev["chatter_user_id"], login,
-                    ev.get("chatter_user_name") or login, raw, chat=True)
+        item = Item(f"{source}-{ev['message_id']}", "", ev["chatter_user_id"], login,
+                    ev.get("chatter_user_name") or login, raw, source, ev["message_id"])
         await self._accept(item)
 
     async def _accept(self, item):
         user_id = item.user_id
-        reason = None
-        if not self.s["enabled"]:
+        reason, wait = None, 0
+        if not self.s["enabled"] or (not item.test and not self.src(item).get("on")):
             reason = R_OFF
         elif self.db.banned(item.login):
             reason = R_BAN
-        elif not self.access_ok(user_id):
+        elif not item.test and not self.access_ok(item):
             reason = R_ACCESS
+        elif wait := self.cooldown_left(item):
+            reason = R_COOLDOWN
         else:
             spoken = self.clean(item.raw)   # мат помечен filters.BEEP: там будет писк
             item.text = spoken.replace(filters.BEEP, filters.BEEP_SHOWN)
@@ -214,13 +254,17 @@ class Engine:
                 if not item.voice:
                     reason = R_NOVOICE
         if reason:
-            if item.chat:  # чат не засоряет журнал и историю: без доступа, бана и т. п. сообщение просто не читается
-                if reason == R_FULL:
+            if item.source != "chat":
+                self.reply(item, reason, wait)
+            if item.chat:  # чат и команда не засоряют историю: баллов нет, возвращать нечего
+                if reason == R_FULL or item.source == "command":
                     self.note(tr("{who}: сообщение чата не озвучено ({reason})", who=item.display, reason=tr(reason)))
                 return
             self.note(tr("{who}: возврат ({reason})", who=item.display, reason=tr(reason)))
             await self.resolve(item, "refund", reason)
             return
+        if item.source == "command":
+            self.cd_user[user_id] = self.cd_global = time.time()
         if self.s["read_nick"]:
             nick = self.profanity.clean(item.display) if self.s["filter_profanity"] else item.display
             spoken = tr("{nick} говорит: {text}", nick=nick, text=spoken)
@@ -243,8 +287,25 @@ class Engine:
         self.db.log(redemption=item.id, ts=item.received, user_id=item.user_id, login=item.login,
                     voice=item.voice or None, text_len=len(item.text or item.raw), outcome=outcome, reason=reason,
                     wait_ms=wait, synth_ms=item.synth_ms, audio_ms=round(item.samples / SR * 1000) or None,
-                    test=int(item.test), chat=int(item.chat))
+                    test=int(item.test), chat=int(item.chat), source=item.source)
         await self.poke()
+
+    def reply(self, item, reason, wait=0):
+        """Зрителю — почему не озвучено (настройка reply: chat — ответом в чате, off — молча)."""
+        mode = self.s["reply"]
+        if mode == "off" or item.test or reason not in REPLIES or not self.twitch or self.twitch.state != "ok":
+            return
+        now = time.time()
+        if now - self.replied.get(item.user_id, 0) < REPLY_EVERY:
+            return
+        self.replied[item.user_id] = now
+        if item.source == "command" and reason == R_EMPTY and not item.raw.strip():
+            text = tr("напишите текст после команды: {cmd} привет", cmd=self.src(item)["name"])
+        else:
+            text = tr(REPLIES[reason], n=wait, who=tr(ACCESS_WHO.get(self.src(item).get("access"), "")))
+        if item.source == "reward":
+            text += tr(", баллы вернутся")
+        asyncio.create_task(self.twitch.tell(item.display, text, item.msg_id))
 
     # --- управление ---
     async def cancel(self, item, reason):
@@ -282,7 +343,7 @@ class Engine:
         if not on:
             await self.clear(by, R_OFF)
         if self.twitch:
-            await self.twitch.set_paused(not on)
+            await self.twitch.set_paused(self.twitch.want_paused())
         await self.poke()
 
     async def chat(self, ev):
@@ -291,16 +352,20 @@ class Engine:
         uid, login = ev["chatter_user_id"], ev["chatter_user_login"].lower()
         badges = {b["set_id"] for b in ev.get("badges") or []}
         self.db.touch_user(uid, login, badges)
+        src = self.s["sources"]
         if not text.startswith("!"):
             # Сообщение, отправленное вместе с нашей наградой, уже озвучивается как активация
-            if self.s["chat_all"] and text and (not self.twitch or
-                                                ev.get("channel_points_custom_reward_id") != self.s["reward"]["id"]):
+            if src["chat"]["on"] and text and (not self.twitch or
+                                               ev.get("channel_points_custom_reward_id") != self.s["reward"]["id"]):
                 await self.chat_message(ev)
             return
-        if not text.lower().startswith("!tts"):
-            return   # команды других ботов не читаются
         parts = text.split()
         cmd, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
+        if src["command"]["on"] and cmd == src["command"]["name"]:
+            await self.chat_message(ev, "command", cmd)
+            return
+        if not cmd.startswith("!tts"):
+            return   # команды других ботов не читаются
         if cmd == "!ttssf":
             v = self.voices.find(arg)
             if v:  # неизвестный или выключенный голос молча игнорируется

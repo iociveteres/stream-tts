@@ -8,12 +8,18 @@ DEFAULTS = {
     "client_id": "",
     "enabled": True,
     "reward": {"id": "", "title": REWARD["title"]["ru"], "cost": 500, "cooldown": 0, "prompt": REWARD["prompt"]["ru"]},
-    "access": "all",            # all | subs | vip | mods
+    # Способы заказать озвучку: on, кто может (access: all | subs | vip | mods), allow — ники, которым способ доступен
+    # всегда (мимо access и кулдаунов, но не мимо бана). У команды баллов нет, поэтому от спама — кулдауны, с.
+    "sources": {
+        "reward": {"on": True, "access": "all", "allow": []},
+        "command": {"on": False, "name": "!tts", "access": "subs", "allow": [], "user_cd": 60, "global_cd": 0},
+        "chat": {"on": False, "access": "all", "allow": []},
+    },
+    "reply": "chat",            # ответ зрителю при отказе команды или награды: off | chat
     "filter_links": True,
     "filter_profanity": True,
     "read_nick": False,
-    "chat_all": False,          # озвучивать все сообщения чата, не только награду
-    "subtitles": True,
+    "subtitles": False,         # субтитры в оверлее
     "queue_limit": 20,
     "streaming": True,
     "max_chars": 500,
@@ -51,6 +57,15 @@ class Settings:
                 self.data[k].update(v)
             else:
                 self.data[k] = v
+        # Настройки до способов заказа: общий уровень доступа и галочка «все сообщения чата»
+        if "sources" not in data and ("access" in data or "chat_all" in data):
+            for src in ("reward", "chat"):
+                self.data["sources"][src]["access"] = data.get("access", "all")
+            self.data["sources"]["chat"]["on"] = bool(data.get("chat_all"))
+        for k in ("access", "chat_all"):
+            self.data.pop(k, None)
+        for name, d in DEFAULTS["sources"].items():  # новые поля способа после обновления
+            self.data["sources"][name] = {**copy.deepcopy(d), **self.data["sources"].get(name, {})}
 
     def __getitem__(self, key):
         return self.data[key]
@@ -80,7 +95,7 @@ CREATE TABLE IF NOT EXISTS bans (login TEXT PRIMARY KEY, ts REAL);
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY, redemption TEXT, ts REAL, user_id TEXT, login TEXT, voice TEXT,
     text_len INTEGER, outcome TEXT, reason TEXT, wait_ms INTEGER, synth_ms INTEGER, audio_ms INTEGER,
-    test INTEGER DEFAULT 0, chat INTEGER DEFAULT 0);
+    test INTEGER DEFAULT 0, chat INTEGER DEFAULT 0, source TEXT);
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
 """
 
@@ -93,8 +108,11 @@ class DB:
         self.con.row_factory = sqlite3.Row
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.executescript(SCHEMA)
-        if "chat" not in {r[1] for r in self.con.execute("PRAGMA table_info(events)")}:  # база до режима чата
+        cols = {r[1] for r in self.con.execute("PRAGMA table_info(events)")}
+        if "chat" not in cols:  # база до режима чата
             self.con.execute("ALTER TABLE events ADD COLUMN chat INTEGER DEFAULT 0")
+        if "source" not in cols:  # база до способов заказа: reward | command | chat | test
+            self.con.execute("ALTER TABLE events ADD COLUMN source TEXT")
         self.lock = threading.Lock()
 
     def q(self, sql, *args):
@@ -141,7 +159,7 @@ class DB:
     # --- история ---
     def log(self, **e):
         cols = ("redemption", "ts", "user_id", "login", "voice", "text_len", "outcome", "reason",
-                "wait_ms", "synth_ms", "audio_ms", "test", "chat")
+                "wait_ms", "synth_ms", "audio_ms", "test", "chat", "source")
         self.q(f"INSERT INTO events({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
                *(e.get(c) for c in cols))
 

@@ -87,21 +87,58 @@
 <!-- ============ Twitch ============ -->
 <section id="tab-twitch" class="tab">
   <div class="card" id="login-card"></div>
-  <div class="card" id="reward-card" hidden>
-    <h2>Награда за баллы канала</h2>
-    <p class="muted small">Награду создаёт сервис: только у награды, созданной своим Client ID, можно отмечать активации
-      сыгранными и возвращать баллы. Текст от зрителя обязателен.</p>
-    <form id="reward" class="rgrid">
-      <label>Название <input name="title" maxlength="45" required></label>
-      <label>Цена, баллов <input name="cost" type="number" min="1" required></label>
-      <label>Кулдаун, с <input name="cooldown" type="number" min="0" max="604800"></label>
-      <label class="wide">Описание для зрителей <input name="prompt" maxlength="200"></label>
-      <div class="wide row">
-        <button class="primary" id="reward-save">Создать награду</button>
-        <button type="button" class="danger" id="reward-delete" hidden>Удалить награду</button>
-        <span id="reward-state" class="muted"></span>
+  <div class="card" id="sources-card" hidden>
+    <h2>Как зрители заказывают озвучку</h2>
+    <p class="muted small">Способы работают одновременно. Бан, фильтры и лимит очереди действуют везде. Стример, модеры
+      и ники из списка «Всегда доступно» проходят мимо уровня доступа и кулдаунов. Статус зрителя сервис узнаёт по
+      значкам в чате: кто ещё не писал в чат, пока сервис работает, считается обычным зрителем.</p>
+    <div class="src" data-src="reward">
+      <label class="check src-head"><input type="checkbox" data-k="on"> <b>Награда за баллы канала</b>
+        <span id="reward-state" class="muted small"></span></label>
+      <div class="src-body">
+        <p class="muted small">Награду создаёт сервис: только у награды, созданной своим Client ID, можно отмечать
+          активации сыгранными и возвращать баллы. Текст от зрителя обязателен. Если озвучить не вышло, баллы
+          возвращаются. Выключенный способ ставит награду на паузу.</p>
+        <form id="reward" class="rgrid">
+          <label>Название <input name="title" maxlength="45" required></label>
+          <label>Цена, баллов <input name="cost" type="number" min="1" required></label>
+          <label>Кулдаун, с <input name="cooldown" type="number" min="0" max="604800"></label>
+          <label class="wide">Описание для зрителей <input name="prompt" maxlength="200"></label>
+          <div class="wide row">
+            <button class="primary" id="reward-save">Создать награду</button>
+            <button type="button" class="danger" id="reward-delete" hidden>Удалить награду</button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
+    <div class="src" data-src="command">
+      <label class="check src-head"><input type="checkbox" data-k="on"> <b>Команда в чате</b>
+        <span class="muted small">без баллов</span></label>
+      <div class="src-body">
+        <div class="rgrid">
+          <label>Команда <input data-k="name" maxlength="26" spellcheck="false" translate="no"></label>
+          <label>Кулдаун зрителя, с <input data-k="user_cd" type="number" min="0" max="3600"></label>
+          <label>Общий кулдаун, с <input data-k="global_cd" type="number" min="0" max="3600"></label>
+        </div>
+        <p class="muted small" id="cmd-example"></p>
+      </div>
+    </div>
+    <div class="src" data-src="chat">
+      <label class="check src-head"><input type="checkbox" data-k="on"> <b>Все сообщения чата</b>
+        <span class="muted small">без баллов</span></label>
+      <div class="src-body">
+        <p class="muted small" data-t>Команды (<code>!…</code>) и эмоуты не озвучиваются. Сообщение, отправленное
+          вместе с наградой, озвучивается один раз, как награда.</p>
+      </div>
+    </div>
+    <h3 class="mt">Если озвучка отклонена</h3>
+    <div class="row">
+      <label class="grow">Ответ зрителю
+        <select id="reply">
+          <option value="chat">ответом в чате</option><option value="off">молча игнорировать</option>
+        </select></label>
+    </div>
+    <p class="small" id="reply-note"></p>
   </div>
   <div class="card" id="guide-card">
     <div class="row between"><h2>Регистрация приложения Twitch</h2>
@@ -143,7 +180,7 @@
     <div>
       <div class="card">
         <h2>Модель</h2>
-        <p class="muted small">Чем меньше вариант, тем меньше видеопамяти; на слух разница почти не слышна.</p>
+        <p class="muted small">Более лёгкие варианты могут давать немного больше артефактов.</p>
         <ul id="models" class="setlist quants"></ul>
         <div class="row end mt">
           <details class="grow">
@@ -204,16 +241,8 @@
     <div>
       <form class="card" id="settings">
         <h2>Озвучка</h2>
-        <label>Кто может озвучивать
-          <select name="access">
-            <option value="all">все</option><option value="subs">сабы, VIP и модеры</option>
-            <option value="vip">VIP и модеры</option><option value="mods">только модеры</option>
-          </select></label>
-        <p class="muted small">Twitch к наградам такого ограничения не применяет: проверка идёт по бейджам из чата,
-          поэтому зритель должен хоть раз написать в чат. Остальным баллы возвращаются.</p>
-        <label class="check"><input type="checkbox" name="chat_all"> Озвучивать все сообщения чата, без баллов</label>
-        <p class="muted small" data-t>Нужен вход в Twitch. Действуют те же доступ, баны, фильтры и лимит очереди; команды
-          (<code>!…</code>) и эмоуты не читаются. Награда работает как раньше.</p>
+        <p class="muted small" data-t>Кто и как заказывает озвучку (награда, команда, все сообщения чата) — на
+          <a href="#twitch">вкладке Twitch</a>.</p>
         <label class="check"><input type="checkbox" name="read_nick"> Читать ник: «&lt;ник&gt; говорит: …»</label>
         <label class="check"><input type="checkbox" name="subtitles"> Субтитры в оверлее</label>
         <div class="row">
@@ -222,8 +251,7 @@
         </div>
         <h2 class="mt">Синтез</h2>
         <label class="check"><input type="checkbox" name="streaming"> Стриминг длинных фраз: звучат, не дожидаясь конца синтеза</label>
-        <p class="muted small" id="stream-note">Короткие фразы и голоса с эффектом (post) всегда синтезируются целиком.
-          На CPU синтез медленнее реального времени, и стриминг там будет заикаться: выключите его.</p>
+        <p class="warn small" id="stream-note" hidden></p>
         <details class="mt">
           <summary class="muted small">Дополнительно</summary>
           <label class="mt">Размер куска стриминга, токенов <input type="number" name="chunk_tokens" min="10" max="1000" step="10"></label>
@@ -289,6 +317,7 @@
     <div class="grid3 mt">
       <div><h3>Голоса</h3><div id="top-voices" class="bars"></div></div>
       <div><h3>Зрители</h3><div id="top-viewers" class="bars"></div></div>
+      <div><h3>Способы</h3><div id="top-sources" class="bars"></div></div>
       <div><h3>Возвраты по причинам</h3><div id="reasons" class="bars"></div></div>
     </div>
   </div>

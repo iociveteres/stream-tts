@@ -85,18 +85,23 @@ function connect() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     wsOnline = true;
-    if (m.settings) { S = m; renderAll(); } else if (S) { Object.assign(S, m); renderLive(); }
+    if (m.settings) { S = m; renderAll(); }
+    else if (S) {
+      Object.assign(S, m);
+      if (m.voices) { renderVoices(); renderTestVoices(); }   // набор установлен или готов пример
+      renderLive();
+    }
   };
   ws.onclose = () => { wsOnline = false; if (S) renderHeader(); setTimeout(connect, 2000); };
 }
 
 function renderAll() {
-  renderSettings(); renderVoices(); renderBans(); renderGuide(); renderReward(); renderTestVoices();
+  renderSettings(); renderVoices(); renderBans(); renderGuide(); renderReward(); renderSources(); renderTestVoices();
   renderLive();
 }
 function renderLive() {
   renderHeader(); renderQueue(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
-  renderStreamNote(); renderServer();
+  renderStreamNote(); renderServer(); renderReplyNote();
 }
 
 // --- шапка ---
@@ -131,6 +136,8 @@ $("#enabled").onchange = e => api("/api/enabled", { on: e.target.checked });
 
 // --- очередь ---
 const STATES = { queued: T("ждёт"), synth: T("синтез"), ready: T("готово"), playing: T("играет") };
+const SOURCE_TAGS = { test: [T("тест"), ""], command: [T("команда"), T("Команда в чате, без баллов")],
+  chat: [T("чат"), T("Сообщение чата, без баллов")] };
 function renderQueue() {
   const q = S.engine.queue;
   const playing = q.find(i => i.state === "playing");
@@ -141,8 +148,8 @@ function renderQueue() {
   $("#qempty").hidden = q.length > 0;
   $("#queue").hidden = !q.length;
   $("#queue tbody").replaceChildren(...q.map(i => h("tr", {},
-    h("td", {}, i.display, i.test ? h("span", { class: "tag" }, T("тест")) : null,
-      i.chat ? h("span", { class: "tag", title: T("Сообщение чата, без баллов") }, T("чат")) : null),
+    h("td", {}, i.display, SOURCE_TAGS[i.source] ? h("span", { class: "tag", title: SOURCE_TAGS[i.source][1] || null },
+      SOURCE_TAGS[i.source][0]) : null),
     h("td", {}, i.voice),
     h("td", { class: "text" }, i.text),
     h("td", {}, h("span", { class: "state " + i.state }, STATES[i.state] || i.state,
@@ -179,14 +186,19 @@ $("#test").onsubmit = async e => {
 };
 
 // --- Twitch: вход ---
-let lastLogin = "";
+let lastLogin = "", lastState = null;
 function renderLogin() {
-  const t = S.twitch, key = JSON.stringify([t.state, t.error, t.device, t.login, t.client_id, t.ws]);
+  const t = S.twitch, key = JSON.stringify([t.state, t.error, t.device, t.login, t.client_id, t.ws, guideOpen]);
   if (key === lastLogin) return;
   lastLogin = key;
+  const entered = t.state !== lastState;
+  if (entered && t.state === "ok" && lastState !== null && guideOpen) { guideOpen = false; renderGuide(); }  // вошли: гайд не нужен
+  lastState = t.state;
+  const below = placeLogin();
   const card = $("#login-card"), kids = [h("h2", {}, T("Вход в Twitch"))];
   if (t.state === "no_client") {
-    kids.push(h("p", {}, T("Сначала зарегистрируйте своё приложение Twitch по шагам ниже и вставьте его Client ID.")));
+    kids.push(h("p", {}, below ? T("Вставьте Client ID в шаге 4 и нажмите «Проверить и войти».")
+      : T("Сначала зарегистрируйте своё приложение Twitch по шагам ниже и вставьте его Client ID.")));
   } else if (t.state === "device") {
     kids.push(h("p", {}, T("Откройте страницу активации на любом устройстве, войдите аккаунтом канала и введите код:")),
       h("div", { class: "code" }, t.device.code),
@@ -210,7 +222,17 @@ function renderLogin() {
   }
   if (t.error) kids.push(h("p", { class: "bad" }, t.error));
   card.replaceChildren(...kids);
-  $("#reward-card").hidden = t.state !== "ok";
+  $("#sources-card").hidden = t.state !== "ok";
+  // Код появился после «Проверить и войти»: карточка может быть за пределами экрана
+  if (entered && t.state === "device" && $("#tab-twitch").classList.contains("on"))
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+/** Пока вход не выполнен и гайд открыт, карточка входа идёт сразу под шагом с Client ID, иначе — вверху вкладки. */
+function placeLogin() {
+  const below = guideOpen && !["ok", "connecting"].includes(S.twitch.state), tab = $("#tab-twitch");
+  if (below) { tab.prepend($("#guide-card")); $("#guide-card").after($("#login-card"), $("#sources-card")); }
+  else tab.append($("#guide-card"));
+  return below;
 }
 
 // --- гайд регистрации ---
@@ -253,7 +275,8 @@ function guideSteps() {
             h("div", { class: "muted small" }, T("Имя должно быть уникальным во всём Twitch. Занято — добавьте что-нибудь."))),
           h("li", {}, "OAuth Redirect URLs: ", h("code", {}, "http://localhost"), " ", copyBtn("http://localhost"),
             " " + T("и кнопка Add"), h("div", { class: "muted small" },
-              T("Поле обязательное, но для входа по коду не используется."))),
+              T("Поле обязательное, но для входа по коду не используется. Twitch может написать, " +
+              "что адрес должен быть HTTPS: к localhost это не относится, http://localhost он принимает."))),
           h("li", {}, T("Category: любая, например Broadcaster Suite.")),
           h("li", {}, h("b", { class: "warn" }, "Client Type: Public. "),
             T("Тип клиента после создания, вероятно, не поменять: с Confidential вход по коду не работает, " +
@@ -295,7 +318,64 @@ function renderGuide() {
   $("#guide").replaceChildren(...guideSteps().map(s => h("li", {},
     h("div", {}, h("h3", {}, s.title), ...s.body), s.mock)));
 }
-$("#guide-toggle").onclick = () => { guideOpen = !guideOpen; renderGuide(); };
+$("#guide-toggle").onclick = () => { guideOpen = !guideOpen; renderGuide(); renderLogin(); };
+
+// --- способы заказа: награда, команда, все сообщения чата ---
+const ACCESS_OPTS = [["all", T("все")], ["subs", T("сабы, VIP и модеры")], ["vip", T("VIP и модеры")],
+  ["mods", T("только модеры")]];
+$$("#sources-card .src").forEach(box => {
+  box.querySelector(".src-body").append(h("div", { class: "src-common" },
+    h("label", {}, T("Кто может"), h("select", { "data-k": "access" },
+      ACCESS_OPTS.map(([v, t]) => h("option", { value: v }, t)))),
+    h("label", {}, T("Всегда доступно: ники через запятую"), h("textarea", { "data-k": "allow", rows: 1,
+      spellcheck: "false", translate: "no" }))));
+  box.addEventListener("change", async e => {
+    const k = e.target.dataset.k;
+    if (!k) return;   // поля награды сохраняются кнопкой формы
+    const el = e.target, v = el.type === "checkbox" ? el.checked : el.type === "number" ? +el.value : el.value;
+    const r = await api("/api/source", { source: box.dataset.src, [k]: v });
+    if (r.ok) { S.settings.sources[box.dataset.src] = r.source; toast(T("Сохранено")); }
+    renderSources(true);
+  });
+});
+function renderSources(force) {
+  const src = S.settings.sources;
+  $$("#sources-card .src").forEach(box => {
+    const c = src[box.dataset.src];
+    box.querySelector(".src-body").hidden = !c.on;
+    for (const el of box.querySelectorAll("[data-k]")) {
+      if (el === document.activeElement && !force) continue;
+      const v = c[el.dataset.k];
+      if (el.type === "checkbox") el.checked = !!v; else el.value = Array.isArray(v) ? v.join(", ") : v;
+    }
+  });
+  $("#cmd-example").textContent = T("Зритель пишет в чат: {cmd} привет, чат!", { cmd: src.command.name });
+  $("#reply").value = S.settings.reply;
+  lastReply = "";
+  renderReplyNote();
+}
+$("#reply").onchange = async e => {
+  if ((await api("/api/settings", { reply: e.target.value })).ok) { S.settings.reply = e.target.value; toast(T("Сохранено")); }
+  renderSources(true);
+};
+const REPLY_SCOPE = "user:write:chat";
+let lastReply = "";
+function renderReplyNote() {
+  const t = S.twitch, mode = S.settings.reply, key = JSON.stringify([mode, t.scopes, t.reply_error, t.state]);
+  if (key === lastReply) return;
+  lastReply = key;
+  const kids = [];
+  if (mode !== "off" && t.state === "ok" && !(t.scopes || []).includes(REPLY_SCOPE))
+    kids.push(h("div", { class: "warn" }, T("Вход в Twitch был до появления ответов: выйдите и войдите снова, " +
+      "чтобы разрешить {scope}. Пока ответов не будет.", { scope: REPLY_SCOPE })));
+  kids.push(h("div", { class: "muted" }, {
+    off: T("Отказ виден только в журнале, за награду баллы возвращаются молча."),
+    chat: T("Ответ приходит от аккаунта канала: на команду — ответом на сообщение, на награду — с @ником. " +
+      "Одному зрителю не чаще раза в 30 с, о бане не сообщается."),
+  }[mode]));
+  if (t.reply_error && mode !== "off") kids.push(h("div", { class: "bad" }, t.reply_error));
+  $("#reply-note").replaceChildren(...kids);
+}
 
 // --- награда ---
 function renderReward() {
@@ -343,8 +423,12 @@ async function preview(v, btn) {
     btn.textContent = "■";
   } catch (e) { btn.textContent = "▶"; pbtn = null; toast(T("Пример: {e}", { e: e.message }), true); }
 }
+let voicesStale = false;
 function renderVoices() {
-  $("#voices tbody").replaceChildren(...S.voices.map(v => {
+  const tbody = $("#voices tbody");
+  if (tbody.contains(document.activeElement)) { voicesStale = true; return; }   // ползунок громкости в руке
+  voicesStale = false;
+  tbody.replaceChildren(...S.voices.map(v => {
     const out = h("output", {}, (v.gain_db > 0 ? "+" : "") + v.gain_db);
     const tr = h("tr", { class: v.enabled ? "" : "off", "data-name": v.name },
       h("td", {}, h("input", { type: "checkbox", checked: v.enabled, "aria-label": T("включён"),
@@ -363,8 +447,8 @@ function renderVoices() {
     return tr;
   }));
   filterVoices();
-  $("#demo-form").demo_phrase.value = S.settings.demo_phrase;
 }
+$("#voices tbody").addEventListener("focusout", () => setTimeout(() => voicesStale && renderVoices()));
 function filterVoices() {
   const q = $("#vsearch").value.trim().toLowerCase();
   $$("#voices tbody tr").forEach(tr => tr.hidden = !tr.dataset.name.toLowerCase().includes(q));
@@ -418,6 +502,8 @@ function playSample(key) {
   renderServer();
 }
 const fmtGB = mb => fmtNum(mb / 1024, 1);
+/** Скорость синтеза по rtf (время синтеза / длина звука): ×3,2 — втрое быстрее звучания, ×0,45 — медленнее. */
+const fmtSpeed = rtf => rtf == null || !(rtf > 0) ? "—" : "×" + fmtNum(1 / rtf, 1 / rtf < 1 ? 2 : 1);
 
 let backendKey = "";
 function renderServer() {
@@ -435,7 +521,6 @@ function renderServer() {
       h("b", {}, q.quant), q.quant === st.default_quant ? h("span", { class: "tag" }, T("рекомендуется")) : null,
       h("div", { class: "small", title: T("Замер на видеокарте NVIDIA; на Vulkan примерно на 0,5 ГБ больше") },
         T("{size} · видеопамять {min}–{max} ГБ", { size: fmtMB(q.size), min: fmtGB(q.vram), max: fmtGB(q.vram_max) })),
-      h("div", { class: "muted small" }, q.note),
       h("div", { class: "row samples" }, st.samples.map(([voice, label]) => {
         const key = `${voice}-${q.quant}`;
         return h("button", { type: "button", class: "small" + (sampleKey === key ? " on" : ""),
@@ -519,12 +604,12 @@ function renderBench(rt) {
         title: T("{date}, фраза {audio} с, кусок {chunk} токенов", { date: new Date(r.ts * 1000).toLocaleString(LOCALE),
           audio: fmtNum(r.audio), chunk: r.chunk }) },
         h("td", {}, r.backend), h("td", {}, quant(r.model)),
-        h("td", { class: "num " + cls, title: verdict }, r.rtf < 1 ? `×${fmtNum(1 / r.rtf)}` : `÷${fmtNum(r.rtf)}`),
+        h("td", { class: "num " + cls, title: verdict }, fmtSpeed(r.rtf)),
         h("td", { class: "num" }, r.first == null ? "—" : T("{n} с", { n: fmtNum(r.first) })));
     }))))
     : h("p", { class: "muted small" }, T("Замеров ещё нет.")),
-    ...(rows.length ? [h("p", { class: "muted small" }, T("×4 — синтез в 4 раза быстрее звучания фразы. Для стрима " +
-      "нужно быстрее реального времени, лучше вдвое и больше (зелёный)."))] : []));   // replaceChildren(null) пишет «null»
+    ...(rows.length ? [h("p", { class: "muted small" }, T("×4 — синтез в 4 раза быстрее звучания фразы, ×0,5 — вдвое " +
+      "медленнее. Для стрима нужно больше ×1, лучше ×2 и выше (зелёный)."))] : []));   // replaceChildren(null) пишет «null»
   const many = rt.backends.some(n => /^(cuda|vulkan)/i.test(n));
   $("#bench-all").hidden = !many || rt.locked.backend;
   $("#bench-one").disabled = $("#bench-all").disabled = running || !S.cosy.ok;
@@ -567,6 +652,7 @@ function runtimeInfo(rt) {
     n: rt.voices });
 }
 function renderSettings() {
+  $("#demo-form").demo_phrase.value = S.settings.demo_phrase;
   const f = $("#settings");
   for (const el of f.elements) {
     if (!el.name || !(el.name in S.settings)) continue;
@@ -587,13 +673,9 @@ $("#settings").onchange = async e => {
 };
 function renderStreamNote() {
   const rtf = S.engine.rtf, note = $("#stream-note");
-  note.classList.toggle("warn", rtf != null && rtf > 0.9);
-  note.dataset.rtf = rtf ?? "";
-  const extra = rtf == null ? "" : rtf > 0.9
-    ? " " + T("Сейчас синтез в {n} раза медленнее реального времени: стриминг будет заикаться.", { n: fmtNum(rtf) })
-    : " " + T("Сейчас синтез в {n} раза быстрее реального времени.", { n: fmtNum(1 / rtf) });
-  note.textContent = T("Короткие фразы и голоса с эффектом (post) всегда синтезируются целиком. " +
-    "На CPU синтез медленнее реального времени, и стриминг там будет заикаться: выключите его.") + extra;
+  note.hidden = !(rtf > 0.9);
+  if (!note.hidden) note.textContent = T("Скорость синтеза сейчас {speed}: стриминг будет заикаться, лучше его выключить.",
+    { speed: fmtSpeed(rtf) });
 }
 function renderBans() {
   $("#bans").replaceChildren(...S.bans.map(b => h("li", {}, b, h("button", { title: T("Разбанить"),
@@ -628,7 +710,7 @@ function renderLiveStats() {
     g ? tile("GPU", `${g.util}%`, T("{used} / {total} ГБ · {temp} °C",
       { used: fmtNum(g.mem_used / 1024), total: fmtNum(g.mem_total / 1024), temp: g.temp }))
       : tile("GPU", T("нет данных"), T("nvidia-smi недоступен в контейнере")),
-    tile(T("Скорость синтеза"), S.engine.rtf == null ? "—" : `${fmtNum(S.engine.rtf, 2)}×`, T("время синтеза / длина звука")));
+    tile(T("Скорость синтеза"), fmtSpeed(S.engine.rtf), T("последние фразы, во сколько раз быстрее звучания")));
 }
 async function loadStats() {
   renderLiveStats();
@@ -642,11 +724,13 @@ async function loadStats() {
     tile(T("Сыграно"), t.played || 0),
     tile(T("Возвратов"), t.refunded || 0, t.n ? `${fmtNum(100 * (t.refunded || 0) / t.n, 0)}%` : ""),
     tile(T("Ожидание до звука"), st.wait_ms == null ? "—" : T("{n} с", { n: fmtNum(st.wait_ms / 1000) }), T("в среднем")),
-    tile(T("Синтез / длина аудио"), st.synth_ratio == null ? "—" : `${fmtNum(st.synth_ratio, 2)}×`,
+    tile(T("Скорость синтеза"), fmtSpeed(st.synth_ratio),
       st.avg_audio_ms ? T("средняя фраза {n} с", { n: fmtNum(st.avg_audio_ms / 1000) }) : ""));
   drawHours(st, hours);
   bars("#top-voices", st.voices.map(x => [x.voice, x.n]));
   bars("#top-viewers", st.viewers.map(x => [x.login, x.n]));
+  const SOURCE_NAMES = { reward: T("награда"), command: T("команда"), chat: T("чат"), test: T("тест") };
+  bars("#top-sources", st.sources.map(x => [SOURCE_NAMES[x.source] || x.source, x.n]));
   bars("#reasons", st.reasons.map(x => [T(x.reason), x.n]));   // причины в базе по-русски (engine.R_*)
 }
 $("#period").onchange = loadStats;

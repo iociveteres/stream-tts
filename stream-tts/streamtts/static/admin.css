@@ -14,7 +14,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px; }
 .tab.on { display: block; }
 .grid2 { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; align-items: start; }
 .grid2 > div > .card + .card { margin-top: 14px; }
-.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
 @media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
 .between { justify-content: space-between; }
 .mt { margin-top: 16px; }
@@ -54,6 +54,13 @@ td.text { max-width: 360px; overflow-wrap: anywhere; }
 .guide ul { margin: 6px 0; padding-left: 20px; }
 @media (max-width: 900px) { .guide > li { grid-template-columns: 1fr; } }
 .rgrid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+/* Способы заказа озвучки */
+.src { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 12px; background: var(--bg); }
+.src-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.src-body { display: grid; gap: 10px; margin-top: 10px; }
+.src-body .src-common { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; }
+.src-body textarea { min-height: 0; height: auto; }
+@media (max-width: 700px) { .src-body .src-common { grid-template-columns: 1fr; } }
 .rgrid .wide { grid-column: 1 / -1; }
 @media (max-width: 700px) { .rgrid { grid-template-columns: 1fr; } }
 
