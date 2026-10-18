@@ -9,14 +9,18 @@ import asyncio, contextlib, logging, random, re
 
 import aiohttp
 
+from . import paths
 from .i18n import tr
 
 log = logging.getLogger("chat")
 
-IRC = "wss://irc-ws.chat.twitch.tv:443"
-JOIN_WAIT = 10    # с: ROOMSTATE приходит сразу после JOIN; нет его — канала нет
-IDLE = 60         # с без данных: свой PING. Twitch пингует раз в ~5 минут, обрыв без FIN иначе заметен нескоро
-PONG_WAIT = 15
+# Переменные STREAM_TTS_IRC_* — для e2e-тестов (tests/e2e): поддельный IRC и короткие таймауты
+IRC = paths.env("STREAM_TTS_IRC_URL", "wss://irc-ws.chat.twitch.tv:443")
+# с: ROOMSTATE приходит сразу после JOIN; нет его — канала нет
+JOIN_WAIT = float(paths.env("STREAM_TTS_IRC_JOIN_WAIT", "10"))
+# с без данных: свой PING. Twitch пингует раз в ~5 минут, обрыв без FIN иначе заметен нескоро
+IDLE = float(paths.env("STREAM_TTS_IRC_IDLE", "60"))
+PONG_WAIT = float(paths.env("STREAM_TTS_IRC_PONG_WAIT", "15"))
 # Логин Twitch: 4–25 символов, у старых аккаунтов бывает короче
 CHANNEL_RE = re.compile(r"[a-z0-9_]{2,25}")
 # Cheer-эмоут в сообщении с битами: Cheer100, BibleThump50 — имена картинок, не читаются (как cheermote в EventSub)
@@ -95,6 +99,7 @@ class ChatReader:
         self.state = "off"           # off | connecting | ok | not_found
         self.error = ""
         self.task = None
+        self.backoff = 1
 
     def public(self):
         return dict(state=self.state, channel=self.channel, error=self.error)
@@ -113,7 +118,7 @@ class ChatReader:
         self.task, self.state, self.error, self.room_id = None, "off", "", ""
 
     async def _run(self):
-        backoff = 1
+        self.backoff = 1
         while True:
             self.state = "connecting"
             ws = None
@@ -125,7 +130,6 @@ class ChatReader:
                 await ws.send_str(f"JOIN #{self.channel}")
                 if not await self._listen(ws):
                     return
-                backoff = 1
             except asyncio.CancelledError:
                 if ws:
                     with contextlib.suppress(Exception):
@@ -138,8 +142,8 @@ class ChatReader:
                 with contextlib.suppress(Exception):
                     await ws.close()
             self.state = "connecting"
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 60)
+            await asyncio.sleep(self.backoff)
+            self.backoff = min(self.backoff * 2, 60)
 
     async def _listen(self, ws):
         """Читает до обрыва. False — переподключаться не надо (канала нет)."""
@@ -176,7 +180,8 @@ class ChatReader:
         elif cmd == "ROOMSTATE" and tags.get("room-id"):
             if self.state != "ok":
                 log.info("чат #%s: подключено", self.channel)
-            self.state, self.error, self.room_id = "ok", "", tags["room-id"]
+            # пауза переподключения — заново после удачного входа: иначе каждый RECONNECT Twitch удваивал её до 60 с
+            self.state, self.error, self.room_id, self.backoff = "ok", "", tags["room-id"], 1
         elif cmd == "NOTICE" and tags.get("msg-id") in ("msg_channel_suspended", "msg_banned"):
             log.warning("чат #%s: %s", self.channel, text)
             self.state, self.error = "not_found", text or tr("Канал {ch} не найден", ch=self.channel)

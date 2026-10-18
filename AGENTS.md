@@ -127,9 +127,9 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 ## Проверка
 
 Минимум после правок:
-- stream-tts: `stream-tts/.venv/Scripts/python -m pytest tests/e2e` (~20 с, без видеокарты и модели; свой процесс на
+- stream-tts: `stream-tts/.venv/Scripts/python -m pytest tests/e2e` (~40 с, без видеокарты и модели; свой процесс на
   свободном порту, Docker-версию не трогает). Новое поведение очереди, фильтров, синтеза, доступа — сценарием в
-  `tests/e2e/`; новый запрос к cosyvoice-server — и в `fake_cosyvoice.py`.
+  `tests/e2e/`; новый запрос к cosyvoice-server — и в `fake_cosyvoice.py`, новый тег IRC — в `fake_irc.py`.
 - Python: `python -m py_compile <файлы>`; страницы инструментов и stream-tts — через preview (`.claude/launch.json`)
   с проверкой консоли и запросов.
 - Compose: `docker compose config -q`; образ — `docker compose build <сервис>`.
