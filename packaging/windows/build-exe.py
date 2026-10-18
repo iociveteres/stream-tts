@@ -23,6 +23,10 @@ SRC = os.path.join(ROOT, "stream-tts")
 DIST = os.path.join(HERE, "dist")
 APP = os.path.join(DIST, "StreamTTS")
 VERSION = "0.1.0"
+# Пакеты, у которых лицензии лежат в папке пакета, а не в dist-info/licenses. Их зависимости не обходятся:
+# onnxruntime требует flatbuffers, packaging и protobuf только для инструментов (onnxruntime.tools и т. п.), а
+# `import onnxruntime` их не тянет, и Nuitka их в программу не кладёт.
+OWN_LICENSES = {"onnxruntime": ("LICENSE", "ThirdPartyNotices.txt")}
 
 
 def nuitka_args(jobs):
@@ -42,6 +46,8 @@ def nuitka_args(jobs):
         "--company-name=StreamTTS", "--product-name=StreamTTS", f"--file-version={VERSION}",
         f"--product-version={VERSION}", "--file-description=StreamTTS: озвучка наград Twitch",
         "--nofollow-import-to=tkinter,unittest,pydoc_data",
+        # separate.py: нужен только InferenceSession; инструменты onnxruntime тянут onnx, sympy, protobuf
+        "--nofollow-import-to=onnxruntime.tools,onnxruntime.transformers,onnxruntime.quantization",
     ]
 
 
@@ -76,10 +82,13 @@ def copy_licenses():
     def dist_licenses(dist, only=None):
         files = [f for f in dist.files or () if f.parts[0].endswith(".dist-info") and f.parts[1:2] == ("licenses",)
                  and (only is None or f.name == only)]
+        own = OWN_LICENSES.get(dist.name.lower(), ())
+        if not files and own:  # лицензии в папке пакета, а не в dist-info
+            files = [f for f in dist.files or () if len(f.parts) == 2 and f.name in own]
         if not files:
             sys.exit(f"{dist.name}: нет файлов лицензий в dist-info/licenses")
         for f in files:
-            dst = os.path.join(lic, dist.name.lower(), *f.parts[2:])
+            dst = os.path.join(lic, dist.name.lower(), *(f.parts[2:] or f.parts[1:]))
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy(f.locate(), dst)
 
@@ -95,7 +104,8 @@ def copy_licenses():
         except md.PackageNotFoundError:
             continue
         dist_licenses(dist)
-        todo += [re.match(r"[A-Za-z0-9._-]+", r).group() for r in dist.requires or () if "extra ==" not in r]
+        if name not in OWN_LICENSES:
+            todo += [re.match(r"[A-Za-z0-9._-]+", r).group() for r in dist.requires or () if "extra ==" not in r]
     dist_licenses(md.distribution("nuitka"), "LICENSE-RUNTIME.txt")
     print(f"Лицензии: {lic} ({', '.join(sorted(os.listdir(lic)))})")
 

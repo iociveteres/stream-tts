@@ -41,7 +41,9 @@ Python 3.14 (python314.dll, *.pyd) — PSF License 2.0,
 Пакеты Python, см. licenses\<пакет>\: aiohttp — Apache-2.0 и MIT;
   aiosignal, frozenlist, multidict, propcache, yarl — Apache-2.0;
   aiohappyeyeballs — PSF-2.0; attrs — MIT; idna — BSD-3-Clause;
-  numpy (с OpenBLAS в numpy.libs) — BSD-3-Clause и другие
+  numpy (с OpenBLAS в numpy.libs) — BSD-3-Clause и другие;
+  onnxruntime 1.31 (onnxruntime\capi) — MIT, см. также
+  licenses\onnxruntime\ThirdPartyNotices.txt
 Nuitka (компилятор программы): его runtime в StreamTTS.exe — AGPLv3
   с Nuitka Runtime Library Exception, которое разрешает распространять
   собранную программу под любой лицензией,
@@ -50,3 +52,10 @@ Nuitka (компилятор программы): его runtime в StreamTTS.ex
 Модель синтеза (CosyVoice3 0.5B, Apache-2.0) в установщик не входит:
 она скачивается при первом запуске с
 https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+
+Модель очистки от музыки (Demucs v4 htdemucs в ONNX) в установщик
+не входит: она скачивается по кнопке в настройках с
+https://huggingface.co/HRSadeghi/demucs-onnx
+Код Demucs и экспорта — MIT, а веса обучены на MusDB и, по словам
+автора Demucs, предназначены только для исследований
+(https://github.com/facebookresearch/demucs/issues/327).

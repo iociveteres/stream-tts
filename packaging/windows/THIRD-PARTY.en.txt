@@ -42,7 +42,9 @@ Python 3.14 (python314.dll, *.pyd) — PSF License 2.0,
 Python packages, see licenses\<package>\: aiohttp — Apache-2.0 and MIT;
   aiosignal, frozenlist, multidict, propcache, yarl — Apache-2.0;
   aiohappyeyeballs — PSF-2.0; attrs — MIT; idna — BSD-3-Clause;
-  numpy (with OpenBLAS in numpy.libs) — BSD-3-Clause and others
+  numpy (with OpenBLAS in numpy.libs) — BSD-3-Clause and others;
+  onnxruntime 1.31 (onnxruntime\capi) — MIT, see also
+  licenses\onnxruntime\ThirdPartyNotices.txt
 Nuitka (the program's compiler): its runtime in StreamTTS.exe is AGPLv3
   with the Nuitka Runtime Library Exception, which allows distributing
   the compiled program under any license,
@@ -51,5 +53,12 @@ Nuitka (the program's compiler): its runtime in StreamTTS.exe is AGPLv3
 The speech model (CosyVoice3 0.5B, Apache-2.0) is not part of the installer:
 it is downloaded on first launch from
 https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+
+The music removal model (Demucs v4 htdemucs in ONNX) is not part of the
+installer: it is downloaded on request in the settings from
+https://huggingface.co/HRSadeghi/demucs-onnx
+The Demucs and export code is MIT, but the weights were trained on MusDB
+and, according to the Demucs author, are for research use only
+(https://github.com/facebookresearch/demucs/issues/327).
 
 Note: the StreamTTS interface is in Russian.
