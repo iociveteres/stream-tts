@@ -1,0 +1,51 @@
+{
+ "cuda": {
+  "version": "13.4-b11500",
+  "unpacked": 696204624,
+  "files": [
+   "ggml-cuda.dll",
+   "cublas64_13.dll",
+   "cublasLt64_13.dll",
+   "cudart64_13.dll"
+  ],
+  "archives": [
+   {
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/llama-b11500-bin-win-cuda-13.4-x64.zip",
+    "size": 153313982,
+    "sha256": "acc9413b9a1af8db6698b032e316297a2446056d7e7799e06304145dfa6e5b5e",
+    "unpacked": 197706525,
+    "files": [
+     "ggml-cuda.dll"
+    ]
+   },
+   {
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/cudart-llama-bin-win-cuda-13.4-x64.zip",
+    "size": 423535356,
+    "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
+    "unpacked": 548245840,
+    "files": [
+     "cublas64_13.dll",
+     "cublasLt64_13.dll",
+     "cudart64_13.dll"
+    ]
+   }
+  ]
+ },
+ "model": {
+  "url": "https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF/resolve/ab01740bbbfcc059fd748163787554f7c8977e64/",
+  "quants": {
+   "Q8_0": {
+    "size": 943933536,
+    "sha256": "be133cb6154ca73cd1d213b1c9496def99ba9c1f7c14cd99f6b350af2eb7963d"
+   },
+   "Q6_K": {
+    "size": 839539424,
+    "sha256": "e6b5e34e413ec6def8e38113ff6e92416b0f3d580aa59d4766dc3dfdc854ff4a"
+   },
+   "Q5_K_M": {
+    "size": 682814464,
+    "sha256": "702b54d4e5d2d6c8d855081a5a2dc1acf046544291899f674295dc17a4f89f16"
+   }
+  }
+ }
+}

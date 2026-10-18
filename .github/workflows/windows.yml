@@ -26,7 +26,8 @@ jobs:
         with:
           python-version: "3.14"
 
-      # Загрузки рантайма (~1 ГБ) с закреплёнными sha256: ключ меняется вместе с версиями в build-runtime.py
+      # Загрузки рантайма (~150 МБ, без CUDA: её установщик качает сам из релиза llama.cpp) с закреплёнными
+      # sha256: ключ меняется вместе с версиями в build-runtime.py
       - uses: actions/cache@v4
         with:
           path: packaging/windows/build/cache
@@ -41,12 +42,13 @@ jobs:
       - name: Зависимости сборки
         run: python -m pip install -r packaging/windows/requirements.txt
 
-      # На образах windows-latest Inno Setup 6 обычно есть; если нет — ставится из Chocolatey
+      # Нужен Inno Setup 6.5+ (ExtractArchive, загрузки): на windows-latest — 6.7; если его нет — из Chocolatey
       - name: Inno Setup
         shell: pwsh
         run: |
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
+      # DLL рантайма VC++ 14.51+ берутся из System32 образа (VC++ Redistributable 14.51.36247; redist VS 2022 — 14.44)
       - name: Рантайм
         run: python packaging/windows/build-runtime.py
 

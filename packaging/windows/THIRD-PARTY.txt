@@ -30,10 +30,12 @@ FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), сборка BtbN lgpl-shared —
   Исходный код: https://github.com/FFmpeg/FFmpeg (ветка release/8.1)
   Сборка: https://github.com/BtbN/FFmpeg-Builds
 NVIDIA CUDA Runtime и cuBLAS (cudart64_13.dll, cublas64_13.dll,
-  cublasLt64_13.dll; компонент CUDA) — NVIDIA CUDA Toolkit EULA,
-  распространяемые файлы: https://docs.nvidia.com/cuda/eula/
-Microsoft Visual C++ Redistributable (vcruntime140*.dll, vc_redist.x64.exe) —
-  лицензия Microsoft на распространяемый код Visual Studio
+  cublasLt64_13.dll; компонент CUDA, скачивается установщиком или во
+  вкладке «Сервер») — NVIDIA CUDA Toolkit EULA, распространяемые файлы:
+  https://docs.nvidia.com/cuda/eula/
+Рантайм Microsoft Visual C++ 14.51 (msvcp140*.dll, vcruntime140*.dll,
+  concrt140.dll в runtime\ и рядом с StreamTTS.exe) — лицензия Microsoft
+  на распространяемый код Visual Studio
 Python 3.14 (python314.dll, *.pyd) — PSF License 2.0,
   см. licenses\python\LICENSE.txt
   В его составе: OpenSSL (libssl-3.dll, libcrypto-3.dll) — Apache-2.0,
@@ -50,7 +52,7 @@ Nuitka (компилятор программы): его runtime в StreamTTS.ex
   см. licenses\nuitka\LICENSE-RUNTIME.txt
 
 Модель синтеза (CosyVoice3 0.5B, Apache-2.0) в установщик не входит:
-она скачивается при первом запуске с
+её скачивает установщик (или программа при первом запуске) с
 https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
 
 Модель очистки от музыки (Demucs v4 htdemucs в ONNX) в установщик

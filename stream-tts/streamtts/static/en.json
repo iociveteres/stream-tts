@@ -612,5 +612,12 @@
  "Последняя проверка: {date}": "Last checked: {date}",
  "Вышла новая версия StreamTTS: {version}.": "A new StreamTTS version is out: {version}.",
  "Подробнее": "Details",
- "Скрыть до следующей версии": "Hide until the next version"
+ "Скрыть до следующей версии": "Hide until the next version",
+ "CUDA уже установлена или здесь не нужна": "CUDA is already installed or not needed here",
+ "{file}: распаковка": "{file}: unpacking",
+ "{size}, на диске {disk}": "{size}, {disk} on disk",
+ "Видеокарта NVIDIA есть, а CUDA не установлена. С CUDA синтез на ней обычно быстрее и требует меньше видеопамяти, чем через Vulkan. Файлы лягут в {dir}, сервер синтеза перезапустится.": "There is an NVIDIA graphics card, but CUDA is not installed. With CUDA, synthesis on it is usually faster and needs less video memory than with Vulkan. The files go to {dir}; the speech server will restart.",
+ "Готово: CUDA установлена, сервер перезапускается.": "Done: CUDA is installed, the server is restarting.",
+ "Ускорение на видеокартах NVIDIA (CUDA)": "NVIDIA GPU acceleration (CUDA)",
+ "в архиве CUDA нет {files}": "the CUDA archive has no {files}"
 }

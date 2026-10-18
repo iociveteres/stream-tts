@@ -1,22 +1,32 @@
-"""Рантайм stream-tts для Windows: cosyvoice-server с DLL, ffmpeg и VC++ Redistributable.
+"""Рантайм stream-tts для Windows: cosyvoice-server с DLL, ffmpeg и рантаймом VC++; по желанию — файлы CUDA.
 
-usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--flat DIR]
+usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--crt DIR] [--cuda] [--flat DIR]
 
-Скачивает закреплённые версии (ASSETS, с проверкой sha256) и раскладывает по компонентам установщика:
-  <out>/core/   cosyvoice-server и cosyvoice-cli, ONNX Runtime, GGML (CPU и Vulkan), ICU, FFmpeg (DLL и ffmpeg.exe)
-  <out>/cuda/   ggml-cuda.dll и рантайм CUDA 13 (cudart, cuBLAS) — отдельный компонент, ~660 МБ
+Скачивает закреплённые версии (ASSETS, с проверкой sha256) и раскладывает:
+  <out>/core/   cosyvoice-server и cosyvoice-cli, ONNX Runtime, GGML (CPU и Vulkan), ICU, FFmpeg (DLL и ffmpeg.exe),
+                DLL рантайма VC++ (CRT) — всё, что установщик кладёт в {app}\runtime
   <out>/core/licenses/   тексты лицензий: из архивов (LICENSES) и из репозиториев тех же версий (LICENSE_URLS)
-  <out>/vc_redist.x64.exe   VC++ 2015–2022: его требуют cosyvoice и ONNX Runtime (MSVCP140)
---flat DIR собирает core и cuda в одну папку: так выглядит runtime/ в корне проекта для запуска stream-tts из
-исходников в режиме managed (docs/stream-tts.md). По умолчанию out — packaging/windows/build/runtime, загрузки
+  --cuda: <out>/cuda/   ggml-cuda.dll и рантайм CUDA 13 (cudart, cuBLAS), ~660 МБ — для build-exe.py --runtime all.
+                В установщик CUDA не входит: установщик и вкладка «Сервер» качают те же два архива llama.cpp сами.
+                Их адреса, размеры и sha256 — в stream-tts/streamtts/downloads.json (cuda.archives), отсюда же их
+                берёт и этот скрипт, так что версия CUDA закреплена в одном месте.
+--flat DIR собирает core и файлы CUDA в одну папку: так выглядит runtime/ в корне проекта для запуска stream-tts
+из исходников в режиме managed (docs/stream-tts.md). По умолчанию out — packaging/windows/build/runtime, загрузки
 кешируются в packaging/windows/build/cache. Нужен только Python 3 (стандартная библиотека).
+
+CRT (msvcp140*, vcruntime140*, concrt140) кладётся рядом с cosyvoice-server.exe, чтобы не ставить VC++
+Redistributable с правами администратора: Microsoft разрешает такую поставку (app-local, redist.txt Visual Studio).
+cosyvoice собран тулсетом 14.51 и со старым рантаймом не запускается, поэтому берётся самая новая копия не ниже
+CRT_MIN: папки Microsoft.VC14*.CRT установленных Visual Studio (VC/Redist/MSVC/<версия>/x64) и System32 (туда
+его ставит VC++ Redistributable; на windows-latest в GitHub Actions — VS 2022 с redist 14.44, а в System32 —
+14.51.36247), или папка из --crt.
 
 Версии проверены 17.10.2026 на RTX 3060 Ti (docs/stream-tts.md, «Развёртывание»): GGML в релизах cosyvoice.cpp не
 поставляется, его берут из llama.cpp; общие файлы GGML во всех архивах llama.cpp одинаковы, поэтому ядро берётся
 из Vulkan-архива (в нём есть и все ggml-cpu-*), а из CUDA-архива — только ggml-cuda.dll. Сборки FFmpeg у BtbN
 со временем удаляются: если ссылка пропала, взять свежую autobuild-* n8.1 lgpl-shared и обновить sha256.
 """
-import argparse, hashlib, os, shutil, sys, urllib.request, zipfile
+import argparse, contextlib, glob, hashlib, json, os, shutil, subprocess, sys, urllib.request, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, "build")
@@ -28,21 +38,21 @@ ASSETS = {
                   "6667b0bc30fcf13d595feb1eff8114a8234186f625486d47cb4efb8e63e0f91a"),
     "vulkan": (f"{LLAMA}/llama-b11500-bin-win-vulkan-x64.zip",
                "aff80157bf74a2f9a450e6946a9ce7bea0f4a47e65da1224ee36f7dcb965763e"),
-    "cuda": (f"{LLAMA}/llama-b11500-bin-win-cuda-13.4-x64.zip",
-             "acc9413b9a1af8db6698b032e316297a2446056d7e7799e06304145dfa6e5b5e"),
-    "cudart": (f"{LLAMA}/cudart-llama-bin-win-cuda-13.4-x64.zip",
-               "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668"),
     "icu": (f"{GH}/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-Win64-MSVC2022.zip",
             "446b671f9437227daa79e221d4521d75793f9ecd65ac44c06e34dd848f201ac2"),
     "ffmpeg": (f"{GH}/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-16-13-04/"
                "ffmpeg-n8.1.3-18-g46d899d7a0-win64-lgpl-shared-8.1.zip",
                "35a7bd207e5dd6c3d1acbe22ed81ae195f081d3527e58f556b15468400252239"),
-    # Последняя поддерживаемая версия (aka.ms/vs/17 отдаёт старую 14.44, а cosyvoice собран тулсетом 14.51 и со
-    # старым рантаймом не запустится). sha256 не закрепить; файл подписан Microsoft, версию проверяет установщик.
-    "vc_redist": ("https://aka.ms/vc14/vc_redist.x64.exe", None),
 }
+# Закреплённые загрузки программы и установщика: архивы CUDA (llama.cpp) и модели
+DOWNLOADS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "stream-tts", "streamtts", "downloads.json")
+with open(DOWNLOADS, encoding="utf-8") as _f:
+    CUDA = json.load(_f)["cuda"]
+# Архивы CUDA — по порядку в downloads.json: llama.cpp (ggml-cuda.dll) и cudart; качаются только для --cuda и --flat
+CUDA_ASSETS = ("cuda", "cudart")
+ASSETS.update({name: (a["url"], a["sha256"]) for name, a in zip(CUDA_ASSETS, CUDA["archives"])})
 
-# (архив, имена файлов в нём — без пути; * в конце — по префиксу), компонент
+# (архив, имена файлов в нём — без пути; * в конце — по префиксу), куда: core или cuda (содержимое zip)
 LAYOUT = [
     ("cosyvoice", ["cosyvoice-server.exe", "cosyvoice-cli.exe", "cosyvoice.dll", "onnxruntime.dll",
                    "onnxruntime_providers_shared.dll"], "core"),
@@ -51,9 +61,17 @@ LAYOUT = [
     # avdevice, avfilter, swscale нужны только ffmpeg.exe (stream-tts: mp3 примеров, эффекты)
     ("ffmpeg", ["avcodec-62.dll", "avformat-62.dll", "avutil-60.dll", "swresample-6.dll", "avdevice-62.dll",
                 "avfilter-11.dll", "swscale-9.dll", "ffmpeg.exe"], "core"),
-    ("cuda", ["ggml-cuda.dll"], "cuda"),
-    ("cudart", ["cudart64_13.dll", "cublas64_13.dll", "cublasLt64_13.dll"], "cuda"),
+    *((name, a["files"], "cuda") for name, a in zip(CUDA_ASSETS, CUDA["archives"])),
 ]
+# DLL рантайма VC++: рантайму нужны MSVCP140, MSVCP140_1, VCRUNTIME140, VCRUNTIME140_1 (dumpbin /dependents), остальные
+# библиотеки C++ из того же набора Microsoft.VC14x.CRT — на случай новых версий cosyvoice и GGML
+CRT = ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atomic_wait.dll", "msvcp140_codecvt_ids.dll",
+       "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll")
+CRT_MIN = (14, 51)
+# ggml-cuda.dll собран вместе с ggml-base.dll своей сборки llama.cpp, поэтому CUDA берётся из той же сборки, что
+# и ядро, а в её версии (cuda-version.txt) — и CUDA, и сборка
+if f"/{LLAMA.rsplit('/', 1)[-1]}/" not in CUDA["archives"][0]["url"] or not CUDA["version"].endswith(LLAMA.rsplit("/", 1)[-1]):
+    sys.exit(f"CUDA в downloads.json ({CUDA['version']}) не из сборки llama.cpp ядра ({LLAMA}): обновите cuda там")
 LICENSES = {"icu": "LICENSE", "ffmpeg": "LICENSE.txt"}  # кладутся в core/licenses/<архив>-<файл>
 # В архивах cosyvoice.cpp и llama.cpp текстов лицензий нет, а MIT/BSD требуют их прикладывать: берём из репозиториев
 # тех же версий. cosyvoice.dll статически содержит PCRE2 (подмодуль vendor/pcre2), cosyvoice-server — cpp-httplib и
@@ -135,23 +153,77 @@ def zip_member_sha(archive, base):
         return hashlib.sha256(z.read(info)).hexdigest()
 
 
+def file_version(path):
+    """(major, minor, build, private) из ресурса версии DLL (Windows) или None."""
+    import ctypes
+    v = ctypes.windll.version
+    size = v.GetFileVersionInfoSizeW(path, None)
+    if not size:
+        return None
+    buf = ctypes.create_string_buffer(size)
+    ptr, n = ctypes.c_void_p(), ctypes.c_uint()
+    if not (v.GetFileVersionInfoW(path, 0, size, buf) and v.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(n))):
+        return None
+    ms, ls = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_uint32))[2:4]  # VS_FIXEDFILEINFO.dwFileVersionMS/LS
+    return ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF
+
+
+def crt_dirs():
+    """Папки, где может лежать CRT: Microsoft.VC14*.CRT всех Visual Studio (vswhere) и System32."""
+    found, roots = [], []
+    vswhere = os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Microsoft Visual Studio",
+                           "Installer", "vswhere.exe")
+    if os.path.isfile(vswhere):
+        out = subprocess.run([vswhere, "-all", "-products", "*", "-prerelease", "-property", "installationPath"],
+                             capture_output=True, text=True).stdout
+        roots = [r.strip() for r in out.splitlines() if r.strip()]
+    for root in roots:
+        found += glob.glob(os.path.join(root, "VC", "Redist", "MSVC", "*", "x64", "Microsoft.VC14*.CRT"))
+    found.append(os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32"))
+    return found
+
+
+def find_crt(forced=None):
+    """Папка с полным набором CRT самой новой версии (наименьшая из версий файлов) и эта версия."""
+    best = None
+    for d in [forced] if forced else crt_dirs():
+        if not all(os.path.isfile(os.path.join(d, f)) for f in CRT):
+            continue
+        ver = min(file_version(os.path.join(d, f)) or (0,) for f in CRT)
+        if not best or ver > best[1]:
+            best = (d, ver)
+    if not best or best[1][:2] < CRT_MIN:
+        have = f"{best[0]}: {'.'.join(map(str, best[1]))}" if best else "не найден"
+        sys.exit(f"нужен рантайм VC++ не ниже {'.'.join(map(str, CRT_MIN))} ({have}): поставьте Visual Studio Build "
+                 "Tools 2026 (MSVC 14.51+) или свежий VC++ Redistributable, или укажите папку в --crt")
+    return best
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default=os.path.join(BUILD, "runtime"))
     ap.add_argument("--cache", default=os.path.join(BUILD, "cache"))
-    ap.add_argument("--flat", help="ещё и собрать core и cuda в одну папку (runtime/ для запуска из исходников)")
+    ap.add_argument("--crt", help="папка с DLL рантайма VC++ (иначе — самая новая из Visual Studio и System32)")
+    ap.add_argument("--cuda", action="store_true", help="разложить и файлы CUDA в <out>/cuda")
+    ap.add_argument("--flat", help="ещё и собрать core и CUDA в одну папку (runtime/ для запуска из исходников)")
     a = ap.parse_args()
+    cuda = a.cuda or bool(a.flat)
     os.makedirs(a.cache, exist_ok=True)
-    files = {name: fetch(name, a.cache) for name in ASSETS}
+    files = {name: fetch(name, a.cache) for name in ASSETS if cuda or name not in CUDA_ASSETS}
+    crt, crt_ver = find_crt(a.crt)
+    print(f"CRT {'.'.join(map(str, crt_ver))}: {crt}")
 
     # ggml-cuda.dll собран вместе с ggml-base.dll своего архива: убедиться, что ядро из Vulkan-архива то же самое
-    if zip_member_sha(files["vulkan"], "ggml-base.dll") != zip_member_sha(files["cuda"], "ggml-base.dll"):
+    if cuda and zip_member_sha(files["vulkan"], "ggml-base.dll") != zip_member_sha(files["cuda"], "ggml-base.dll"):
         sys.exit("ggml-base.dll в Vulkan- и CUDA-архивах llama.cpp различаются: брать ядро из CUDA-архива")
 
     for comp in ("core", "cuda"):
         shutil.rmtree(os.path.join(a.out, comp), ignore_errors=True)
     for name, patterns, comp in LAYOUT:
-        extract(files[name], patterns, os.path.join(a.out, comp))
+        if name in files:
+            extract(files[name], patterns, os.path.join(a.out, comp))
+    for f in CRT:
+        shutil.copy(os.path.join(crt, f), os.path.join(a.out, "core", f))
     lic = os.path.join(a.out, "core", "licenses")
     os.makedirs(lic, exist_ok=True)
     for name, base in LICENSES.items():
@@ -161,17 +233,28 @@ def main():
     os.makedirs(os.path.join(a.cache, "licenses"), exist_ok=True)
     for base, (url, want) in LICENSE_URLS.items():
         shutil.copy(download(url, want, os.path.join(a.cache, "licenses", base), base), lic)
-    shutil.copy(files["vc_redist"], os.path.join(a.out, "vc_redist.x64.exe"))
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(os.path.join(a.out, "vc_redist.x64.exe"))  # от прошлых сборок: рантайм VC++ теперь в core
 
-    for comp in ("core", "cuda"):
-        d = os.path.join(a.out, comp)
-        size = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(d) for f in fs)
-        print(f"{comp}: {len(os.listdir(d))} файлов, {size / 2**20:.0f} МБ")
+    def size(d):
+        return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(d) for f in fs)
+
+    core = os.path.join(a.out, "core")
+    print(f"core: {len(os.listdir(core))} файлов, {size(core) / 2**20:.0f} МБ")
+    for old in glob.glob(os.path.join(a.out, "StreamTTS-cuda-*.zip")):
+        os.remove(old)  # от прошлых сборок: свой архив CUDA больше не делается
+    if cuda:
+        d = os.path.join(a.out, "cuda")
+        print(f"cuda: {len(os.listdir(d))} файлов, {size(d) / 2**20:.0f} МБ")
+        if size(d) != CUDA["unpacked"] or sorted(os.listdir(d)) != sorted(CUDA["files"]):
+            sys.exit(f"файлы CUDA не совпадают с downloads.json (cuda.files, cuda.unpacked = {size(d)})")
 
     if a.flat:
         os.makedirs(a.flat, exist_ok=True)
         for comp in ("core", "cuda"):
             shutil.copytree(os.path.join(a.out, comp), a.flat, dirs_exist_ok=True)
+        with open(os.path.join(a.flat, "cuda-version.txt"), "w", encoding="utf-8") as f:
+            f.write(CUDA["version"])
         print(f"Собрано в {a.flat}")
 
 

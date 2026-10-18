@@ -28,8 +28,8 @@
 |---|---|---|
 | `setup.sh`, `docker-compose.yml`, `docker-compose.gpu.yml` | запуск всего стека | да |
 | `cosyvoice/` | `Dockerfile` и `entrypoint.sh` образа cosyvoice-server | да |
-| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели, дополнительные пакеты и наборы голосов из админки, `editor.py` — новый голос из записи (черновик, тестовые фразы, сохранение), `separate.py` — очистка образца от музыки (htdemucs в ONNX через onnxruntime, пакет «music»), `bench.py` — проверка скорости устройств, `desktop.py` — точка входа собранной программы, `updates.py` — проверка новой версии (latest.json релиза на GitHub), `i18n.py` — язык интерфейса, `static/` — админка, оверлей, страница голосов, `static/en.json` — английский словарь, `static/i18n.js` — перевод страниц, `static/quants/` — примеры звука квантов (их же берёт установщик); `stream-tts/check-i18n.py` — строки без перевода | да |
-| `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup), `release.py` (`latest.json` и текст релиза), `THIRD-PARTY.txt` и `THIRD-PARTY.en.txt` (сторонние лицензии, страница «Информация» установщика); сборочный venv `.venv`, портативный Inno Setup `.inno`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
+| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели, дополнительные пакеты и наборы голосов из админки, `editor.py` — новый голос из записи (черновик, тестовые фразы, сохранение), `separate.py` — очистка образца от музыки (htdemucs в ONNX через onnxruntime, пакет «music»), `bench.py` — проверка скорости устройств, `desktop.py` — точка входа собранной программы, `updates.py` — проверка новой версии (latest.json релиза на GitHub), `i18n.py` — язык интерфейса, `downloads.json` — закреплённые загрузки (архивы CUDA из релиза llama.cpp, кванты модели) для `install.py`, `build-runtime.py` и установщика, `static/` — админка, оверлей, страница голосов, `static/en.json` — английский словарь, `static/i18n.js` — перевод страниц, `static/quants/` — примеры звука квантов (их же берёт установщик); `stream-tts/check-i18n.py` — строки без перевода | да |
+| `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм с DLL VC++; `--cuda` — ещё файлы CUDA), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup 6.5+, без админа, всё в `{app}`: качает CUDA и модель), `release.py` (`latest.json` и текст релиза), `THIRD-PARTY.txt` и `THIRD-PARTY.en.txt` (сторонние лицензии, страница «Информация» установщика); сборочный venv `.venv`, портативный Inno Setup `.inno`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`, `import-voices.sh` | да |
 | `tools/voices/` | общий подбор: `pick.py` + `pick.html` (страница, `--add`, `--add-batch`, `--install`), `synth.py` (синтез и оценки), `emotions.py` (модель эмоций), `emotion-eval.py` + `.html` (сверка моделей эмоций с разметкой на слух), `campplus.py` (эмбеддинги) | да |
 | `tools/wc3/` | реплики WC3: `cut-clips.py` (кандидаты партиями, `pools.json`), `review.py` (тексты и метки фраз), `extract-subtitles.py` | да |
@@ -71,8 +71,9 @@
   (ставит `COSYVOICE_URL=http://localhost:8080`, данные берутся из `stream-tts-data/`).
 - Shell-скрипты — bash (Git Bash на Windows), из PowerShell не запускаются.
 - Программа для Windows: `packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py --runtime core`
-  (Nuitka + MSVC, первая сборка ~6 мин), установщик — `--setup` (нужен Inno Setup 6). Рантайм —
-  `build-runtime.py`. Проверять собранный exe на другом порту и с отдельными данными (`STREAM_TTS_PORT`,
+  (Nuitka + MSVC, первая сборка ~6 мин), установщик — `--setup` (нужен Inno Setup 6.5+). Рантайм —
+  `build-runtime.py` (`--cuda` — ещё файлы CUDA для `--runtime all`). Установленная программа хранит данные, модели и голоса в своей
+  папке (`data\`, `models\`, `voices\`, признак — файл `portable`). Проверять собранный exe на другом порту и с отдельными данными (`STREAM_TTS_PORT`,
   `STREAM_TTS_DATA`), чтобы не задеть Docker-версию на 8090.
 
 ## Подводные камни
@@ -80,6 +81,10 @@
 - Сборка Nuitka: собранную программу `paths.py` узнаёт по `__compiled__` (Nuitka не задаёт `sys.frozen`), данные
   пакета и `effects/` лежат рядом с exe. Модули, которые грузятся по пути через importlib (эффекты), и их импорты
   Nuitka не видит: новые зависимости эффектов добавлять в `--include-module` в `build-exe.py`.
+- CUDA в установщик не входит: установщик и вкладка «Сервер» качают два архива из релиза llama.cpp той же сборки,
+  что и ядро GGML (`downloads.json`, `cuda.archives`; `ggml-cuda.dll` должен совпадать с `ggml-base.dll`). Новая
+  сборка llama.cpp — `LLAMA`/`ASSETS` в `build-runtime.py` и запись `cuda` в `downloads.json` вместе. Строка в
+  `[Code]` `StreamTTS.iss` не должна начинаться с `[` (Inno считает её заголовком секции).
 - Версия программы — только `__version__` в `stream-tts/streamtts/__init__.py`. Релиз — аннотированный тег
   `v<версия>`: CI собирает установщик и публикует релиз с `latest.json`, по которому программа ищет обновления
   (`REPO` в `updates.py` должен совпадать с репозиторием, иначе CI падает на шаге «Версия»).

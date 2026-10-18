@@ -566,6 +566,11 @@ async def post_package_delete(request, ctx, data):
     return ok()
 
 
+async def post_cuda_download(request, ctx, data):
+    _install(ctx).start_cuda()
+    return ok()
+
+
 # --- обновления (updates.py) ---
 async def post_update_check(request, ctx, data):
     await ctx.updates.check()
@@ -623,6 +628,7 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/draft/discard": post_draft_discard,
     "/api/package/download": post_package_download,
     "/api/package/delete": post_package_delete,
+    "/api/cuda/download": post_cuda_download,
     "/api/update/check": post_update_check,
     "/api/update/dismiss": post_update_dismiss,
 }.items()}

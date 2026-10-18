@@ -1044,7 +1044,8 @@ function renderServer() {
   $("#dl-text").className = "small " + ({ error: "bad", done: "good" }[d.state] || "");
   $("#dl-text").textContent = {
     running: dlProgress(d),
-    done: d.package ? ((pkg(d.package) || {}).restart ? T("Готово: пакет скачан, сервер перезапускается.")
+    done: d.package === "cuda" ? T("Готово: CUDA установлена, сервер перезапускается.")
+      : d.package ? ((pkg(d.package) || {}).restart ? T("Готово: пакет скачан, сервер перезапускается.")
         : T("Готово: пакет скачан."))
       : T("Готово: {quant} скачана, сервер перезапускается.", { quant: d.quant }),
     cancelled: T("Загрузка отменена на {done} из {total}: «Скачать» продолжит с этого места.",
@@ -1063,6 +1064,7 @@ function renderServer() {
   }
   $("#backend-lock").hidden = !rt.locked.backend;
   $("#backend-lock").textContent = T("Устройство задано переменной COSYVOICE_BACKEND.");
+  renderCuda(st, d);
   // Наборы голосов
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
     h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted small" },
@@ -1084,6 +1086,30 @@ function renderServer() {
     row(T("Программа"), rt.server)));
 }
 $("#model-cancel").onclick = () => api("/api/model/cancel");
+
+// CUDA (install.py, cuda_state): есть драйвер NVIDIA, а ggml-cuda.dll рядом с сервером нет — предложить скачать
+let cudaKey = "";
+function renderCuda(st, d) {
+  const c = st.cuda, mine = d.package === "cuda", running = d.state === "running";
+  const key = JSON.stringify([c, mine && d]);
+  if (key === cudaKey) return;
+  cudaKey = key;
+  $("#cuda").hidden = !c.offer && !(mine && running);
+  if ($("#cuda").hidden) return;
+  const action = mine && running ? h("button", { onclick: () => api("/api/model/cancel") }, T("Отменить"))
+    : h("button", { class: "primary", disabled: running, onclick: () => api("/api/cuda/download") }, T("Скачать"));
+  const status = mine && ["running", "error", "cancelled"].includes(d.state) ? h("div", { class: "small " + ({ error: "bad" }[d.state] || "") },
+      { running: dlProgress(d), error: T("Ошибка: {e}", { e: d.error }),
+        cancelled: T("Загрузка отменена: «Скачать» продолжит с того же места.") }[d.state])
+    : null;
+  $("#cuda").replaceChildren(h("li", { class: "on" }, h("div", { class: "grow" },
+    h("b", {}, T("Ускорение на видеокартах NVIDIA (CUDA)")), " ",
+    h("span", { class: "muted small" }, T("{size}, на диске {disk}", { size: fmtMB(c.size), disk: fmtMB(c.unpacked) })),
+    h("div", { class: "small muted" }, T("Видеокарта NVIDIA есть, а CUDA не установлена. С CUDA синтез на ней обычно " +
+      "быстрее и требует меньше видеопамяти, чем через Vulkan. Файлы лягут в {dir}, сервер синтеза перезапустится.",
+      { dir: c.dir })),
+    status), action));
+}
 
 // Скорость синтеза (bench.py): результаты по устройствам и моделям, текущее выделено
 function benchVerdict(rtf) {

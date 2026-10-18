@@ -7,6 +7,13 @@
 с докачкой (Range) и повторами, сверяется с sha256 из x-linked-etag и только потом переименовывается. Папка
 моделей — paths.MODELS.
 
+CUDA (ggml-cuda.dll и рантайм CUDA 13) в установщик не входит: это два архива из релиза llama.cpp той же сборки,
+что и ядро GGML (адреса, размеры и sha256 — в downloads.json, cuda.archives; там же закреплены кванты модели для
+установщика). Если в системе есть драйвер NVIDIA (nvcuda.dll), а ggml-cuda.dll рядом с cosyvoice-server нет,
+вкладка «Сервер» предлагает скачать их: из архивов берутся только нужные файлы (cuda.files), они распаковываются в
+папку сервера при остановленном сервере, версия пишется в cuda-version.txt (по ней установщик при обновлении
+решает, качать ли CUDA заново), потом сервер перезапускается и заново ищет устройства.
+
 Набор голосов — zip с *.gguf и manifest.json (ключи — имена голосов: title, post…) в корне или в одной папке.
 Имя набора — эта папка или имя zip; оно же группа на странице голосов (voices.GROUPS). Набор ставится в
 paths.VOICES/<набор>/ целиком, старая версия заменяется. Голос с именем, которое уже есть в другом наборе,
@@ -21,6 +28,23 @@ from .i18n import tr
 
 log = logging.getLogger("install")
 
+# Закреплённые загрузки (их же берёт установщик, build-exe.py передаёт их в StreamTTS.iss)
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads.json"), encoding="utf-8") as _f:
+    DOWNLOADS = json.load(_f)
+CUDA = DOWNLOADS["cuda"]
+# Другая папка с теми же архивами (проверка без GitHub: python -m http.server в packaging/windows/build/cache)
+CUDA_BASE = paths.env("STREAM_TTS_CUDA_URL").rstrip("/")
+
+
+def cuda_archives():
+    """[(url, имя файла, размер, sha256, нужные файлы)] архивов CUDA."""
+    out = []
+    for a in CUDA["archives"]:
+        name = a["url"].rsplit("/", 1)[-1]
+        out.append((f"{CUDA_BASE}/{name}" if CUDA_BASE else a["url"], name, a["size"], a["sha256"], a["files"]))
+    return out
+CUDA_VERSION_FILE = "cuda-version.txt"
+
 REPO = "Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF"
 BASE = f"https://huggingface.co/{REPO}/resolve/main"
 # Кванты на выбор (полный список — scripts/download-model.sh --list): размер файла в байтах и видеопамять
@@ -31,10 +55,12 @@ BASE = f"https://huggingface.co/{REPO}/resolve/main"
 # ohf-denis — из датасета ru_RU-denis (OHF-Voice/voice-datasets, CC0), чтобы примеры можно было распространять;
 # как он собран — docs/stream-tts.md.
 QUANTS = {
-    "Q8_0": dict(size=943933536, vram=1500, vram_max=1900),
-    "Q6_K": dict(size=839539424, vram=1450, vram_max=1800),
-    "Q5_K_M": dict(size=682814464, vram=1300, vram_max=1700),
+    "Q8_0": dict(vram=1500, vram_max=1900),
+    "Q6_K": dict(vram=1450, vram_max=1800),
+    "Q5_K_M": dict(vram=1300, vram_max=1700),
 }
+for _q, _d in QUANTS.items():
+    _d["size"] = DOWNLOADS["model"]["quants"][_q]["size"]
 DEFAULT_QUANT = "Q8_0"  # рекомендация автора модели
 SAMPLES = (("ohf-denis", "Пример"),)  # голос в установщике — SampleVoice в StreamTTS.iss
 SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет. Вперёд!"
@@ -107,7 +133,59 @@ class Installer:
                     models=installed_models(),
                     model=os.path.basename(self.runtime.model) if self.runtime.model else self.s.get("model", ""),
                     models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets(),
-                    packages=packages())
+                    packages=packages(), cuda=self.cuda_state())
+
+    # --- CUDA ---
+    def cuda_state(self):
+        """CUDA для вкладки «Сервер»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda.dll нет)."""
+        d = self.runtime.dir
+        version = ""
+        with contextlib.suppress(OSError):
+            with open(os.path.join(d, CUDA_VERSION_FILE), encoding="utf-8-sig") as f:
+                version = f.read().strip()
+        installed = os.path.isfile(os.path.join(d, "ggml-cuda" + (".dll" if os.name == "nt" else ".so")))
+        nvidia = os.name == "nt" and os.path.isfile(
+            os.path.join(paths.env("SystemRoot", r"C:\Windows"), "System32", "nvcuda.dll"))
+        return dict(offer=nvidia and not installed, installed=installed, version=version,
+                    size=sum(a["size"] for a in CUDA["archives"]), unpacked=CUDA["unpacked"], dir=d)
+
+    def start_cuda(self):
+        if not self.cuda_state()["offer"]:
+            raise ValueError(tr("CUDA уже установлена или здесь не нужна"))
+        if self.task and not self.task.done():
+            raise ValueError(tr("загрузка уже идёт"))
+        self.dl = dict(state="running", quant="", package="cuda", file="", done=0, total=0, speed=0.0, error="")
+        self.task = asyncio.create_task(self._download_cuda())
+
+    async def _download_cuda(self):
+        d = self.runtime.dir
+        archives = cuda_archives()
+        try:
+            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                self.dl.update(total=sum(a[2] for a in archives),
+                               done=sum(_part_size(os.path.join(d, a[1])) for a in archives))
+                for url, name, size, sha, _ in archives:
+                    dst = os.path.join(d, name)
+                    if not (os.path.isfile(dst) and os.path.getsize(dst) == size):  # скачан в прошлый раз
+                        await self._fetch(session, url, name, dst, size, sha)
+                    else:
+                        self.dl["done"] += size
+            self.dl.update(file=tr("{file}: распаковка", file="CUDA"), speed=0.0)
+            self._push(force=True)
+            async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll
+                await asyncio.to_thread(_extract_cuda, archives, d)
+                self.runtime.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
+            self.dl.update(state="done", file="", speed=0.0)
+            log.info("CUDA %s установлена в %s", CUDA["version"], d)
+        except asyncio.CancelledError:
+            self.dl.update(state="cancelled", speed=0.0, error="")
+            log.info("загрузка CUDA отменена (докачается со следующей попытки)")
+        except Exception as e:
+            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
+            log.warning("CUDA: %s", self.dl["error"])
+        finally:
+            self._push(force=True)
 
     def _push(self, force=False):
         now = time.monotonic()
@@ -148,18 +226,26 @@ class Installer:
         log.info("пакет %s удалён", pid)
 
     def first_run(self):
-        """Модели нет, а в установщике выбран квант: качаем его сам, один раз (отмена не перезапускает)."""
-        if installed_models() or self.s.get("setup_download"):
-            return
+        """Квант, выбранный в установщике. Установщик его скачал — он и используется (один раз на выбор: потом
+        решает вкладка «Сервер»); модели нет совсем (загрузку в установщике пропустили или она не удалась) — качаем
+        сами, тоже один раз (отмена не перезапускает)."""
         try:
             with open(SETUP_CHOICE, encoding="utf-8-sig") as f:
                 quant = f.read().strip()
         except OSError:
             return
-        if quant in QUANTS:
-            log.info("модель %s выбрана в установщике, качаю", quant)
-            self.s.update(setup_download=quant)
-            self.start_download(quant, False)
+        if quant not in QUANTS:
+            return
+        if model_name(quant) in installed_models():
+            if self.s.get("setup_model") != quant:
+                log.info("модель %s скачана установщиком", quant)
+                self.s.update(model=model_name(quant), setup_model=quant)
+            return
+        if installed_models() or self.s.get("setup_download"):
+            return
+        log.info("модель %s выбрана в установщике, качаю", quant)
+        self.s.update(setup_download=quant)
+        self.start_download(quant, False)
 
     def cancel(self):
         if self.task and not self.task.done():
@@ -271,6 +357,26 @@ class Installer:
         async with self.runtime.paused():
             await asyncio.to_thread(shutil.rmtree, target)
         log.info("набор %s удалён", name)
+
+
+def _extract_cuda(archives, dest):
+    """Из каждого архива — только его файлы из downloads.json (лежат в корне архива); архивы потом не нужны."""
+    for _, name, _, _, files in archives:
+        zpath = os.path.join(dest, name)
+        with zipfile.ZipFile(zpath) as z:
+            names = {i.filename: i for i in z.infolist()}
+            missing = [f for f in files if f not in names]
+            if missing:
+                raise RuntimeError(tr("в архиве CUDA нет {files}", files=", ".join(missing)))
+            for f in files:
+                tmp = os.path.join(dest, f + ".part")
+                with z.open(names[f]) as src, open(tmp, "wb") as dst:
+                    shutil.copyfileobj(src, dst, CHUNK)
+                os.replace(tmp, os.path.join(dest, f))
+    with open(os.path.join(dest, CUDA_VERSION_FILE), "w", encoding="utf-8") as f:
+        f.write(CUDA["version"])
+    for _, name, _, _, _ in archives:
+        os.remove(os.path.join(dest, name))
 
 
 def package_installed(pid):

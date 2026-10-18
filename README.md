@@ -260,8 +260,8 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 чтобы не мешать Docker-версии. Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
 проверка словаря `python stream-tts/check-i18n.py`.
 
-Программа для Windows без Docker и Python (установщик с рантаймом, модель качается из админки) собирается в
-`packaging/windows/`: [docs/stream-tts.md](docs/stream-tts.md#сборка-для-windows).
+Программа для Windows без Docker и Python (установщик без прав администратора, всё в папке программы; CUDA и модель
+качаются по выбору во время установки) собирается в `packaging/windows/`: [docs/stream-tts.md](docs/stream-tts.md#сборка-для-windows).
 
 ### Перенос голосов между инстансами
 
@@ -311,10 +311,12 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 │                          # голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
-│                          # i18n.py (язык интерфейса), static/ (static/en.json — английский словарь, static/i18n.js —
-│                          # перевод страниц, static/quants/ — примеры звука квантов для админки и установщика)
-├── packaging/windows/     # программа и установщик для Windows: build-runtime.py, build-exe.py (Nuitka),
-│                          # StreamTTS.iss (Inno Setup), release.py (latest.json релиза);
+│                          # i18n.py (язык интерфейса), downloads.json (закреплённые загрузки: CUDA из llama.cpp и кванты
+│                          # модели), static/ (static/en.json — английский словарь, static/i18n.js — перевод
+│                          # страниц, static/quants/ — примеры звука квантов для админки и установщика)
+├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++),
+│                          # build-exe.py (Nuitka), StreamTTS.iss (Inno Setup: загрузка CUDA и модели),
+│                          # release.py (latest.json релиза);
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой

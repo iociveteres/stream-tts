@@ -2,7 +2,9 @@
 
 - Программа и статика только читаются: рядом с кодом (в сборке — папка exe, Nuitka кладёт туда данные пакета).
 - Данные (настройки, SQLite, примеры), модели и голоса: в исходниках проекта — его папки stream-tts-data/,
-  models/, voices/, как раньше; иначе %LOCALAPPDATA%\\StreamTTS\\ на Windows, $XDG_DATA_HOME/stream-tts на Linux.
+  models/, voices/, как раньше; у программы, поставленной установщиком (рядом с exe лежит файл-признак portable), —
+  data/, models/, voices/ в её папке; иначе %LOCALAPPDATA%\\StreamTTS\\ на Windows, $XDG_DATA_HOME/stream-tts на
+  Linux.
 - Рантайм (cosyvoice-server, DLL, ffmpeg): runtime/ рядом с программой (в исходниках — в корне проекта).
 Переменные STREAM_TTS_DATA, STREAM_TTS_MODELS, STREAM_TTS_VOICES, STREAM_TTS_PROJECT, STREAM_TTS_RUNTIME
 переопределяют всё (Docker задаёт STREAM_TTS_DATA и STREAM_TTS_PROJECT в Dockerfile)."""
@@ -34,12 +36,16 @@ def user_data():
     return os.path.join(env("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"), "stream-tts")
 
 
-_BASE = _REPO if FROM_SOURCE else user_data()
-DATA = env("STREAM_TTS_DATA", os.path.join(_BASE, "stream-tts-data") if FROM_SOURCE else _BASE)
+# Установщик (StreamTTS.iss) ставит программу для одного пользователя в папку, куда можно писать, и кладёт туда этот
+# признак: всё хранится в папке программы
+PORTABLE = not FROM_SOURCE and os.path.isfile(os.path.join(APP, "portable"))
+_BASE = _REPO if FROM_SOURCE else APP if PORTABLE else user_data()
+DATA = env("STREAM_TTS_DATA", os.path.join(_BASE, "stream-tts-data") if FROM_SOURCE
+           else os.path.join(_BASE, "data") if PORTABLE else _BASE)
 MODELS = env("STREAM_TTS_MODELS", os.path.join(_BASE, "models"))
 VOICES = env("STREAM_TTS_VOICES", os.path.join(_BASE, "voices"))
 # Корень проекта: voice-refs/*/manifest.json и скрипты эффектов (post) ищутся от него
-PROJECT = env("STREAM_TTS_PROJECT", _REPO if FROM_SOURCE else _BASE)
+PROJECT = env("STREAM_TTS_PROJECT", _REPO if FROM_SOURCE else DATA)
 RUNTIME = env("STREAM_TTS_RUNTIME", os.path.join(APP, "runtime"))
 
 
