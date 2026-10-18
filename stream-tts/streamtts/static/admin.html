@@ -27,6 +27,7 @@
   <button data-tab="stats">Статистика</button>
 </nav>
 <div id="banner" hidden></div>
+<div id="update-banner" hidden></div>
 <main>
 
 <!-- ============ Очередь ============ -->
@@ -362,6 +363,21 @@
         <p class="muted small">Сторонние модели, которые нужны не для озвучки, а для отдельных функций. Качаются с
           Hugging Face по кнопке и лежат в папке моделей.</p>
         <ul id="packages" class="setlist"></ul>
+      </div>
+      <div class="card">
+        <h2>Обновления</h2>
+        <p class="small">Установлена версия <b id="update-version" translate="no"></b></p>
+        <div class="row end">
+          <label class="grow">Проверять новую версию
+            <select id="update-check">
+              <option value="day">раз в день</option>
+              <option value="week">раз в неделю</option>
+              <option value="month">раз в месяц</option>
+              <option value="off">не проверять</option>
+            </select></label>
+          <button type="button" id="update-now">Проверить сейчас</button>
+        </div>
+        <div id="update-status" class="small mt"></div>
       </div>
       <div class="card">
         <h2>Сервер</h2>

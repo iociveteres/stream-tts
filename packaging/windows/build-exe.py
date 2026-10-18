@@ -11,9 +11,9 @@ Python 3.13+ не поддерживает. Первая сборка — нес
 --runtime core|all кладёт в dist/StreamTTS/runtime/ рантайм из build/runtime (build-runtime.py): core — без CUDA,
 all — с CUDA. Так собранную программу можно запустить без установщика; установщик (StreamTTS.iss) берёт рантайм
 сам, из build/runtime.
---setup собирает установщик dist/StreamTTS-Setup-<VERSION>.exe (Inno Setup 6: ISCC из переменной ISCC, портативной
-установки в packaging/windows/.inno, PATH или стандартных папок установки), --no-build — только установщик из уже
-собранного dist/StreamTTS.
+--setup собирает установщик dist/StreamTTS-Setup-<версия>.exe (версия — __version__ в streamtts/__init__.py; Inno
+Setup 6: ISCC из переменной ISCC, портативной установки в packaging/windows/.inno, PATH или стандартных папок
+установки), --no-build — только установщик из уже собранного dist/StreamTTS.
 """
 import argparse, importlib.metadata as md, os, re, shutil, subprocess, sys
 
@@ -22,7 +22,8 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 SRC = os.path.join(ROOT, "stream-tts")
 DIST = os.path.join(HERE, "dist")
 APP = os.path.join(DIST, "StreamTTS")
-VERSION = "0.1.0"
+# Версия — одна на всё: streamtts/__init__.py (её же показывает админка и сверяет CI с тегом релиза)
+VERSION = re.search(r'__version__ = "(.+?)"', open(os.path.join(SRC, "streamtts", "__init__.py"), encoding="utf-8").read())[1]
 # Пакеты, у которых лицензии лежат в папке пакета, а не в dist-info/licenses. Их зависимости не обходятся:
 # onnxruntime требует flatbuffers, packaging и protobuf только для инструментов (onnxruntime.tools и т. п.), а
 # `import onnxruntime` их не тянет, и Nuitka их в программу не кладёт.

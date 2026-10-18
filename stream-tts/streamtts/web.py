@@ -3,7 +3,7 @@ import asyncio, contextlib, hashlib, hmac, json, logging, os, re, secrets, tempf
 
 from aiohttp import web
 
-from . import config, editor, i18n, install, runtime, stats
+from . import config, editor, i18n, install, runtime, stats, updates
 from .i18n import tr
 from .engine import SERVICE_COMMANDS
 from .twitch import TwitchError, explain
@@ -141,7 +141,7 @@ async def voices_zip(request):
 # --- состояние ---
 SETTINGS_KEYS = ("enabled", "sources", "reply", "filter_links", "filter_profanity", "read_nick", "subtitles",
                  "queue_limit", "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "lang",
-                 "test_phrases")
+                 "test_phrases", "update_check")
 ACCESS_LEVELS = ("all", "subs", "vip", "mods")
 
 
@@ -160,6 +160,7 @@ def state(ctx, full=True):
         packages=install.packages() if ctx.install
         else install.packages(dict(frontend=bool(ctx.cosy.info.get("frontend_available")))),
         bench=ctx.bench.public() if ctx.bench else None,
+        update=ctx.updates.public(),
         ts=time.time(),
     )
     if full:
@@ -249,6 +250,8 @@ async def post_settings(request, ctx, data):
         elif k == "chunk_tokens":
             v = min(1000, max(10, int(v)))
         elif k == "reply" and v not in ("off", "chat"):
+            continue
+        elif k == "update_check" and v not in updates.INTERVALS:
             continue
         elif k == "test_phrases":
             v = [" ".join(str(p).split())[:300] for p in v if str(p).strip()][:editor.MAX_PHRASES]
@@ -563,6 +566,18 @@ async def post_package_delete(request, ctx, data):
     return ok()
 
 
+# --- обновления (updates.py) ---
+async def post_update_check(request, ctx, data):
+    await ctx.updates.check()
+    return ok(update=ctx.updates.public())
+
+
+async def post_update_dismiss(request, ctx, data):
+    """Скрыть плашку о новой версии до следующей."""
+    ctx.settings.update(update_dismissed=str(data["version"]))
+    return ok()
+
+
 def _wrap(fn):
     async def handler(request):
         try:
@@ -608,4 +623,6 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/draft/discard": post_draft_discard,
     "/api/package/download": post_package_download,
     "/api/package/delete": post_package_delete,
+    "/api/update/check": post_update_check,
+    "/api/update/dismiss": post_update_dismiss,
 }.items()}

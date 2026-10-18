@@ -30,6 +30,7 @@ DEFAULTS = {
     "voices": {},               # имя -> {enabled, gain_db, calib_db, calib_phrase}
     "lang": "",                 # ru | en, пустой — выбрать при первом запуске (i18n.init)
     "known_voices": [],         # последний список голосов сервера (на случай, если он недоступен)
+    "update_check": "day",      # проверка новой версии (updates.py): day | week | month | off
 }
 
 

@@ -28,8 +28,8 @@
 |---|---|---|
 | `setup.sh`, `docker-compose.yml`, `docker-compose.gpu.yml` | запуск всего стека | да |
 | `cosyvoice/` | `Dockerfile` и `entrypoint.sh` образа cosyvoice-server | да |
-| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели, дополнительные пакеты и наборы голосов из админки, `editor.py` — новый голос из записи (черновик, тестовые фразы, сохранение), `separate.py` — очистка образца от музыки (htdemucs в ONNX через onnxruntime, пакет «music»), `bench.py` — проверка скорости устройств, `desktop.py` — точка входа собранной программы, `i18n.py` — язык интерфейса, `static/` — админка, оверлей, страница голосов, `static/en.json` — английский словарь, `static/i18n.js` — перевод страниц, `static/quants/` — примеры звука квантов (их же берёт установщик); `stream-tts/check-i18n.py` — строки без перевода | да |
-| `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup), `THIRD-PARTY.txt` и `THIRD-PARTY.en.txt` (сторонние лицензии, страница «Информация» установщика); сборочный venv `.venv`, портативный Inno Setup `.inno`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
+| `stream-tts/streamtts/` | пакет stream-tts (aiohttp); `paths.py` — пути по способу запуска, `runtime.py` — встроенный cosyvoice-server (режим managed), `install.py` — загрузка модели, дополнительные пакеты и наборы голосов из админки, `editor.py` — новый голос из записи (черновик, тестовые фразы, сохранение), `separate.py` — очистка образца от музыки (htdemucs в ONNX через onnxruntime, пакет «music»), `bench.py` — проверка скорости устройств, `desktop.py` — точка входа собранной программы, `updates.py` — проверка новой версии (latest.json релиза на GitHub), `i18n.py` — язык интерфейса, `static/` — админка, оверлей, страница голосов, `static/en.json` — английский словарь, `static/i18n.js` — перевод страниц, `static/quants/` — примеры звука квантов (их же берёт установщик); `stream-tts/check-i18n.py` — строки без перевода | да |
+| `packaging/windows/` | программа и установщик для Windows: `build-runtime.py` (рантайм), `build-exe.py` (Nuitka, `StreamTTS.py`), `StreamTTS.iss` (Inno Setup), `release.py` (`latest.json` и текст релиза), `THIRD-PARTY.txt` и `THIRD-PARTY.en.txt` (сторонние лицензии, страница «Информация» установщика); сборочный venv `.venv`, портативный Inno Setup `.inno`, выход `build/`, `dist/`; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`, `import-voices.sh` | да |
 | `tools/voices/` | общий подбор: `pick.py` + `pick.html` (страница, `--add`, `--add-batch`, `--install`), `synth.py` (синтез и оценки), `emotions.py` (модель эмоций), `emotion-eval.py` + `.html` (сверка моделей эмоций с разметкой на слух), `campplus.py` (эмбеддинги) | да |
 | `tools/wc3/` | реплики WC3: `cut-clips.py` (кандидаты партиями, `pools.json`), `review.py` (тексты и метки фраз), `extract-subtitles.py` | да |
@@ -80,6 +80,9 @@
 - Сборка Nuitka: собранную программу `paths.py` узнаёт по `__compiled__` (Nuitka не задаёт `sys.frozen`), данные
   пакета и `effects/` лежат рядом с exe. Модули, которые грузятся по пути через importlib (эффекты), и их импорты
   Nuitka не видит: новые зависимости эффектов добавлять в `--include-module` в `build-exe.py`.
+- Версия программы — только `__version__` в `stream-tts/streamtts/__init__.py`. Релиз — аннотированный тег
+  `v<версия>`: CI собирает установщик и публикует релиз с `latest.json`, по которому программа ищет обновления
+  (`REPO` в `updates.py` должен совпадать с репозиторием, иначе CI падает на шаге «Версия»).
 - stream-tts без `COSYVOICE_URL` при наличии `runtime/cosyvoice-server.exe` запускает свой сервер (режим managed):
   это второй сервер на той же видеокарте (1,5–1,9 ГБ видеопамяти на Q8_0). Конфигурация `stream-tts` в `.claude/launch.json`
   задаёт `COSYVOICE_URL` и работает с Docker как раньше.

@@ -310,11 +310,12 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
 │                          # голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
-│                          # desktop.py (точка входа программы для Windows),
+│                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
 │                          # i18n.py (язык интерфейса), static/ (static/en.json — английский словарь, static/i18n.js —
 │                          # перевод страниц, static/quants/ — примеры звука квантов для админки и установщика)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py, build-exe.py (Nuitka),
-│                          # StreamTTS.iss (Inno Setup); сборка в CI — .github/workflows/windows.yml
+│                          # StreamTTS.iss (Inno Setup), release.py (latest.json релиза);
+│                          # сборка и релиз в CI — .github/workflows/windows.yml
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой
 │   └── import-voices.sh   # регистрация голосов из пар .wav + .txt и сохранение в voices/

@@ -3,7 +3,7 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import bench, config, editor, filters, i18n, install, runtime, stats, store, web as webapp
+from . import bench, config, editor, filters, i18n, install, runtime, stats, store, updates, web as webapp
 from .i18n import tr
 from .cosy import Cosy
 from .engine import Engine
@@ -63,7 +63,7 @@ async def on_startup(app):
     await ctx.twitch.start()
     ctx.tasks = [asyncio.create_task(c) for c in (
         ctx.engine.synth_worker(), ctx.engine.player(), ctx.voices.demo_worker(),
-        cosy_monitor(ctx), gpu_monitor(ctx), housekeeping(ctx))]
+        cosy_monitor(ctx), gpu_monitor(ctx), housekeeping(ctx), ctx.updates.worker())]
 
 
 async def on_cleanup(app):
@@ -115,6 +115,7 @@ def main():
     ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.cosy, ctx.voices, ctx.runtime)
     ctx.bench = bench.Bench(ctx.settings, ctx.cosy, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
+    ctx.updates = updates.Updates(ctx.settings, ctx.engine.dirty.set)
 
     app = webapp.make_app(ctx)
     app.on_startup.append(on_startup)
