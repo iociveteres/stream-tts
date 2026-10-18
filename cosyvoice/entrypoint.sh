@@ -32,25 +32,11 @@ first_existing() { for f in "$@"; do if [ -f "$f" ]; then echo "$f"; return; fi;
 fe=/models/frontend-onnx
 tokenizer="$(first_existing "$fe/speech_tokenizer_v3.onnx" "$fe/speech_tokenizer_v3.int8.onnx")"
 campplus="$(first_existing "$fe/campplus.onnx" "$fe/campplus.int8.onnx")"
-# В режиме WebUI флаги --speech-tokenizer/--campplus только заполняют поля формы,
-# поэтому после старта грузим фронтенд через POST /frontend/model/load
-# (bash /dev/tcp вместо curl, чтобы не тянуть его в образ).
-autoload_frontend() {
-    local body="{\"speech_tokenizer\":\"$1\",\"campplus\":\"$2\"}" status
-    for _ in $(seq 1 300); do
-        sleep 1
-        exec 3<>/dev/tcp/127.0.0.1/8080 2>/dev/null || continue
-        printf 'POST /frontend/model/load HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' \
-            "${#body}" "$body" >&3
-        read -r status <&3 || true
-        exec 3>&-
-        echo "[entrypoint] Загрузка ONNX-фронтенда: ${status%$'\r'}" >&2
-        return
-    done
-}
+# В режиме WebUI флаги --speech-tokenizer/--campplus только задают пути (GET /frontend/model), а сам фронтенд
+# (~300 МБ) не загружается: его грузят по этим путям те, кому он нужен, — stream-tts при создании голоса,
+# scripts/import-voices.sh и tools/voices/synth.py (POST /frontend/model/load)
 if [ -n "$tokenizer" ] && [ -n "$campplus" ]; then
     args+=(--speech-tokenizer "$tokenizer" --campplus "$campplus")
-    autoload_frontend "$tokenizer" "$campplus" &
 else
     echo "[entrypoint] ONNX-фронтенд не найден в $fe: извлечение голоса из аудио недоступно" >&2
 fi

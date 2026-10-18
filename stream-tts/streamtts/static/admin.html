@@ -394,6 +394,17 @@
   <div class="card">
     <h2>Сейчас</h2>
     <div class="tiles" id="live"></div>
+    <h3 class="mt">Загрузка за 10 минут</h3>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>процессор</span>
+      <span><i style="background:var(--series-2)"></i>видеокарта</span></div>
+    <div id="load-chart" class="chart load"></div>
+    <p class="muted small">Замеры идут, только пока открыта админка.</p>
+  </div>
+  <div class="card">
+    <h2>Модели в памяти</h2>
+    <p class="muted small">Фронтенд и очистка от музыки загружаются сами, когда создаётся голос, и выгружаются после
+      простоя. Модель синтеза нужна для озвучки: без неё награды возвращаются.</p>
+    <div class="table-wrap" id="mem-models"></div>
   </div>
   <div class="card">
     <div class="row between">

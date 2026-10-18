@@ -8,8 +8,8 @@
 - модель: MODEL, иначе выбранная в админке (settings.model), иначе единственный *.gguf в paths.MODELS
   (нет модели — ждём, пока появится: её можно скачать в админке, install.py);
 - голоса: paths.VOICES/*.gguf и paths.VOICES/<набор>/*.gguf, имя голоса — имя файла;
-- ONNX-фронтенд из paths.MODELS/frontend-onnx (полные версии приоритетнее int8): флаги плюс
-  POST /frontend/model/load после старта, потому что в режиме --webui флаги только заполняют форму;
+- ONNX-фронтенд из paths.MODELS/frontend-onnx (полные версии приоритетнее int8): в режиме --webui флаги только
+  заполняют форму (GET /frontend/model), загружает его editor.py перед созданием голоса;
 - бэкенд (COSYVOICE_BACKEND=auto|cuda|vulkan|cpu, иначе выбор в админке, по умолчанию auto) — по выводу
   cosyvoice-cli --list-backends:
   CUDA, если есть ggml-cuda.dll и видеокарта NVIDIA, иначе Vulkan (дискретная видеокарта приоритетнее
@@ -17,7 +17,8 @@
 - всегда GGML_CUDA_DISABLE_GRAPHS=1, а на CUDA ещё --llm-flash-attn 0: без них вместо речи шум (AGENTS.md).
 Порт: COSYVOICE_PORT или любой свободный. Упавший сервер перезапускается (пауза растёт до минуты, если он
 падает сразу после старта). Сервер завершается вместе с stream-tts: на Windows через Job Object (даже если
-stream-tts убит), на Linux через PR_SET_PDEATHSIG."""
+stream-tts убит), на Linux через PR_SET_PDEATHSIG. Выгрузка модели синтеза (вкладка «Статистика») — остановка сервера:
+так освобождается и контекст видеокарты; загрузка — новый запуск."""
 import asyncio, collections, contextlib, glob, logging, os, re, socket, subprocess, sys
 
 import aiohttp
@@ -163,12 +164,13 @@ class Managed:
         self.restarts = 0
         self.starts = 0            # сколько раз сервер становился готов: stream-tts перечитывает голоса
         self.tail = collections.deque(maxlen=40)  # последние строки вывода сервера: причина падения
-        self.frontend = None       # (speech_tokenizer, campplus) для POST /frontend/model/load
+        self.frontend = None       # (speech_tokenizer, campplus), флаги сервера
         self.proc = None
         self.task = None
         self.override = ""         # устройство на время проверки скорости (bench.py), в настройки не пишется
         self._restarting = False
         self._hold = 0             # paused(): сервер остановлен, пока меняются файлы голосов
+        self.unloaded = False      # модель выгружена кнопкой: сервер не запускается до load()
         self._wake = None          # asyncio.Event: перезапуск без ожидания
         self._job = None
         if os.name == "nt":
@@ -189,6 +191,7 @@ class Managed:
                     model=os.path.basename(self.model), voices=self.voices, restarts=self.restarts,
                     backends=[n for n, _ in self.backends or []], server=self.server,
                     locked=dict(backend=bool(env("COSYVOICE_BACKEND")), model=bool(env("MODEL"))),
+                    unloaded=self.unloaded,
                     pid=self.proc.pid if self.proc and self.proc.returncode is None else None)
 
     def _env(self):
@@ -304,6 +307,15 @@ class Managed:
         await self._kill()
         self._wake.set()
 
+    async def unload(self):
+        """Модель выгружена: сервер остановлен, пока не вызван load()."""
+        self.unloaded = True
+        await self.restart()
+
+    def load(self):
+        self.unloaded = False
+        self._wake.set()
+
     @contextlib.asynccontextmanager
     async def paused(self):
         """Сервер остановлен на время блока: на Windows он держит открытыми файлы голосов."""
@@ -340,7 +352,7 @@ class Managed:
                 srv_log.info("%s", text)
 
     async def _ready(self, session):
-        """Ждёт ответа /status, пока процесс жив; затем грузит ONNX-фронтенд."""
+        """Ждёт ответа /status, пока процесс жив."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + 300
         while self.proc.returncode is None and loop.time() < deadline:
@@ -353,16 +365,6 @@ class Managed:
             await asyncio.sleep(1)
         else:
             return False
-        # «Работает» — только после фронтенда: иначе проверка скорости (bench.py) начинала синтез параллельно с
-        # /frontend/model/load, а к серверу можно лишь один запрос за раз
-        if self.frontend:
-            body = dict(speech_tokenizer=self.frontend[0], campplus=self.frontend[1])
-            try:
-                async with session.post(f"{self.url}/frontend/model/load", json=body,
-                                        timeout=aiohttp.ClientTimeout(total=120)) as r:
-                    log.info("ONNX-фронтенд: %s %s", r.status, (await r.text())[:200])
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                log.warning("ONNX-фронтенд не загружен: %s", e)
         self.state = "running"
         self.starts += 1
         return True
@@ -381,7 +383,7 @@ class Managed:
                 self._job.add(self.proc.pid)
             except OSError as e:
                 log.warning("сервер не добавлен в Job Object: %s", e)
-        if self._hold:  # paused() начался, пока процесс запускался
+        if self._hold or self.unloaded:  # paused() или unload() начались, пока процесс запускался
             await self._kill()
         pump = asyncio.create_task(self._pump(self.proc.stdout))
         try:
@@ -403,6 +405,10 @@ class Managed:
                 self.state, self.error = "stopped", tr("сервер остановлен: меняются голоса")
                 await self._sleep(1)
                 continue
+            if self.unloaded:
+                self.state, self.error = "stopped", tr("модель выгружена: загрузите её на вкладке «Статистика»")
+                await self._sleep(5)
+                continue
             try:
                 args = await self._args()
             except Unavailable as e:
@@ -411,7 +417,7 @@ class Managed:
                 self.state, self.error = "waiting", str(e)
                 await self._sleep(5)
                 continue
-            if self._hold:
+            if self._hold or self.unloaded:   # paused() или unload() начались, пока собирались аргументы
                 continue
             self._restarting = False
             started = loop.time()

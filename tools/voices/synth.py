@@ -14,7 +14,7 @@ usage: .venv/Scripts/python.exe tools/voices/synth.py [набор ...] [--voice 
   эмоции образца и синтеза — в общем кеше voice-clips/emotions.json (emotions.py)
 Оценка пересчитывается, только если файл изменился. Разница sim меньше 0,02 — в пределах шума.
 
-Нужны cosyvoice-server на localhost:8080, numpy, onnxruntime, faster-whisper, torch, transformers, ffmpeg и curl.
+Нужны cosyvoice-server на localhost:8080 (ONNX-фронтенд загружается, если выгружен), numpy, onnxruntime, faster-whisper, torch, transformers, ffmpeg и curl.
 Запросы к серверу идут строго по одному: параллельную регистрацию голосов он не выдерживает, поэтому
 synth.py нельзя запускать одновременно с scripts/import-voices.sh и с синтезом в stream-tts.
 """
@@ -48,6 +48,10 @@ def curl(*args):
 
 
 def register(wav, text):
+    # ONNX-фронтенд сервер держит выгруженным, а stream-tts выгружает его после простоя: грузим по путям из флагов
+    if not json.loads(curl(f"{API}/status")).get("frontend_available"):
+        curl("-X", "POST", f"{API}/frontend/model/load", "-H", "Content-Type: application/json",
+             "-d", curl(f"{API}/frontend/model").decode())
     subprocess.run(["curl", "-s", "-X", "DELETE", f"{API}/speaker/{NAME}"], capture_output=True)
     curl("-X", "POST", f"{API}/speaker?type=extract", "-F", f"name={NAME}", "-F", f"text={text}", "-F", f"audio=@{wav}")
 

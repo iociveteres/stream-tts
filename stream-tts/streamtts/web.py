@@ -3,7 +3,8 @@ import asyncio, contextlib, hashlib, hmac, json, logging, os, re, secrets, tempf
 
 from aiohttp import web
 
-from . import config, editor, i18n, install, runtime, stats, updates
+from . import config, editor, i18n, install, runtime, separate, stats, updates
+from .cosy import LIVE
 from .i18n import tr
 from .engine import SERVICE_COMMANDS
 from .twitch import TwitchError, explain
@@ -153,12 +154,12 @@ def state(ctx, full=True):
         cosy=dict(ok=ctx.cosy.ok, error=ctx.cosy.error, url=ctx.cosy.url,
                   busy=ctx.cosy.lane.holder[1] if ctx.cosy.lane.holder else "",
                   runtime=ctx.runtime.public() if ctx.runtime else None),
-        gpu=ctx.gpu.data,
+        load=ctx.load.public(history=full),
+        models=models(ctx),
         demos=dict(ctx.voices.progress),
         setup=ctx.install.public() if ctx.install else None,
-        # необязательные пакеты; с внешним сервером файлов не видно — о фронтенде говорит его /status
-        packages=install.packages() if ctx.install
-        else install.packages(dict(frontend=bool(ctx.cosy.info.get("frontend_available")))),
+        # необязательные пакеты; с внешним сервером файлов не видно — о фронтенде говорит GET /frontend/model
+        packages=install.packages() if ctx.install else install.packages(dict(frontend=ctx.cosy.frontend_ready)),
         bench=ctx.bench.public() if ctx.bench else None,
         update=ctx.updates.public(),
         ts=time.time(),
@@ -170,6 +171,28 @@ def state(ctx, full=True):
             bans=ctx.db.bans(),
             config=dict(password=bool(config.PASSWORD), bind=config.BIND, port=config.PORT),
         )
+    return out
+
+
+def models(ctx):
+    """Модели в памяти (вкладка «Статистика»): синтез и ONNX-фронтенд — на cosyvoice-server, htdemucs — в stream-tts.
+    Модель синтеза выгружается только у встроенного сервера: внешний после POST /model/unload без перезапуска
+    контейнера голоса не вернёт (путь к модели и голоса знает только его entrypoint.sh)."""
+    rt = ctx.runtime.public() if ctx.runtime else None
+    up = ctx.cosy.ok is True
+    out = [dict(id="tts", name=(rt and rt["model"]) or ctx.cosy.info.get("model") or "CosyVoice3",
+                what=tr("синтез речи"), where=(rt and rt["backend"]) or tr("внешний сервер"), loaded=up,
+                unload=bool(rt) and not rt["unloaded"] and rt["state"] == "running",
+                load=bool(rt and rt["unloaded"]))]
+    if ctx.cosy.frontend_ready:
+        out.append(dict(id="frontend", name="speech_tokenizer + campplus", what=tr("создание голосов из записи"),
+                        where=tr("сервер синтеза, ~300 МБ ОЗУ"), loaded=up and ctx.cosy.frontend_loaded,
+                        unload=up and ctx.cosy.frontend_loaded, load=False))
+    if separate.available():
+        sep = ctx.editor.separator
+        out.append(dict(id="music", name="htdemucs int8", what=tr("очистка образца от музыки"),
+                        where=tr("stream-tts, процессор, ~1 ГБ ОЗУ"), loaded=sep.session is not None,
+                        unload=sep.session is not None and not sep.lock.locked(), load=False))
     return out
 
 
@@ -571,6 +594,37 @@ async def post_cuda_download(request, ctx, data):
     return ok()
 
 
+# --- модели в памяти (вкладка «Статистика») ---
+async def post_model_unload(request, ctx, data):
+    what = str(data["id"])
+    if what == "tts":
+        if not ctx.runtime:
+            return fail(tr("сервер синтеза внешний: модель выгружается на нём"))
+        # после текущего запроса к серверу, иначе он оборвётся на середине
+        async with ctx.cosy.lane.hold(LIVE, tr("выгрузка модели")):
+            await ctx.runtime.unload()
+        ctx.cosy.ok, ctx.cosy.error = False, tr("модель выгружена")
+        log.info("модель синтеза выгружена: сервер остановлен")
+    elif what == "frontend":
+        try:
+            await ctx.editor.unload_frontend()
+        except Exception as e:
+            return fail(str(e) or type(e).__name__)
+    elif what == "music":
+        ctx.editor.separator.unload()
+    else:
+        return fail(tr("нет такой модели"))
+    return ok()
+
+
+async def post_model_load(request, ctx, data):
+    if str(data["id"]) != "tts" or not ctx.runtime:
+        return fail(tr("эта модель загружается сама, когда нужна"))
+    ctx.runtime.load()
+    log.info("модель синтеза: запуск сервера")
+    return ok()
+
+
 # --- обновления (updates.py) ---
 async def post_update_check(request, ctx, data):
     await ctx.updates.check()
@@ -629,6 +683,8 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/package/download": post_package_download,
     "/api/package/delete": post_package_delete,
     "/api/cuda/download": post_cuda_download,
+    "/api/models/unload": post_model_unload,
+    "/api/models/load": post_model_load,
     "/api/update/check": post_update_check,
     "/api/update/dismiss": post_update_dismiss,
 }.items()}

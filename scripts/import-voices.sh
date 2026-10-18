@@ -16,6 +16,14 @@ URL="http://localhost:${PORT:-8080}"
 
 curl -fs -o /dev/null "$URL/ping" || { echo "Сервер $URL не отвечает (docker compose up -d)" >&2; exit 1; }
 
+# ONNX-фронтенд сервер держит выгруженным (stream-tts грузит его, когда создаёт голос): грузим по путям из его флагов
+load_frontend() {
+    curl -fs "$URL/status" | grep -q '"frontend_available":true' && return
+    curl -fsS -X POST "$URL/frontend/model/load" -H 'Content-Type: application/json' \
+        -d "$(curl -fsS "$URL/frontend/model")" >/dev/null \
+        || { echo "ONNX-фронтенд не загружен: нет models/frontend-onnx (scripts/download-model.sh --frontend int8)" >&2; exit 1; }
+}
+
 # python3 на Linux, python на Windows (там python3 бывает заглушкой Microsoft Store, поэтому проверяем запуск)
 PY=""
 for p in python3 python; do
@@ -35,6 +43,7 @@ for wav in "$DIR"/*.wav; do
         skip=$((skip+1)); continue
     fi
     echo "==> $name"
+    load_frontend   # stream-tts выгружает его после простоя
     # сервер не регистрирует имя повторно (409): сначала выгружаем голос из памяти
     [ "$FORCE" -eq 1 ] && curl -fs -o /dev/null -X DELETE "$URL/speaker/$name" || true
     if ! curl -fsS -X POST "$URL/speaker?type=extract" \

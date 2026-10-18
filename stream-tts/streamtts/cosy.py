@@ -1,10 +1,12 @@
 """Клиент cosyvoice-server и очередь доступа к нему: строго один запрос за раз."""
-import asyncio, contextlib, heapq, itertools, time
+import asyncio, contextlib, heapq, itertools, logging, time
 
 import aiohttp
 
 from . import audio
 from .i18n import tr
+
+log = logging.getLogger("cosy")
 
 LIVE, PREVIEW, BACKGROUND = 0, 1, 2   # приоритеты: озвучка наград, «послушать» в интерфейсе, примеры голосов
 
@@ -60,6 +62,7 @@ class Cosy:
         self.error = ""
         self.info = {}
         self.checked = 0.0
+        self.frontend_paths = None   # пути ONNX-фронтенда с сервера (GET /frontend/model); {} — не настроен
 
     async def start(self):
         self.session = aiohttp.ClientSession(headers=self.headers)
@@ -78,10 +81,54 @@ class Cosy:
             self.ok, self.error = bool(self.info.get("model_loaded")), ""
             if not self.ok:
                 self.error = tr("модель не загружена")
+            if self.frontend_paths is None:
+                try:
+                    self.frontend_paths = await self._frontend_paths()
+                except Exception as e:   # синтезу это не мешает: повтор при следующей проверке
+                    log.warning("пути ONNX-фронтенда: %s", e)
         except Exception as e:
             self.ok, self.error = False, str(e) or type(e).__name__
+            self.frontend_paths = None   # перезапущенный сервер мог получить другие флаги
         self.checked = time.time()
         return self.ok
+
+    # --- ONNX-фронтенд: нужен только для голосов из записи (editor.py), грузится по требованию ---
+    async def _frontend_paths(self):
+        """Пути из флагов --speech-tokenizer/--campplus: сервер отдаёт их и до загрузки фронтенда."""
+        async with self.session.get(f"{self.url}/frontend/model", timeout=aiohttp.ClientTimeout(total=5)) as r:
+            if r.status == 404:   # сборка cosyvoice.cpp без этого API
+                return {}
+            r.raise_for_status()
+            d = await r.json()
+        return d if d.get("speech_tokenizer") and d.get("campplus") else {}
+
+    @property
+    def frontend_loaded(self):
+        return bool(self.info.get("frontend_available"))
+
+    @property
+    def frontend_ready(self):
+        """Фронтенд загружен или его можно загрузить."""
+        return self.frontend_loaded or bool(self.frontend_paths)
+
+    async def load_frontend(self):
+        """Вызывать под lane.hold: загрузка занимает сервер ~3 с."""
+        if self.frontend_loaded:
+            return False
+        if not self.frontend_paths:
+            raise RuntimeError(tr("на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"))
+        async with self.session.post(f"{self.url}/frontend/model/load", json=self.frontend_paths,
+                                     timeout=aiohttp.ClientTimeout(total=120)) as r:
+            if r.status != 200:
+                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+        self.info["frontend_available"] = True
+        return True
+
+    async def unload_frontend(self):
+        async with self.session.post(f"{self.url}/frontend/model/unload", timeout=aiohttp.ClientTimeout(total=30)) as r:
+            if r.status != 200:
+                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+        self.info["frontend_available"] = False
 
     async def speakers(self):
         async with self.session.get(f"{self.url}/speaker", timeout=aiohttp.ClientTimeout(total=10)) as r:

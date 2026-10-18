@@ -229,7 +229,8 @@ docker compose up -d --build stream-tts   # вместе с cosyvoice: docker co
 
 Если формат голосов сменится в новой версии cosyvoice.cpp, их можно пересобрать из исходных образцов.
 Для этого перенесите `voice-refs/` и выполните `scripts/import-voices.sh voice-refs/<набор>` для каждого набора
-(`wc3`, `games`, `streamers`). Здесь фронтенд уже нужен.
+(`wc3`, `games`, `streamers`). Здесь фронтенд уже нужен: файлы в `models/frontend-onnx/`, а загружает его в
+сервер сам скрипт.
 
 ## Производительность
 

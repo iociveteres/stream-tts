@@ -41,10 +41,10 @@ async def cosy_monitor(ctx):
         await asyncio.sleep(5)
 
 
-async def gpu_monitor(ctx):
+async def load_monitor(ctx):
     while True:
         if ctx.admins:
-            await ctx.gpu.poll()
+            await ctx.load.poll()
         await asyncio.sleep(2)
 
 
@@ -63,7 +63,7 @@ async def on_startup(app):
     await ctx.twitch.start()
     ctx.tasks = [asyncio.create_task(c) for c in (
         ctx.engine.synth_worker(), ctx.engine.player(), ctx.voices.demo_worker(),
-        cosy_monitor(ctx), gpu_monitor(ctx), housekeeping(ctx), ctx.updates.worker())]
+        cosy_monitor(ctx), load_monitor(ctx), housekeeping(ctx), ctx.updates.worker())]
 
 
 async def on_cleanup(app):
@@ -110,7 +110,7 @@ def main():
     ctx.voices.engine = ctx.engine
     ctx.twitch = Twitch(ctx.settings, ctx.engine)
     ctx.engine.twitch = ctx.twitch
-    ctx.gpu = stats.GPU()
+    ctx.load = stats.Load()
     # Первый запуск через админку (модель, устройство, наборы голосов) — только для встроенного сервера
     ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.cosy, ctx.voices, ctx.runtime)

@@ -153,6 +153,9 @@ textarea.short { min-height: 0; font-family: inherit; font-size: 14px; resize: v
 .chart svg { display: block; width: 100%; height: 220px; }
 .chart .grid { stroke: var(--line); stroke-width: 1; }
 .chart text { fill: var(--muted); font-size: 11px; }
+.chart.load svg { height: 180px; }
+.chart .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+#mem-models td.num { text-align: right; white-space: nowrap; }
 .bars { display: grid; gap: 6px; font-size: 13px; }
 .bars .b { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
 .bars .b .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

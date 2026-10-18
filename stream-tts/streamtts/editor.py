@@ -12,7 +12,9 @@
 он регистрируется при первом синтезе (POST /speaker?type=extract, нужен ONNX-фронтенд) под служебным именем
 _draft-<ключ>, где ключ — хеш параметров: изменённый вариант регистрируется заново, прежний выгружается.
 Служебные голоса в список голосов не попадают (voices.refresh). Синтез — с приоритетом «послушать» и тем же seed,
-что у примеров, поэтому варианты различаются только образцом.
+что у примеров, поэтому варианты различаются только образцом. ONNX-фронтенд сервер держит выгруженным: он
+грузится перед первым извлечением голоса (пути — из флагов сервера, cosy.frontend_paths) и выгружается через
+FRONTEND_IDLE простоя.
 
 Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет .gguf. Со встроенным сервером —
 в paths.VOICES/<набор>/ с manifest.json набора; с внешним (Docker) — в COSYVOICE_VOICES (по умолчанию /voices) без
@@ -24,7 +26,7 @@ import numpy as np
 
 from . import audio, config, install, paths, separate, store
 from .config import SR
-from .cosy import PREVIEW
+from .cosy import BACKGROUND, PREVIEW
 from .i18n import tr
 from .voices import DEMO_SEED, DRAFT_PREFIX
 
@@ -38,6 +40,8 @@ SAMPLE_MIN, SAMPLE_MAX = 2.0, 30.0   # с; советуем 10–20 (docs/voice-
 DENOISE = "afftdn=nf=-25"            # шумоподавление ffmpeg: фон и шипение, музыку не убирает
 FADE = 0.01                          # с: без щелчков на краях отрезка
 CONTEXT = 1.0                        # с: запас записи по краям отрезка для отделения от музыки
+# с: потом ONNX-фронтенд выгружается. Замер (2026-10-18, int8, CPU): ~300 МБ памяти сервера, загрузка ~3 с
+FRONTEND_IDLE = 600
 ID = re.compile(r"[\w-]{1,24}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
 
@@ -64,6 +68,7 @@ class Editor:
         self.registered = {}   # id варианта -> служебное имя на сервере (прежнее выгружается при смене)
         self.separator = separate.Separator()
         self._vocals_jobs = {}  # имя в кэше -> задача: синтез всех фраз сразу не запускает отделение повторно
+        self._fe_timer = None
 
     # --- черновик ---
     def _load(self):
@@ -98,7 +103,7 @@ class Editor:
         for v in d["variants"]:
             v["ready"] = ready(self.key(v))
         d["compare_ready"] = ready("ref-" + d["compare"]) if d["compare"] else []
-        d["frontend"] = bool(self.cosy.info.get("frontend_available"))
+        d["frontend"] = self.cosy.frontend_ready
         d["music"] = separate.available()
         d["sets"] = self.sets()
         d["managed"] = self.runtime is not None
@@ -255,8 +260,36 @@ class Editor:
                                 min=int(SAMPLE_MIN), max=int(SAMPLE_MAX)))
         if not v["text"].strip():
             raise ValueError(tr("нет расшифровки образца"))
-        if not self.cosy.info.get("frontend_available"):
+        if not self.cosy.frontend_ready:
             raise ValueError(tr("на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"))
+
+    # --- ONNX-фронтенд ---
+    async def _extract(self, name, text, wav):
+        """Под lane.hold: голос из образца; фронтенд грузится к первому и выгружается после простоя."""
+        if await self.cosy.load_frontend():
+            log.info("ONNX-фронтенд загружен")
+        try:
+            await self.cosy.extract(name, text, wav)
+        finally:
+            if self._fe_timer:
+                self._fe_timer.cancel()
+            self._fe_timer = asyncio.get_running_loop().call_later(
+                FRONTEND_IDLE, lambda: asyncio.ensure_future(self.unload_frontend(BACKGROUND)))
+
+    async def unload_frontend(self, priority=PREVIEW):
+        """По таймеру простоя и кнопкой на вкладке «Статистика»."""
+        if self._fe_timer:
+            self._fe_timer.cancel()
+            self._fe_timer = None
+        try:
+            async with self.cosy.lane.hold(priority, tr("выгрузка фронтенда")):
+                if self.cosy.ok is not False and self.cosy.frontend_loaded:
+                    await self.cosy.unload_frontend()
+                    log.info("ONNX-фронтенд выгружен")
+        except Exception as e:
+            if priority != BACKGROUND:
+                raise
+            log.warning("ONNX-фронтенд не выгружен: %s", e)
 
     # --- тестовый синтез ---
     async def synth(self, vid, voice, index):
@@ -278,7 +311,7 @@ class Editor:
                     old = self.registered.get(vid)
                     if old and old != name:
                         await self.cosy.delete_speaker(old)
-                    await self.cosy.extract(name, " ".join(v["text"].split()), wav)
+                    await self._extract(name, " ".join(v["text"].split()), wav)
                     log.info("черновик: вариант %s зарегистрирован как %s", vid, name)
                 self.registered[vid] = name
                 x = await self.cosy.synth(name, text, self.s["token_ratio"], seed=DEMO_SEED)
@@ -325,7 +358,7 @@ class Editor:
         async with self.cosy.lane.hold(PREVIEW, tr("сохранение голоса {voice}", voice=name)):
             if name in await self.cosy.speakers():
                 raise ValueError(tr("голос {voice} уже есть: выберите другое имя", voice=name))
-            await self.cosy.extract(name, text, _wav_bytes(x))
+            await self._extract(name, text, _wav_bytes(x))
             try:
                 await self.cosy.save_speaker(name, target)
             except Exception:

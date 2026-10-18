@@ -61,6 +61,9 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   stream-tts раз в минуту перечитывает голоса и синтезирует примеры новых, то есть может вклиниться в
   `import-voices.sh`.
 - Сервер помнит `chunk_tokens` из прошлого запроса, поэтому stream-tts передаёт его в каждом.
+- ONNX-фронтенд (нужен для `POST /speaker?type=extract`) сервер держит выгруженным: флаги дают только пути
+  (`GET /frontend/model`). Кто извлекает голос, сначала грузит его (`POST /frontend/model/load` с этими путями), как
+  `import-voices.sh`, `synth.py` и `editor.py`; stream-tts выгружает его после 10 минут простоя.
 - Повторная регистрация имени даёт 409: сначала `DELETE /speaker/<имя>` (так делает `import-voices.sh --force`).
   `POST /model/load` ждёт поле `model`; после выгрузки модели голоса сбрасываются.
 - Не убирать `GGML_CUDA_DISABLE_GRAPHS=1` (образ) и `--llm-flash-attn 0` (`docker-compose.gpu.yml`): без них на GPU
