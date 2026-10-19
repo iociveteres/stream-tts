@@ -152,7 +152,7 @@ def state(ctx, full=True):
         engine=ctx.engine.snapshot(),
         twitch=ctx.twitch.public(),
         cosy=dict(ok=ctx.cosy.ok, error=ctx.cosy.error, url=ctx.cosy.url,
-                  busy=ctx.cosy.lane.holder[1] if ctx.cosy.lane.holder else "",
+                  busy=ctx.cosy.lane.holder[1] if ctx.cosy.lane.holder else "", waiting=ctx.cosy.lane.queued(),
                   runtime=ctx.runtime.public() if ctx.runtime else None),
         load=ctx.load.public(history=full),
         models=models(ctx),

@@ -51,6 +51,10 @@ class Lane:
     def waiting(self, priority):
         return any(p <= priority and not f.done() for p, _, f in self.waiters)
 
+    def queued(self):
+        """Сколько запросов ждут сервер синтеза (в /api/state: по нему e2e-тесты видят, что запрос встал в очередь)."""
+        return sum(not f.done() for _, _, f in self.waiters)
+
 
 class Cosy:
     def __init__(self, url, api_key=""):

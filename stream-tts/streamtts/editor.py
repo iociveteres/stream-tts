@@ -65,7 +65,6 @@ class Editor:
         self.s, self.cosy, self.voices, self.runtime = settings, cosy, voices, runtime
         self.dir = os.path.join(config.DATA, "draft")
         self.path = os.path.join(self.dir, "draft.json")
-        self.registered = {}   # id варианта -> служебное имя на сервере (прежнее выгружается при смене)
         self.separator = separate.Separator()
         self._vocals_jobs = {}  # имя в кэше -> задача: синтез всех фраз сразу не запускает отделение повторно
         self._fe_timer = None
@@ -307,13 +306,16 @@ class Editor:
             wav = _wav_bytes(await self.sample(v))
             name = DRAFT_PREFIX + self.key(v)
             async with self.cosy.lane.hold(PREVIEW, tr("черновик голоса")):
-                if name not in await self.cosy.speakers():
-                    old = self.registered.get(vid)
-                    if old and old != name:
-                        await self.cosy.delete_speaker(old)
+                speakers = await self.cosy.speakers()
+                if name not in speakers:
+                    # Прежние регистрации изменённых и удалённых вариантов — по списку сервера, а не по памяти:
+                    # после перезапуска stream-tts они иначе оставались на сервере до «Удалить черновик»
+                    keep = {DRAFT_PREFIX + self.key(d) for d in self._load()["variants"]}
+                    for old in speakers:
+                        if old.startswith(DRAFT_PREFIX) and old not in keep:
+                            await self.cosy.delete_speaker(old)
                     await self._extract(name, " ".join(v["text"].split()), wav)
                     log.info("черновик: вариант %s зарегистрирован как %s", vid, name)
-                self.registered[vid] = name
                 x = await self.cosy.synth(name, text, self.s["token_ratio"], seed=DEMO_SEED)
         else:
             if voice not in self.voices.names():
@@ -380,7 +382,6 @@ class Editor:
 
     async def discard(self):
         """Черновик целиком: файлы и служебные голоса на сервере."""
-        self.registered.clear()
         shutil.rmtree(self.dir, ignore_errors=True)
         if self.cosy.ok:
             async with self.cosy.lane.hold(PREVIEW, tr("черновик голоса")):

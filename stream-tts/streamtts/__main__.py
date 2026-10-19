@@ -3,7 +3,7 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import bench, config, editor, filters, i18n, install, runtime, stats, store, updates, web as webapp
+from . import bench, config, editor, filters, i18n, install, paths, runtime, stats, store, updates, web as webapp
 from .i18n import tr
 from .cosy import Cosy
 from .engine import Engine
@@ -11,6 +11,11 @@ from .twitch import Twitch
 from .voices import Voices
 
 log = logging.getLogger("stream-tts")
+
+# Переменные STREAM_TTS_COSY_CHECK и STREAM_TTS_VOICES_CHECK — для e2e-тестов (tests/e2e): с между проверками
+# сервера синтеза и между перечитываниями списка голосов
+COSY_CHECK = float(paths.env("STREAM_TTS_COSY_CHECK", "5"))
+VOICES_CHECK = float(paths.env("STREAM_TTS_VOICES_CHECK", "60"))
 
 
 class Ctx:
@@ -27,7 +32,8 @@ async def cosy_monitor(ctx):
             ctx.cosy.error = ctx.runtime.error or tr("cosyvoice-server запускается")
         # встроенный сервер перезапущен с новыми голосами (между проверками он мог не успеть пропасть)
         started = ctx.runtime.starts if ctx.runtime else 0
-        if ctx.cosy.ok and (not was or started != last_start or asyncio.get_running_loop().time() - last_list > 60):
+        stale = asyncio.get_running_loop().time() - last_list > VOICES_CHECK
+        if ctx.cosy.ok and (not was or started != last_start or stale):
             last_start = started
             try:
                 await ctx.voices.refresh()
@@ -38,7 +44,7 @@ async def cosy_monitor(ctx):
         if was is not ctx.cosy.ok:
             log.info("cosyvoice %s", "доступен" if ctx.cosy.ok else f"недоступен: {ctx.cosy.error}")
             ctx.engine.dirty.set()
-        await asyncio.sleep(5)
+        await asyncio.sleep(COSY_CHECK)
 
 
 async def load_monitor(ctx):

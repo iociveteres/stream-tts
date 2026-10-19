@@ -3,8 +3,8 @@
 Тесты синхронные. Всё асинхронное (поддельный cosyvoice, WebSocket оверлея) живёт в цикле событий фонового
 потока (Loop), тест зовёт его через Loop.run. stream-tts — отдельный процесс со своими портом и папками данных,
 моделей и голосов во временной папке: Docker-версию на 8090 и stream-tts-data/ он не трогает."""
-import asyncio, http.cookiejar, json, os, socket, sqlite3, subprocess, sys, threading, time, urllib.error, \
-    urllib.parse, urllib.request
+import asyncio, http.cookiejar, io, json, os, socket, sqlite3, subprocess, sys, threading, time, urllib.error, \
+    urllib.parse, urllib.request, wave
 
 import aiohttp
 import numpy as np
@@ -108,6 +108,11 @@ class Api:
         assert r.status == 200, f"/api/state: {r.status} {r.text}"
         return r.json()
 
+    def upload(self, path, data, filename):
+        """Файл сырым телом с именем в X-Filename, как админка (запись в черновик, набор голосов)."""
+        return self.request("POST", path, data=data, timeout=60, headers={
+            "Content-Type": "application/octet-stream", "X-Filename": urllib.parse.quote(filename)})
+
     def test(self, text, login="tester", voice=None):
         """Тестовая активация (как кнопка «Тест» в админке): весь путь, кроме Twitch. Возвращает ID активации."""
         body = dict(text=text, login=login)
@@ -118,7 +123,7 @@ class Api:
 
 class StreamTTS:
     """Процесс stream-tts. Окружение очищено от переменных проекта: Client ID Twitch, пароль, адрес cosyvoice
-    задаются только тестом."""
+    задаются только тестом. cosy_url=None — режим managed: stream-tts сам запускает cosyvoice-server (уровень real)."""
 
     def __init__(self, workdir, cosy_url, env=None):
         self.dir = workdir
@@ -140,7 +145,9 @@ class StreamTTS:
             # без voice-refs/ проекта: наборы и эффекты голосов задаёт тест
             STREAM_TTS_PROJECT=os.path.join(self.dir, "project"),
             STREAM_TTS_RUNTIME=os.path.join(self.dir, "runtime"),
-            STREAM_TTS_LANG="ru", COSYVOICE_URL=self.cosy_url, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+            STREAM_TTS_LANG="ru", PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+        if self.cosy_url:
+            env["COSYVOICE_URL"] = self.cosy_url
         env.update(self.extra)
         return env
 
@@ -157,11 +164,11 @@ class StreamTTS:
                                      stdout=self.log, stderr=subprocess.STDOUT)
         return self
 
-    def start(self, password=None):
+    def start(self, password=None, timeout=30):
         """Запустить и дождаться, когда он ответит и увидит cosyvoice."""
         self.spawn()
         api = Api(self.base)
-        wait_for(lambda: self._up(api) and self._login(api, password) and api.state()["cosy"]["ok"], 30,
+        wait_for(lambda: self._up(api) and self._login(api, password) and api.state()["cosy"]["ok"], timeout,
                  f"запуск stream-tts\n{self.tail()}")
         return self
 
@@ -195,18 +202,25 @@ class StreamTTS:
         except OSError:
             return ""
 
+    @property
+    def db_path(self):
+        return os.path.join(self.data, "stream-tts.sqlite")
+
+    def sql(self, query, *args):
+        """Запрос к SQLite stream-tts (в процессе тоже открыта: WAL). Строки — словари. Не mode=ro: база в WAL без
+        файла -shm (процесс остановлен) так не открывается — disk I/O error."""
+        con = sqlite3.connect(self.db_path, isolation_level=None)
+        con.row_factory = sqlite3.Row
+        try:
+            return [dict(r) for r in con.execute(query, args).fetchall()]
+        finally:
+            con.close()
+
     def event(self, rid, timeout=10):
         """Итог активации из истории (SQLite stream-tts): outcome, reason и остальное. Ждёт, пока он появится."""
-        path = os.path.join(self.data, "stream-tts.sqlite")
-
         def row():
-            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-            con.row_factory = sqlite3.Row
-            try:
-                r = con.execute("SELECT * FROM events WHERE redemption=?", (rid,)).fetchone()
-                return dict(r) if r else None
-            finally:
-                con.close()
+            rows = self.sql("SELECT * FROM events WHERE redemption=?", rid)
+            return rows[0] if rows else None
         return wait_for(row, timeout, f"итог активации {rid}")
 
 
@@ -214,6 +228,8 @@ class Played:
     def __init__(self, id, subtitle):
         self.id, self.subtitle = id, subtitle
         self.chunks = []
+        self.started_at = time.monotonic()   # пришёл start
+        self.first_at = None    # первый кусок звука
         self.ended = False      # пришёл end: всё аудио отправлено
         self.stopped = False    # пришёл stop: фразу прервали
 
@@ -254,6 +270,8 @@ class Overlay:
         async for msg in self.ws:
             if msg.type == aiohttp.WSMsgType.BINARY:
                 if cur:
+                    if cur.first_at is None:
+                        cur.first_at = time.monotonic()
                     cur.chunks.append(msg.data)
                 continue
             if msg.type != aiohttp.WSMsgType.TEXT:
@@ -297,6 +315,43 @@ class Overlay:
 
 
 # --- разбор звука ---
+def read_wav(data):
+    """WAV PCM16 -> (float32, частота, каналы)."""
+    with wave.open(io.BytesIO(data)) as w:
+        assert w.getsampwidth() == 2, "ожидался PCM16"
+        sr, ch = w.getframerate(), w.getnchannels()
+        x = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float32) / 32768
+    return x, sr, ch
+
+
+def make_wav(x, sr=SR, channels=1):
+    """float32 (моно; при channels=2 тот же звук в оба канала) -> WAV PCM16."""
+    pcm = (np.clip(np.repeat(x, channels) if channels > 1 else x, -1, 1) * 32767).astype("<i2")
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm.tobytes())
+    return buf.getvalue()
+
+
+def ffmpeg(args, data):
+    """ffmpeg из PATH: stdin -> stdout."""
+    p = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", *args], input=data, capture_output=True, timeout=60)
+    assert p.returncode == 0, p.stderr.decode(errors="replace")
+    return p.stdout
+
+
+def decode(data):
+    """Любой звук (mp3 примеров и редактора) -> float32 24 кГц моно."""
+    return np.frombuffer(ffmpeg(["-i", "-", "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"], data), np.float32)
+
+
+def sine(hz, seconds, amp=0.3, sr=SR):
+    return (amp * np.sin(2 * np.pi * hz * np.arange(int(seconds * sr)) / sr)).astype(np.float32)
+
+
 def dominant_hz(x):
     spec = np.abs(np.fft.rfft(x * np.hanning(len(x))))
     return float(np.fft.rfftfreq(len(x), 1 / SR)[np.argmax(spec)])

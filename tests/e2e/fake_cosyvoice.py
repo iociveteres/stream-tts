@@ -1,18 +1,26 @@
 """Поддельный cosyvoice-server для e2e-тестов stream-tts: те же адреса API, вместо речи — синус.
 
-У каждого голоса своя частота и громкость (VOICES): по частоте тест узнаёт, каким голосом прозвучала фраза, а разная
-громкость проверяет выравнивание до −16 LUFS. Длина звука — как у речи, 12 символов в секунду (config.CHARS_PER_SEC),
-умноженная на length_factor.
+У каждого голоса своя частота и громкость (voices, сначала VOICES): по частоте тест узнаёт, каким голосом прозвучала
+фраза, а разная громкость проверяет выравнивание до −16 LUFS. Длина звука — как у речи, 12 символов в секунду
+(config.CHARS_PER_SEC), умноженная на length_factor. Голос из образца (POST /speaker?type=extract) звучит основной
+частотой образца: варианты образца из разных мест записи различаются по звуку.
 
-Каждый запрос к /tts записывается в tts (тело запроса и stopped), а max_active считает, сколько синтезов шло
-одновременно: к настоящему серверу можно только по одному (параллельные запросы его роняют).
+Каждый запрос к /tts записывается в tts (тело запроса и stopped), остальные изменяющие запросы — в calls
+(извлечение голоса, сохранение, удаление, фронтенд). max_active считает, сколько таких запросов шло одновременно: к
+настоящему серверу можно только по одному (параллельные запросы его роняют).
+
+ONNX-фронтенд (FakeCosy(frontend=True)): GET /frontend/model отдаёт пути, как сервер с флагами --speech-tokenizer и
+--campplus, а извлечение голоса без POST /frontend/model/load — ошибка, как у настоящего сервера. Без фронтенда —
+404, как у сборки без этого API.
 
 Ручки, которые тест меняет на ходу (из другого потока: только простые поля, без asyncio-объектов):
-- hold — синтез ждёт, пока его не снимут или не придёт /tts/stop (чтобы застать фразу на синтезе);
+- hold — синтез ждёт, пока его не снимут или не придёт /tts/stop (чтобы застать фразу на синтезе); строка вместо
+  True — ждут только тексты с этой подстрокой;
 - fail — подстрока текста, на которой /tts отвечает 500;
 - down — /status отвечает 500 (сервер недоступен);
-- length_factor — во сколько раз звук длиннее расчётного (проверка жёсткой обрезки)."""
-import asyncio, io, struct, time, wave
+- length_factor — во сколько раз звук длиннее расчётного (проверка жёсткой обрезки);
+- fail_save — /speaker/save отвечает 500."""
+import asyncio, contextlib, io, struct, time, wave
 
 import numpy as np
 from aiohttp import web
@@ -22,10 +30,12 @@ CHARS_PER_SEC = 12.0
 TOKENS_PER_SEC = 25.0
 # голос -> (частота, Гц; амплитуда). 800 Гц не занимать: это писк вместо мата
 VOICES = {"alpha": (220.0, 0.05), "bravo": (330.0, 0.3), "charlie": (440.0, 0.6)}
+FRONTEND = dict(speech_tokenizer="/models/frontend-onnx/speech_tokenizer_v3.onnx",
+                campplus="/models/frontend-onnx/campplus.onnx")
+EXTRACTED_AMP = 0.2
 
 
-def tone(voice, seconds):
-    freq, amp = VOICES[voice]
+def tone(freq, amp, seconds):
     t = np.arange(max(1, int(seconds * SR))) / SR
     return (amp * np.sin(2 * np.pi * freq * t)).astype(np.float32)
 
@@ -50,10 +60,18 @@ def stream_header():
             struct.pack("<IHHIIHH", 16, 1, 1, SR, SR * 2, 2, 16) + b"data" + struct.pack("<I", 0xFFFFFFFF))
 
 
+def dominant_hz(x):
+    spec = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+    return float(np.fft.rfftfreq(len(x), 1 / SR)[np.argmax(spec)])
+
+
 class FakeCosy:
-    def __init__(self):
+    def __init__(self, frontend=False):
         self.voices = dict(VOICES)
+        self.frontend = dict(FRONTEND) if frontend else None
+        self.frontend_loaded = False
         self.tts = []
+        self.calls = []
         self.active = self.max_active = 0
         self.stops = 0
         self.reset()
@@ -66,18 +84,38 @@ class FakeCosy:
         self.fail = ""
         self.down = False
         self.length_factor = 1.0
+        self.fail_save = False
         self.chunk_delay = 0.0
         self.tts = []
+        self.calls = []
+        self.lists = 0       # сколько раз stream-tts перечитал список голосов (GET /speaker)
         self.max_active = self.active
         self.stops = 0
         self._stop = False
 
+    def called(self, what):
+        """Записи calls одного вида: extract, save, delete, frontend_load, frontend_unload."""
+        return [c for c in self.calls if c["call"] == what]
+
+    @contextlib.contextmanager
+    def _busy(self):
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            yield
+        finally:
+            self.active -= 1
+
     # --- запуск в цикле событий теста ---
     async def start(self):
-        app = web.Application()
+        app = web.Application(client_max_size=64 << 20)
         app.router.add_get("/status", self.status)
-        app.router.add_get("/frontend/model", self.no_frontend)
+        app.router.add_get("/frontend/model", self.frontend_paths)
+        app.router.add_post("/frontend/model/load", self.frontend_load)
+        app.router.add_post("/frontend/model/unload", self.frontend_unload)
         app.router.add_get("/speaker", self.speakers)
+        app.router.add_post("/speaker", self.speaker_extract)
+        app.router.add_post("/speaker/save", self.speaker_save)
         app.router.add_delete("/speaker/{name}", self.speaker_delete)
         app.router.add_post("/tts", self.synth)
         app.router.add_post("/tts/stop", self.stop)
@@ -97,17 +135,77 @@ class FakeCosy:
     async def status(self, request):
         if self.down:
             return web.Response(status=500, text="down")
-        return web.json_response(dict(model_loaded=True, model="fake", frontend_available=False))
+        return web.json_response(dict(model_loaded=True, model="fake", frontend_available=self.frontend_loaded))
 
-    async def no_frontend(self, request):
-        """Сборка без ONNX-фронтенда: голоса из записи не создаются (редактор проверят отдельные тесты)."""
-        return web.Response(status=404)
+    # --- ONNX-фронтенд и голоса из образца ---
+    async def frontend_paths(self, request):
+        if not self.frontend:
+            return web.Response(status=404)
+        return web.json_response(self.frontend)
+
+    async def frontend_load(self, request):
+        if not self.frontend:
+            return web.Response(status=404)
+        body = await request.json()
+        with self._busy():
+            self.calls.append(dict(call="frontend_load", body=body, ts=time.time()))
+            if body != self.frontend:
+                return web.Response(status=400, text="wrong frontend paths")
+            await asyncio.sleep(0.05)
+            self.frontend_loaded = True
+        return web.json_response(dict(ok=True))
+
+    async def frontend_unload(self, request):
+        with self._busy():
+            self.calls.append(dict(call="frontend_unload", ts=time.time()))
+            self.frontend_loaded = False
+        return web.json_response(dict(ok=True))
+
+    async def speaker_extract(self, request):
+        """POST /speaker?type=extract, multipart: name, text, audio (WAV)."""
+        if request.query.get("type") != "extract":
+            return web.Response(status=400, text="only type=extract")
+        form = await request.post()
+        with self._busy():
+            name, text, f = form.get("name", ""), form.get("text", ""), form.get("audio")
+            data = f.file.read() if hasattr(f, "file") else b""
+            rec = dict(call="extract", name=name, text=text, ts=time.time(), bytes=len(data))
+            self.calls.append(rec)
+            if not self.frontend_loaded:
+                return web.Response(status=400, text="frontend not loaded")
+            if name in self.voices:
+                return web.Response(status=409, text=f"speaker {name} exists")
+            try:
+                with wave.open(io.BytesIO(data)) as w:
+                    rec.update(sr=w.getframerate(), channels=w.getnchannels(), width=w.getsampwidth(),
+                               frames=w.getnframes())
+                    x = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float32) / 32768
+            except (wave.Error, EOFError) as e:
+                return web.Response(status=400, text=f"bad wav: {e}")
+            rec["hz"] = round(dominant_hz(x)) if len(x) else 0
+            await asyncio.sleep(0.05)
+            self.voices[name] = (float(rec["hz"]), EXTRACTED_AMP)
+        return web.json_response(dict(ok=True, name=name))
+
+    async def speaker_save(self, request):
+        body = await request.json()
+        with self._busy():
+            self.calls.append(dict(call="save", name=body.get("name"), path=body.get("path"), ts=time.time()))
+            if self.fail_save:
+                return web.Response(status=500, text="fake save failure")
+            if body.get("name") not in self.voices:
+                return web.Response(status=404, text="unknown speaker")
+        return web.json_response(dict(ok=True))
 
     async def speakers(self, request):
+        self.lists += 1
         return web.json_response(sorted(self.voices))
 
     async def speaker_delete(self, request):
-        self.voices.pop(request.match_info["name"], None)
+        name = request.match_info["name"]
+        self.calls.append(dict(call="delete", name=name, ts=time.time()))
+        if self.voices.pop(name, None) is None:
+            return web.Response(status=404, text="unknown speaker")
         return web.json_response(dict(ok=True))
 
     async def stop(self, request):
@@ -115,8 +213,11 @@ class FakeCosy:
         self._stop = True
         return web.json_response(dict(ok=True))
 
-    async def _wait_hold(self):
-        while self.hold and not self._stop:
+    def _held(self, text):
+        return self.hold is True or bool(isinstance(self.hold, str) and self.hold and self.hold in text)
+
+    async def _wait_hold(self, text):
+        while self._held(text) and not self._stop:
             await asyncio.sleep(0.02)
 
     async def synth(self, request):
@@ -132,8 +233,9 @@ class FakeCosy:
                 return web.Response(status=404, text=f"unknown voice {voice}")
             if self.fail and self.fail in text:
                 return web.Response(status=500, text="fake failure")
-            x = tone(voice, len(text) / CHARS_PER_SEC * self.length_factor)
-            await self._wait_hold()
+            freq, amp = self.voices[voice]
+            x = tone(freq, amp, len(text) / CHARS_PER_SEC * self.length_factor)
+            await self._wait_hold(text)
             if not body.get("stream"):
                 if self._stop:   # остановленный синтез отдаёт то, что успел
                     rec["stopped"] = True

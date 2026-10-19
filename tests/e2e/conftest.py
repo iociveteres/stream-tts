@@ -5,7 +5,11 @@
   не шли два синтеза одновременно.
 - chat — то же в режиме «Только чтение чата»: stream-tts читает канал testchan поддельного IRC (fake_irc.py).
 - spawn — отдельный процесс со своими данными и своим поддельным cosyvoice: для тестов, которым нужно другое
-  окружение (пароль, адрес) или перезапуск."""
+  окружение (пароль, адрес) или перезапуск.
+- editor — процесс на модуль с поддельным cosyvoice, у которого есть ONNX-фронтенд (голоса из записи), черновик
+  перед тестом удаляется.
+- Маркер real — проверка с настоящей моделью (test_real.py): по умолчанию пропускается, запуск — pytest -m real.
+  Замеры (report) выводятся в конце прогона."""
 import os, sys
 
 import pytest
@@ -25,6 +29,35 @@ SOURCES = dict(reward=dict(on=True, access="all", allow=[]),
                chat=dict(on=False, access="all", allow=[]))
 # Таймауты чата для тестов: «канал не найден» через 2 с, свой PING после 1 с тишины, ответ на него — 1 с
 IRC_ENV = dict(STREAM_TTS_IRC_JOIN_WAIT="2", STREAM_TTS_IRC_IDLE="1", STREAM_TTS_IRC_PONG_WAIT="1")
+# Проверка cosyvoice и список голосов — раз в секунду, а не раз в 5 и 60 с: новый голос на сервере тест ждёт секунды
+FAST_ENV = dict(STREAM_TTS_COSY_CHECK="1", STREAM_TTS_VOICES_CHECK="1")
+REPORT = []
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "real: с настоящей моделью и cosyvoice-server (pytest -m real)")
+
+
+def pytest_collection_modifyitems(config, items):
+    if "real" in (config.getoption("-m") or ""):
+        return
+    skip = pytest.mark.skip(reason="с настоящей моделью: pytest tests/e2e -m real")
+    for item in items:
+        if "real" in item.keywords:
+            item.add_marker(skip)
+
+
+def pytest_terminal_summary(terminalreporter):
+    if REPORT:
+        terminalreporter.section("замеры с настоящей моделью")
+        for line in REPORT:
+            terminalreporter.write_line(line)
+
+
+@pytest.fixture
+def report(request):
+    """report(строка): замер в итог прогона (без жёстких порогов)."""
+    return lambda line: REPORT.append(f"{request.node.name}: {line}")
 
 
 @pytest.fixture(scope="session")
@@ -57,7 +90,8 @@ class Ctx:
         def done():
             s = self.api.state()
             return (s["cosy"]["ok"] and not s["engine"]["queue"] and not s["cosy"]["busy"]
-                    and s["demos"]["todo"] == 0 and not s["demos"]["current"])
+                    and s["demos"]["todo"] == 0 and not s["demos"]["current"]
+                    and all(v["demo"] for v in s["voices"] if v["enabled"]))
         wait_for(done, timeout, "простоя stream-tts")
 
     def close(self):
@@ -77,7 +111,7 @@ def irc(loop):
 def shared(loop, irc, tmp_path_factory):
     cosy = _fake(loop)
     server = StreamTTS(str(tmp_path_factory.mktemp("stream-tts")), cosy.url,
-                       dict(IRC_ENV, STREAM_TTS_IRC_URL=irc.url)).start()
+                       dict(IRC_ENV, **FAST_ENV, STREAM_TTS_IRC_URL=irc.url)).start()
     ctx = Ctx(loop, server, cosy)
     ctx.idle(30)
     yield ctx
@@ -151,15 +185,15 @@ def chat(tts, irc):
 
 @pytest.fixture
 def spawn(loop, tmp_path):
-    """spawn(env=..., password=..., start=True) -> (StreamTTS, FakeCosy). Один и тот же каталог данных у
-    повторного запуска: spawn(workdir=прошлый.dir)."""
+    """spawn(env=..., password=..., start=True, frontend=False) -> (StreamTTS, FakeCosy). Один и тот же каталог
+    данных у повторного запуска: spawn(workdir=прошлый.dir); тот же поддельный сервер: spawn(cosy=прошлый)."""
     made = []
 
-    def make(env=None, password=None, start=True, workdir=None):
-        cosy = _fake(loop)
+    def make(env=None, password=None, start=True, workdir=None, frontend=False, cosy=None):
+        cosy = cosy or loop.run(FakeCosy(frontend).start())
         wd = workdir or str(tmp_path / f"s{len(made)}")
         os.makedirs(wd, exist_ok=True)
-        server = StreamTTS(wd, cosy.url, env)
+        server = StreamTTS(wd, cosy.url, dict(FAST_ENV, **(env or {})))
         made.append((server, cosy))
         if start:
             server.start(password)
@@ -168,4 +202,35 @@ def spawn(loop, tmp_path):
     yield make
     for server, cosy in made:
         server.stop()
+    for cosy in {id(c): c for _, c in made}.values():
         loop.run(cosy.close())
+
+
+# Внешний сервер синтеза: путь .gguf при сохранении голоса — на его машине (editor.py)
+EDITOR_VOICES = "/srv/voices"
+
+
+@pytest.fixture(scope="module")
+def editor_shared(loop, tmp_path_factory):
+    cosy = loop.run(FakeCosy(frontend=True).start())
+    server = StreamTTS(str(tmp_path_factory.mktemp("editor")), cosy.url,
+                       dict(FAST_ENV, COSYVOICE_VOICES=EDITOR_VOICES)).start()
+    ctx = Ctx(loop, server, cosy)
+    ctx.idle(30)
+    yield ctx
+    server.stop()
+    loop.run(cosy.close())
+
+
+@pytest.fixture
+def editor(editor_shared):
+    """Процесс с фронтендом на сервере синтеза, черновик пуст, фронтенд выгружен."""
+    ctx = editor_shared
+    ctx.api.ok("/api/draft/discard")
+    ctx.api.ok("/api/models/unload", dict(id="frontend"))
+    ctx.api.ok("/api/enabled", dict(on=True))
+    ctx.idle()
+    ctx.cosy.reset()
+    yield ctx
+    ctx.close()
+    assert ctx.cosy.max_active <= 1, "к cosyvoice шли параллельные запросы"
