@@ -44,7 +44,8 @@
 │                          # (фикстуры, маркер real), test_*.py (сценарии), test_real.py (настоящая модель),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
 ├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
-│                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md
+│                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
+│                          # espeech.md (ESpeech как вторая модель: замеры и план)
 │
 │   Данные (в git не попадают):
 ├── models/                # модели и пакеты (volume; админка качает сюда)
