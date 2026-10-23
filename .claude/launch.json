@@ -52,6 +52,21 @@
         "import os, sys; os.environ.update(STREAM_TTS_PORT='8093', STREAM_TTS_LANG='en', STREAM_TTS_DATA='stream-tts-data/en-test', STREAM_TTS_MODELS='stream-tts-data/en-test/models', STREAM_TTS_VOICES='stream-tts-data/en-test/voices'); sys.path.insert(0, 'stream-tts'); import runpy; runpy.run_module('streamtts', run_name='__main__')"
       ],
       "port": 8093
+    },
+    {
+      "name": "espeech",
+      "runtimeExecutable": "espeech/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "espeech",
+        "--models",
+        "models/espeech",
+        "--voices",
+        "voices",
+        "--port",
+        "8094"
+      ],
+      "port": 8094
     }
   ]
 }

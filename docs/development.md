@@ -16,6 +16,11 @@
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
 ├── cosyvoice/
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
+├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): server.py (HTTP API
+│                          # как у cosyvoice-server), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
+│                          # RUAccent), normalize.py (текст чата), pipeline.py (нарезка на куски), lora.py (адаптер
+│                          # голоса), voices.py (формат .espeech); requirements.txt — окружение espeech/.venv,
+│                          # THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
@@ -36,20 +41,24 @@
 ├── tools/                 # подбор образцов голосов (docs/voice-pipeline.md), запуск из корня проекта
 │   ├── voices/            # общее: страница выбора, синтез и оценки, модель эмоций и её сверка на слух, CAM++
 │   ├── wc3/               # реплики Warcraft III: нарезка кандидатов, проверка текстов (docs/voices-wc3.md)
-│   └── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
+│   ├── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
+│   └── espeech/           # ESpeech: prepare.py (папка модели models/espeech из файлов Hugging Face),
+│                          # make-voice.py (голос .espeech из образца или по manifest.json набора)
 ├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts
 ├── tests/                 # автотесты (раздел «Тесты»); requirements.txt — pytest для stream-tts/.venv
 │   └── e2e/               # e2e stream-tts: fake_cosyvoice.py (поддельный сервер), fake_irc.py (поддельный IRC
 │                          # Twitch), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии), test_real.py (настоящая модель),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
+│   └── espeech/           # espeech-server в espeech/.venv: test_text.py (нарезка, нормализатор),
+│                          # test_server.py (сервер с настоящей моделью)
 ├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
-│                          # espeech.md (ESpeech как вторая модель: замеры и план)
+│                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план)
 │
 │   Данные (в git не попадают):
-├── models/                # модели и пакеты (volume; админка качает сюда)
-├── voices/                # сохранённые голоса .gguf (volume)
+├── models/                # модели и пакеты (volume; админка качает сюда); espeech/ — модель ESpeech
+├── voices/                # сохранённые голоса .gguf и .espeech (volume)
 ├── voice-refs/            # итоговые образцы голосов (.wav + .txt) по наборам: wc3, games, streamers
 ├── voice-clips/           # варианты образцов, их синтез, оценки и выбор по наборам
 ├── voice-origs/           # сырые звуковые паки
@@ -210,3 +219,14 @@ stream-tts в режиме managed запускает свой cosyvoice-server 
 очисткой от музыки, если есть `models/demucs`) и его сохранение в `<голоса>/<набор>/`, потом то же на CPU
 (`/api/backend`, сервер перезапускается). Время синтеза и первого звука выводится в конце прогона («замеры с
 настоящей моделью»), без порогов; весь уровень идёт ~1,5 мин.
+
+**espeech-server** — `tests/espeech/`, pytest в `espeech/.venv` (`espeech/requirements.txt`):
+
+```bash
+espeech/.venv/Scripts/python -m pytest tests/espeech
+```
+
+`test_text.py` — нарезка фразы, длительность кусков, нормализатор, без модели. `test_server.py` — сервер отдельным
+процессом на свободном порту с голосами во временной папке и настоящей моделью из `models/espeech` (пропускается без
+неё или без образца `voice-refs/wc3/wc3-jaina.wav`): голос создаётся через API, из него — голоса с нулевым и
+случайным адаптером LoRA (нулевой должен дать звук бит в бит как без адаптера). ~1,5 мин на видеокарте.

@@ -13,12 +13,15 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | Путь | Что | В git |
 |---|---|---|
 | `setup.sh`, `Dockerfile`, `docker-compose*.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server (:8090 и :8080), профиль `server-only` — только сервер (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
+| `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent) для stream-tts, HTTP API как у cosyvoice-server ([docs/espeech.md](docs/espeech.md)); в stream-tts пока не подключён | да, кроме `.venv` |
 | `stream-tts/streamtts/` | stream-tts на :8090: озвучка наград Twitch, админка, оверлей OBS (спецификация [docs/stream-tts.md](docs/stream-tts.md), развёртывание `stream-tts-deploy.md`, Windows `stream-tts-windows.md`) | да |
 | `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: общий (`pick.py`, `synth.py`, оценки), реплики WC3, прочие источники ([docs/voice-pipeline.md](docs/voice-pipeline.md), [docs/voices-wc3.md](docs/voices-wc3.md)) | да |
+| `tools/espeech/` | папка модели ESpeech (`prepare.py`) и голоса `.espeech` (`make-voice.py`) | да |
 | `effects/` | эффекты поверх синтеза (`post`) | да |
 | `tests/e2e/` | e2e-тесты stream-tts на поддельном cosyvoice-server (раздел «Тесты» в `docs/development.md`) | да |
+| `tests/espeech/` | тесты espeech-server: нарезка без модели и сервер с настоящей моделью | да |
 | `voice-clips/<набор>/` | варианты образцов, их синтез, оценки и выбор | нет (тексты реплик из игр) |
 | `voice-refs/<набор>/` | итоговые образцы и `manifest.json` | нет |
 | `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `runtime/`, `.env` | данные, секреты, нативный cosyvoice-server для Windows | нет |
@@ -36,7 +39,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   командная строка эффекта нужна `synth.py`.
 - `engine.chat` принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
   (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах.
-- Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767; из исходников
+- Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767, espeech-server 8094; из исходников
   `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
   модели) — 8093. Конфигурации — `.claude/launch.json`.
 
@@ -52,6 +55,9 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   пайплайне — 24 кГц моно.
 - stream-tts без Docker: `stream-tts/.venv` (3.14), конфигурация `stream-tts` (`COSYVOICE_URL=http://localhost:8080`,
   данные из `stream-tts-data/`).
+- espeech-server: `espeech/.venv` (3.11, `espeech/requirements.txt`), конфигурация `espeech` —
+  `python -m espeech --models models/espeech --voices voices`; папка модели — `tools/espeech/prepare.py`. Занимает
+  ~0,8 ГБ видеопамяти рядом с cosyvoice-server: видеокарта общая, замеры скорости — чередующимися прогонами.
 - Shell-скрипты — bash (Git Bash), из PowerShell не запускаются.
 - Программа для Windows: `packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py --runtime core`
   (Nuitka + MSVC, первая сборка ~6 мин), установщик — `--setup`, рантайм — `build-runtime.py` (`--cuda` — для
@@ -109,6 +115,13 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - Голоса реальных людей (***, ***, ***) — только для шуток на стриме. Предпочтительны оригинальные
   записи; примеры JeetBot — запасной вариант, это уже синтез.
 - `voice-origs/` (ассеты игр, записи с YouTube) не попадает ни в git, ни в образы.
+- espeech-server: всё, что трогает модель, — в его рабочем потоке (`Engine.call`/`stream`): torch в потоках запросов
+  копит память (~2 МБ за запрос). Модель — `requires_grad_(False)`, копии адаптеров LoRA — под `no_grad`, иначе
+  история autograd растёт на каждой смене голоса. `model.py` совпадает с f5-tts бит в бит — после правки сверять
+  (эталон — облегчённый f5-tts в `samples/espeech-lean`). `RUAccent.load` не вызывать: лезет в сеть и грузит
+  RuleEngine (~1 ГБ, разметке не нужен).
+- Веса ESpeech помечены Apache-2.0, но похожи на дообучение F5-TTS (CC-BY-NC-4.0): до поставки в установщике —
+  выяснить лицензию (docs/espeech.md, «Лицензии»). Английский ESpeech не читает (сильный акцент).
 
 ## Соглашения
 
@@ -132,6 +145,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   статистики, доступа — сценарием в `tests/e2e/`; новый запрос к cosyvoice-server — и в `fake_cosyvoice.py`, новый
   тег IRC — в `fake_irc.py`. После правок синтеза, `runtime.py` или обновления cosyvoice.cpp — ещё `-m real`
   (настоящая модель на видеокарте и CPU, распознавание faster-whisper; при нехватке видеопамяти пропускается).
+- espeech-server: `espeech/.venv/Scripts/python -m pytest tests/espeech` (~1,5 мин, настоящая модель; без
+  `models/espeech` пропускается).
 - Python: `python -m py_compile <файлы>`; страницы инструментов и stream-tts — через preview (`.claude/launch.json`)
   с проверкой консоли и запросов.
 - Compose: `docker compose config -q`; образ — `docker compose build <сервис>`.
