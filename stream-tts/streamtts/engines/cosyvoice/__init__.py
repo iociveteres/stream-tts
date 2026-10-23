@@ -1,6 +1,7 @@
 """Движок CosyVoice3: cosyvoice-server из cosyvoice.cpp (его код не наш). Описание, запуск в режиме managed
-(launch.py) и клиент (client.py)."""
+(launch.py), клиент (client.py) и особенности редактора голоса (editor.py)."""
 from .client import Client
+from .editor import Maker
 from .launch import BACKENDS as DEVICES, Launcher, find_server
 
 ID = "cosyvoice"

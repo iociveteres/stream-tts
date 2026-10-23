@@ -1,4 +1,4 @@
-"""espeech-server без модели: нарезка фразы на куски, длительность, нормализатор.
+"""espeech-server без модели: нарезка фразы на куски, длительность, нормализатор, словарь ударений пользователя.
 Запуск: espeech/.venv/Scripts/python -m pytest tests/espeech/test_text.py (секунды)."""
 import os, sys
 
@@ -6,6 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from espeech import model as M, normalize, pipeline as P  # noqa: E402
+from espeech.accent import UserAccents  # noqa: E402
 
 BPS = 24.0   # байт на секунду звука — темп медленного голоса (Артес ~22–24)
 
@@ -57,3 +58,26 @@ def test_normalize_output_alphabet():
     out = normalize.normalize("Спасибо за 500р, xXx_Killer_2007!!! :) Стрим в 18:30")
     assert "пятьсот" in out and "киллер" in out.lower() and "восемнадцать" in out
     assert not set(out) - set("абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ .,!?:;—-")
+
+
+def test_user_accents(tmp_path):
+    path = str(tmp_path / "accents.json")
+    u = UserAccents(path)
+    assert u.put("З+АМОК") == ("замок", "з+амок")
+    u.put("+ежик")
+    u.put("вс+ё")
+    # поверх готовой разметки: регистр и «ё» — из текста, «ё» в тексте находит слово с «е»
+    assert u.apply("Зам+ок и ЗАМ+ОК, зам+ок-то.") == "З+амок и З+АМОК, зам+ок-то."
+    assert u.apply("Ёжик ушёл.") == "+Ёжик ушёл."
+    assert u.apply("Вс+е пришли.") == "Вс+е пришли."   # «всё» из словаря — только где RUAccent прочитал «всё»
+    assert u.apply("Это вс+ё.") == "Это вс+ё."
+    for bad in ("замок", "zam+ok", "два сл+ова", "з+", "з++амок", "+"):
+        try:
+            u.parse(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    assert UserAccents(path).items() == u.items()   # файл переживает перезапуск
+    assert u.delete("ЗАМОК") and not u.delete("замок")
+    assert "замок" not in dict(UserAccents(path).items())
+    assert UserAccents().apply("Зам+ок.") == "Зам+ок."

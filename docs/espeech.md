@@ -82,6 +82,9 @@ Windows нет).
 espeech/.venv/Scripts/python -m espeech --models models/espeech --voices voices --port 8094
 ```
 
+`--user-accents <файл>` — словарь ударений пользователя (JSON); stream-tts в режиме managed передаёт
+`<данные>/espeech/accents.json`.
+
 Конфигурация `espeech` в `.claude/launch.json`. Окружение для разработки — `espeech/requirements.txt` (Python 3.11,
 torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимостей). `--device auto|cuda|cpu` (на CPU — fp32;
 скорость на CPU ещё не исследована), `--steps 16|32|12` — шагов по умолчанию.
@@ -97,7 +100,10 @@ torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимост
   STFT образца и iSTFT — на CPU (рантайму не нужны cuFFT и NVRTC). cuDNN выключен: без него на 20 % быстрее.
   Остановка — флаг перед каждым шагом Эйлера, CPU опережает видеокарту не больше чем на шаг (`lag=1`).
 - `accent.py` — RUAccent в полном режиме с той же разметкой (858/858 текстов исследования): без RuleEngine, словарь
-  в SQLite, свои токенизаторы, ONNX через mmap, `allow_spinning=0`; ~0,3 ГБ. Плюс правило «вс+ём».
+  в SQLite, свои токенизаторы, ONNX через mmap, `allow_spinning=0`; ~0,3 ГБ. Плюс правило «вс+ём» и словарь ударений
+  пользователя (`UserAccents`): он применяется к готовой разметке последним и перекрывает всё — словарь, омографы
+  (turbo3.1 решает их до словаря, поэтому подмены в `SqliteAccents` мало) и «вс+ём». Слово ищется как есть, потом с
+  «ё» → «е»; регистр и «ё» берутся из текста. Хранится в JSON (`--user-accents`), без флага — в памяти.
 - `normalize.py` — нормализатор текста чата (числа с падежами, латиница, ники, смайлы, сокращения): на выходе только
   кириллица и знаки, которые модель читает.
 - `pipeline.py` — нарезка фразы на куски по запасу воспроизведения, длительность куска, склейка (ниже).
@@ -110,14 +116,15 @@ torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимост
 
 | Запрос | Что |
 |---|---|
-| `GET /status` | `model_loaded`, `engine: espeech`, `api_version`, `device`, `capabilities` (stream, accent, extract, train, voice_formats), `params` — схема настроек для админки (`nfe_steps`: 16 / 32 / 12), `memory` (uss, видеопамять), `error` |
+| `GET /status` | `model_loaded`, `engine: espeech`, `api_version`, `device`, `capabilities` (stream, accent, extract, train, voice_formats, user_accents), `params` — схема настроек для админки (`nfe_steps`: 16 / 32 / 12), `memory` (uss, видеопамять), `error` |
 | `GET /speaker` | имена голосов; папка перечитывается при каждом запросе — новые файлы без перезапуска |
 | `POST /speaker?type=extract` | голос из образца в памяти: multipart `name`, `text` (без «+» ударения ставит RUAccent), `audio` (WAV PCM16 моно 24 кГц, до 12 с), необязательные `tempo`, `title`; 409 — имя занято |
-| `POST /speaker/save {name, path}` | голос в файл `.espeech` |
+| `POST /speaker/save {name, path}` | голос в файл `.espeech`; относительный `path` — от папки `--voices` (`<набор>/<имя>.espeech`: так сохраняет редактор stream-tts) |
 | `DELETE /speaker/<имя>` | выгрузить; голос из файла вернётся, когда файл изменится, или после перезапуска |
 | `POST /tts {text, voice, seed?, stream?, nfe_steps?}` | WAV PCM16 24 кГц; `stream` — заголовок с неизвестной длиной и PCM по мере готовности кусков (chunked); `seed` по умолчанию случайный, один на все куски фразы; поля cosyvoice (`chunk_tokens` и др.) игнорируются |
 | `POST /tts/stop` | остановить текущий синтез: видеокарта свободна через 0,1–0,2 с, целиком — ответ с тем, что успело |
 | `POST /accent {text}` | как прочитает модель: `{normalized, accented}` |
+| `GET /accents`, `POST /accents {accented}`, `DELETE /accents/<слово>` | словарь ударений пользователя: `{words: [{word, accented}]}`; добавить или заменить слово («з+амок»; 400 — не одно русское слово с «+» перед гласной); убрать (404 — нет такого) |
 | `POST /model/unload`, `/model/load` | выгрузить и загрузить модель (torch возвращает не всю память: stream-tts выгружает остановкой процесса) |
 
 **Синтез фразы** (`pipeline.py`, по `samples/espeech-sentences`): нормализатор → предложения → цепочки из
@@ -147,7 +154,7 @@ LoRA — ветка выключена, цена нулевая. Модель б
 **Тесты** — `tests/espeech/` в `espeech/.venv` (pytest): `test_text.py` — нарезка, длительность, нормализатор (без
 модели, секунды); `test_server.py` — сервер с настоящей моделью отдельным процессом (~1,5 мин; пропускается без
 `models/espeech` или `voice-refs/wc3/wc3-jaina.wav`): статус, ударения, целиком и поток, LoRA (нулевой адаптер —
-звук бит в бит как без него), ошибки, шаги, остановка, выгрузка голоса, память.
+звук бит в бит как без него), ошибки, шаги, остановка, выгрузка голоса, память, сохранение по относительному пути, словарь ударений.
 
 ```bash
 espeech/.venv/Scripts/python -m pytest tests/espeech
@@ -174,9 +181,12 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
    скорости с выбранными шагами, «как прочитает», голоса и примеры по моделям; e2e — `test_engines.py` на
    поддельных серверах, `test_real_espeech.py` с настоящей моделью. Поток ESpeech — с 6 с расчётного звука: короче
    фраза приходит одним куском, а громкость потока по примеру голоса гуляет сильнее (−12,9…−14,4 LUFS против −16).
-   Своих страниц и редактора у модулей пока нет (этап 3).
-3. Редактор голоса ESpeech (кусок 4–12 с, разметка через `/accent` с правкой, темп) и словарь ударений пользователя
-   (overlay поверх `accents.sqlite`).
+   Редактор голоса — этап 3, своих страниц у модулей пока нет.
+3. ~~Редактор голоса ESpeech и словарь ударений~~ — сделано: редактор общий, особенности моделей — в
+   `engines/<id>/editor.py` (кусок 4–12 с, «Ударения» через `/accent` с правкой «+», темп по отрезку для темпа,
+   сохранение в `<набор>/<имя>.espeech`), интерфейс — `static/editor.js` (записи, волну и тестовые фразы возьмёт
+   страница дообучения, этап 5); словарь ударений — у сервера (`/accents`, `capabilities.user_accents`), карточка
+   на вкладке «Сервер» и правка щелчком в «Как прочитает» ([stream-tts.md](stream-tts.md)).
 4. Поставка: `build-runtime.py` (встраиваемый Python 3.11, облегчённый torch — только нужные файлы колеса, cuBLAS из
    архива CUDA llama.cpp, DLL-заглушки, CRT с `vcruntime140_threads.dll`), `downloads.json` (раздел `espeech`),
    `StreamTTS.iss` (выбор модели: CosyVoice / ESpeech / обе), CI; Docker — отдельный образ и сервис `espeech`

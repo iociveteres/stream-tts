@@ -18,15 +18,18 @@
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
 ├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): server.py (HTTP API
 │                          # как у cosyvoice-server), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
-│                          # RUAccent), normalize.py (текст чата), pipeline.py (нарезка на куски), lora.py (адаптер
+│                          # RUAccent и словарь ударений пользователя), normalize.py (текст чата), pipeline.py
+│                          # (нарезка на куски), lora.py (адаптер
 │                          # голоса), voices.py (формат .espeech); requirements.txt — окружение espeech/.venv,
 │                          # THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер: процесс, перезапуски),
 │                          # engines/ (модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент
-│                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск и клиент модели),
-│                          # install.py (модель и наборы голосов из админки), editor.py (новый голос из записи),
+│                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск, клиент модели и
+│                          # особенности редактора голоса в editor.py),
+│                          # install.py (модель и наборы голосов из админки), editor.py (новый голос из записи;
+│                          # интерфейс — static/editor.js),
 │                          # bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
@@ -52,10 +55,11 @@
 │   └── e2e/               # e2e stream-tts: fake_cosyvoice.py (поддельный сервер cosyvoice или espeech),
 │                          # fake_irc.py (поддельный IRC
 │                          # Twitch), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
-│                          # (фикстуры, маркер real), test_*.py (сценарии), test_real.py и test_real_espeech.py
+│                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
+│                          # test_editor_espeech.py), test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
-│   └── espeech/           # espeech-server в espeech/.venv: test_text.py (нарезка, нормализатор),
+│   └── espeech/           # espeech-server в espeech/.venv: test_text.py (нарезка, нормализатор, словарь),
 │                          # test_server.py (сервер с настоящей моделью)
 ├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
@@ -149,7 +153,9 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 корне проекта (режим managed, [stream-tts-deploy.md](stream-tts-deploy.md)) с моделью из `models/` и
 голосами из `voices/`; конфигурация `stream-tts-managed` — на порту 8092 и с данными в `stream-tts-data/native/`,
 чтобы не мешать Docker-версии (её сервер на 8080 — внешний для конфигурации `stream-tts`). Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
-проверка словаря `python stream-tts/check-i18n.py`. Программа для Windows —
+проверка словаря `python stream-tts/check-i18n.py`. ESpeech со своими данными — `espeech-test` (espeech-server на
+8096, голоса и словарь ударений в `stream-tts-data/espeech-test/`) и `stream-tts-espeech` (stream-tts на 8095 с
+`TTS_SERVERS=espeech=…`): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Программа для Windows —
 [stream-tts-windows.md](stream-tts-windows.md).
 
 ## Тесты
@@ -164,8 +170,9 @@ stream-tts/.venv/Scripts/python -m pytest tests/e2e
 Тест запускает настоящий процесс stream-tts (`python -m streamtts`) на свободном порту, данные, модели, голоса и
 проект у него во временной папке. Вместо cosyvoice-server — поддельный (`fake_cosyvoice.py`): те же адреса API, а
 вместо речи синус, у каждого голоса своя частота и громкость. `FakeCosy(engine="espeech", voices=…)` — поддельный
-espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, `/accent`, поток кусками по 1 с, проверка
-`nfe_steps`. Так тест узнаёт голос фразы и проверяет писк 800 Гц
+espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, `/accent`, словарь ударений `/accents`
+(синтез записывает, как прочитал бы текст), голос из образца без фронтенда с полем `tempo`, поток кусками по 1 с,
+проверка `nfe_steps`. Так тест узнаёт голос фразы и проверяет писк 800 Гц
 и выравнивание громкости. Голос, извлечённый из образца (редактор), звучит основной частотой образца. Видеокарта,
 модель и сеть не нужны (нужен только `ffmpeg` в PATH, для mp3 примеров), Docker-версию на 8090 тесты не трогают,
 весь набор идёт ~1 мин. Оверлей играет сам тест: подключается к `/overlay/ws`, сообщает `ready` и `ended`, собирает
@@ -209,7 +216,9 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
 старых версий; `test_engines.py` — две модели на двух поддельных серверах (`TTS_SERVERS`): список и смена модели,
 настройки по схеме `params` (`nfe_steps` в запросе, значение не из схемы — отказ), голос без файла для модели
 (выбор зрителя сохраняется), свои примеры у каждой модели, порог стриминга, «как прочитает», выбор после
-перезапуска. Twitch с приложением (вход, награда, EventSub) и админка в браузере пока не покрыты.
+перезапуска; `test_editor_espeech.py` — редактор с ESpeech (пределы 4–12 с, «Ударения» без фильтров, регистрация
+без фронтенда с текстом в разметке и темпом по отрезку, путь `<набор>/<имя>.espeech`, голос другой модели — в его
+наборе) и словарь ударений (разметка и синтез, отказ, удаление). Twitch с приложением (вход, награда, EventSub) и админка в браузере пока не покрыты.
 
 **С настоящей моделью** (`test_real.py`, маркер `real`, без него тесты пропускаются):
 
@@ -230,7 +239,9 @@ stream-tts в режиме managed запускает свой cosyvoice-server 
 (`/api/backend`, сервер перезапускается). `test_real_espeech.py` — ESpeech в режиме managed: espeech-server из
 `espeech/.venv` (`ESPEECH_SERVER`), модель — ссылки на `models/espeech`, голос `wc3-jaina` собирает
 `tools/espeech/make-voice.py` из `voice-refs/wc3/wc3-jaina.wav` (без них уровень пропускается): синтез короткой
-(целиком) и длинной (потоком) фразы, «как прочитает», проверка скорости на 32 шагах, а если есть и cosyvoice-server с
+(целиком) и длинной (потоком) фразы, «как прочитает», голос из редактора (кусок записи Джайны, темп по всей
+записи, сохранение в `.espeech`, синтез им), словарь ударений (омограф «замок», файл `<данные>/espeech/accents.json`),
+проверка скорости на 32 шагах, а если есть и cosyvoice-server с
 Q5_K_M — смена модели туда и обратно со своими голосами у каждой. Время синтеза и первого звука выводится в конце
 прогона («замеры с настоящей моделью»), без порогов; весь уровень идёт ~3 мин.
 
@@ -243,4 +254,5 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
 `test_text.py` — нарезка фразы, длительность кусков, нормализатор, без модели. `test_server.py` — сервер отдельным
 процессом на свободном порту с голосами во временной папке и настоящей моделью из `models/espeech` (пропускается без
 неё или без образца `voice-refs/wc3/wc3-jaina.wav`): голос создаётся через API, из него — голоса с нулевым и
-случайным адаптером LoRA (нулевой должен дать звук бит в бит как без адаптера). ~1,5 мин на видеокарте.
+случайным адаптером LoRA (нулевой должен дать звук бит в бит как без адаптера); сохранение по пути от папки
+голосов; словарь ударений (омограф «замок» по словарю, звук другой, файл `--user-accents`). ~2 мин на видеокарте.

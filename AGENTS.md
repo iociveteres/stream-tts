@@ -39,14 +39,16 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   командная строка эффекта нужна `synth.py`.
 - Модели синтеза — `streamtts/engines/<id>/` (описание, запуск, клиент), одна единовременно (`settings.engine`).
   Ядро зовёт у клиента только lane/synth/stream/streams/stop/speakers/ok/status; поле запроса модели — в `params()`
-  её клиента, настройка модели — схемой `params` в `/status` сервера (`SETTINGS` клиента), новый запрос к серверу —
-  и в `fake_cosyvoice.py` (оба режима). Голос без файла для текущей модели (`.gguf`/`.espeech`) зрителям не выдаётся,
+  её клиента, особенности редактора голоса — в `Maker` (`engines/<id>/editor.py`, ключ варианта CosyVoice не менять:
+  пропадёт кэш черновиков), словарь ударений хранит сервер модели (`/accents`), настройка модели — схемой `params`
+  в `/status` сервера (`SETTINGS` клиента), новый запрос к серверу — и в `fake_cosyvoice.py` (оба режима). Голос без файла для текущей модели (`.gguf`/`.espeech`) зрителям не выдаётся,
   но `users.voice` не перезаписывается; примеры и `calib_db` — свои у каждой модели (`voices.py`).
 - `engine.chat` принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
   (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах.
 - Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767, espeech-server 8094; из исходников
   `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
-  модели) — 8093. Встроенный espeech-server (режим managed, выбор ESpeech) — на свободном порту или `ESPEECH_PORT`. Конфигурации — `.claude/launch.json`.
+  модели) — 8093, `stream-tts-espeech` — 8095 с `espeech-test` на 8096 (свои голоса и словарь в
+  `stream-tts-data/espeech-test/`). Встроенный espeech-server (режим managed, выбор ESpeech) — на свободном порту или `ESPEECH_PORT`. Конфигурации — `.claude/launch.json`.
 
 ## Запуск
 

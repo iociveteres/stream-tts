@@ -210,11 +210,15 @@ class Client:
             return False
 
     # --- голоса из записи (editor.py) ---
-    async def extract(self, name, text, wav):
-        """POST /speaker?type=extract: голос из образца (WAV) и его расшифровки, сразу доступен для синтеза."""
+    async def extract(self, name, text, wav, **fields):
+        """POST /speaker?type=extract: голос из образца (WAV) и его расшифровки, сразу доступен для синтеза;
+        fields — свои поля движка (у ESpeech tempo), None не передаётся."""
         form = aiohttp.FormData()
         form.add_field("name", name)
         form.add_field("text", text)
+        for k, v in fields.items():
+            if v is not None:
+                form.add_field(k, str(v))
         form.add_field("audio", wav, filename="sample.wav", content_type="audio/wav")
         async with self.session.post(f"{self.url}/speaker", params={"type": "extract"}, data=form,
                                      timeout=aiohttp.ClientTimeout(total=300)) as r:

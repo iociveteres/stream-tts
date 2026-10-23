@@ -1,6 +1,6 @@
 """Проверка английского словаря stream-tts (streamtts/static/en.json, механизм — streamtts/i18n.py).
 
-Ищет строки, которым нужен перевод: tr("…") в streamtts/**/*.py, T("…") в static/admin.js и static/overlay.html,
+Ищет строки, которым нужен перевод: tr("…") в streamtts/**/*.py, T("…") в static/admin.js, editor.js и overlay.html,
 {{t:…}} в static/voices.html, плюс константы, которые переводятся при показе (причины возврата R_*, REPLIES и ACCESS_WHO в engine.py,
 HELIX_HINTS, GROUPS, подписи примеров и пакеты в install.py). Печатает ключи без перевода, переводы с кириллицей и
 расхождения подстановок {имя}. Код выхода 1, если что-то нашлось.
@@ -53,7 +53,7 @@ def python_keys():
 
 def js_keys():
     keys = set()
-    for name in ("admin.js", "overlay.html"):
+    for name in ("admin.js", "editor.js", "overlay.html"):
         src = open(os.path.join(STATIC, name), encoding="utf-8").read()
         for m in re.finditer(r'\bT\(\s*((?:' + STR + r'\s*\+?\s*)+)', src):  # T("…" + "…")
             keys.add("".join(json.loads('"' + s + '"') for s in re.findall(STR, m[1])))

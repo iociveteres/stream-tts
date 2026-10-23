@@ -152,10 +152,15 @@ def test_espeech_stream_threshold(two):
 
 
 def test_accent(two):
-    """«Как прочитает»: текст после фильтров через POST /accent; у CosyVoice — отказ, кнопки нет."""
+    """«Как прочитает»: текст после фильтров через POST /accent; у CosyVoice — отказ, кнопки нет, словаря ударений и
+    кнопки «Ударения» в редакторе тоже."""
     r = two.api.post("/api/accent", dict(text="Привет, 2 мира"))
     assert not r.json()["ok"]
+    assert two.api.get("/api/accents").json() == dict(ok=False, error="у модели CosyVoice3 нет словаря ударений")
+    d = two.api.get("/api/draft").json()["engine"]
+    assert (d["id"], d["min"], d["max"], d["packages"], d["accent"]) == ("cosyvoice", 2, 30, ["frontend", "music"], False)
     two.use("espeech")
+    assert two.api.get("/api/draft").json()["engine"]["id"] == "espeech"
     assert two.api.state()["cosy"]["capabilities"]["accent"]
     r = two.api.ok("/api/accent", dict(text="Привет, 2 мира https://example.com"))
     assert r["normalized"] == "Привет, два мира" and r["accented"] == "Пр+ивет, дв+а м+ира"

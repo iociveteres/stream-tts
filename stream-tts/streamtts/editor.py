@@ -8,25 +8,30 @@
 - cache/vocals-<хеш отрезка>.wav — отрезок без музыки (separate.py), считается один раз: ~10 с на 20 с записи.
 Вариант образца — отрезок записи, его расшифровка и обработка: по желанию сначала убирается музыка (htdemucs,
 пакет «music»; отрезок берётся с запасом CONTEXT по краям, чтобы сети было что слушать на границах), потом
-шумоподавление ffmpeg afftdn. На cosyvoice-server
-он регистрируется при первом синтезе (POST /speaker?type=extract, нужен ONNX-фронтенд) под служебным именем
+шумоподавление ffmpeg afftdn. На сервере
+выбранной модели он регистрируется при первом синтезе (POST /speaker?type=extract) под служебным именем
 _draft-<ключ>, где ключ — хеш параметров: изменённый вариант регистрируется заново, прежний выгружается.
 Служебные голоса в список голосов не попадают (voices.refresh). Синтез — с приоритетом «послушать» и тем же seed,
-что у примеров, поэтому варианты различаются только образцом. ONNX-фронтенд сервер держит выгруженным: он
-грузится перед первым извлечением голоса (пути — из флагов сервера, frontend_paths клиента engines/cosyvoice) и
-выгружается через FRONTEND_IDLE простоя.
+что у примеров, поэтому варианты различаются только образцом.
 
-Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет .gguf. Со встроенным сервером —
-в paths.VOICES/<набор>/ с manifest.json набора (так и в Docker); с внешним (COSYVOICE_URL) — в COSYVOICE_VOICES (по
-умолчанию /voices) без подпапки (cosyvoice/entrypoint.sh склеивает имя голоса из подпапок), а набор записывается в
-<данные>/sets/<набор>/manifest.json. Образец и расшифровка остаются в <данные>/samples/<голос>.wav и .txt."""
+Особенности модели — в engines/<id>/editor.py (Maker): пределы длины образца, свои поля варианта (у ESpeech —
+отрезок для темпа), проверка (у CosyVoice — ONNX-фронтенд), регистрация образца (у ESpeech — ударения и темп), путь
+файла голоса. Черновик общий; ключ варианта и кэш сравнения с голосом у каждой модели свои (голос с тем же именем
+звучит у них по-разному), ключ CosyVoice — как до второй модели.
+
+Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет файл голоса модели (.gguf,
+.espeech). Со встроенным сервером — в paths.VOICES/<набор>/ с manifest.json набора (так и в Docker); с внешним —
+куда скажет Maker.target (CosyVoice — COSYVOICE_VOICES без подпапки, ESpeech — <набор>/ от папки голосов сервера), а
+набор записывается в <данные>/sets/<набор>/manifest.json. Имя занято, если у выбранной модели уже есть голос с ним;
+голос другой модели с тем же именем получает файл этой модели, но в том же наборе. Образец и расшифровка остаются в
+<данные>/samples/<голос>.wav и .txt (у моделей, кроме CosyVoice, — в samples/<модель>/)."""
 import asyncio, contextlib, glob, hashlib, io, json, logging, math, os, re, secrets, shutil, wave
 
 import numpy as np
 
-from . import audio, config, install, paths, separate, store
+from . import audio, config, engines, install, paths, separate, store
 from .config import SR
-from .engines.client import BACKGROUND, PREVIEW
+from .engines.client import PREVIEW
 from .i18n import tr
 from .voices import DEMO_SEED, DRAFT_PREFIX
 
@@ -36,12 +41,10 @@ MAX_SOURCE_SEC = 15 * 60   # длиннее не декодируется: об�
 MAX_SOURCES = 10
 MAX_VARIANTS = 12
 MAX_PHRASES = 8
-SAMPLE_MIN, SAMPLE_MAX = 2.0, 30.0   # с; советуем 10–20 (docs/voice-pipeline.md), длиннее синтез медленнее
-DENOISE = "afftdn=nf=-25"            # шумоподавление ffmpeg: фон и шипение, музыку не убирает
-FADE = 0.01                          # с: без щелчков на краях отрезка
-CONTEXT = 1.0                        # с: запас записи по краям отрезка для отделения от музыки
-# с: потом ONNX-фронтенд выгружается. Замер (2026-10-18, int8, CPU): ~300 МБ памяти сервера, загрузка ~3 с
-FRONTEND_IDLE = 600
+SAMPLE_MIN = 2.0           # с: короче запись не принимается; пределы образца — у модели (Maker.SAMPLE_MIN/MAX)
+DENOISE = "afftdn=nf=-25"  # шумоподавление ffmpeg: фон и шипение, музыку не убирает
+FADE = 0.01                # с: без щелчков на краях отрезка
+CONTEXT = 1.0              # с: запас записи по краям отрезка для отделения от музыки
 ID = re.compile(r"[\w-]{1,24}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
 
@@ -67,7 +70,12 @@ class Editor:
         self.path = os.path.join(self.dir, "draft.json")
         self.separator = separate.Separator()
         self._vocals_jobs = {}  # имя в кэше -> задача: синтез всех фраз сразу не запускает отделение повторно
-        self._fe_timer = None
+        self.makers = {i: E.Maker(tts) for i, E in engines.ENGINES.items()}
+
+    @property
+    def maker(self):
+        """Особенности выбранной модели (engines/<id>/editor.py)."""
+        return self.makers[self.tts.id]
 
     # --- черновик ---
     def _load(self):
@@ -84,12 +92,11 @@ class Editor:
     def _cache(self, name, ext=".mp3"):
         return os.path.join(self.dir, "cache", name + ext)
 
-    @staticmethod
-    def key(v):
+    def key(self, v, maker=None):
         parts = [v["src"], round(v["start"], 2), round(v["end"], 2), " ".join(v["text"].split()), v["denoise"]]
         if v.get("music"):  # без галочки ключ прежний: синтез черновиков до неё не пропадает
             parts.append("music")
-        return _hash(*parts)
+        return _hash(*parts, *(maker or self.maker).key_parts(v))
 
     @staticmethod
     def vocals_name(v):
@@ -101,11 +108,14 @@ class Editor:
         ready = lambda prefix: [i for i, h in enumerate(phrases) if os.path.exists(self._cache(f"{prefix}-{h}"))]
         for v in d["variants"]:
             v["ready"] = ready(self.key(v))
-        d["compare_ready"] = ready("ref-" + d["compare"]) if d["compare"] else []
+        m = self.maker
+        d["compare_ready"] = ready(m.ref_name(d["compare"])) if d["compare"] else []
         d["frontend"] = self.tts.frontend_ready
         d["music"] = separate.available()
         d["sets"] = self.sets()
         d["managed"] = self.runtime is not None
+        d["engine"] = dict(id=m.ENGINE, title=self.tts.title, min=m.SAMPLE_MIN, max=m.SAMPLE_MAX, ok=list(m.SAMPLE_OK),
+                           packages=list(m.PACKAGES), accent=bool(self.tts.capabilities.get("accent")))
         return d
 
     def sets(self):
@@ -125,9 +135,11 @@ class Editor:
             end = min(float(srcs[src]["dur"]), float(v["end"]))
             if not (math.isfinite(start) and math.isfinite(end)) or end <= start:
                 raise ValueError(tr("неверный отрезок"))
-            variants.append(dict(id=vid, src=src, start=round(start, 2), end=round(end, 2),
-                                 text=str(v.get("text", ""))[:1000], denoise=bool(v.get("denoise")),
-                                 music=bool(v.get("music"))))
+            out = dict(id=vid, src=src, start=round(start, 2), end=round(end, 2), text=str(v.get("text", ""))[:1000],
+                       denoise=bool(v.get("denoise")), music=bool(v.get("music")))
+            for m in self.makers.values():   # поля всех моделей: при смене модели они не теряются
+                out.update(m.fields(v, srcs[src]["dur"]))
+            variants.append(out)
         d["variants"] = variants
         if "compare" in data:
             c = str(data["compare"] or "")
@@ -142,7 +154,7 @@ class Editor:
     def _prune(self, d):
         """Синтез и дорожки без музыки вариантов, которых больше нет (сравнение с голосами остаётся: он не
         устаревает)."""
-        keep = {self.key(v) for v in d["variants"]}
+        keep = {self.key(v, m) for v in d["variants"] for m in self.makers.values()}
         vocals = {self.vocals_name(v) + ".wav" for v in d["variants"] if v.get("music")}
         for f in glob.glob(os.path.join(self.dir, "cache", "*.*")):
             name = os.path.basename(f)
@@ -253,42 +265,26 @@ class Editor:
         return _wav_bytes(await self.sample(self._variant(vid)))
 
     def _check(self, v):
-        dur = v["end"] - v["start"]
-        if dur < SAMPLE_MIN or dur > SAMPLE_MAX:
+        m, dur = self.maker, v["end"] - v["start"]
+        if dur < m.SAMPLE_MIN or dur > m.SAMPLE_MAX:
             raise ValueError(tr("образец {dur} с: нужно от {min} до {max} с", dur=round(dur, 1),
-                                min=int(SAMPLE_MIN), max=int(SAMPLE_MAX)))
+                                min=int(m.SAMPLE_MIN), max=int(m.SAMPLE_MAX)))
         if not v["text"].strip():
             raise ValueError(tr("нет расшифровки образца"))
-        if not self.tts.frontend_ready:
-            raise ValueError(tr("на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"))
-
-    # --- ONNX-фронтенд ---
-    async def _extract(self, name, text, wav):
-        """Под lane.hold: голос из образца; фронтенд грузится к первому и выгружается после простоя."""
-        if await self.tts.load_frontend():
-            log.info("ONNX-фронтенд загружен")
-        try:
-            await self.tts.extract(name, text, wav)
-        finally:
-            if self._fe_timer:
-                self._fe_timer.cancel()
-            self._fe_timer = asyncio.get_running_loop().call_later(
-                FRONTEND_IDLE, lambda: asyncio.ensure_future(self.unload_frontend(BACKGROUND)))
+        m.check(v)
 
     async def unload_frontend(self, priority=PREVIEW):
-        """По таймеру простоя и кнопкой на вкладке «Статистика»."""
-        if self._fe_timer:
-            self._fe_timer.cancel()
-            self._fe_timer = None
-        try:
-            async with self.tts.lane.hold(priority, tr("выгрузка фронтенда")):
-                if self.tts.ok is not False and self.tts.frontend_loaded:
-                    await self.tts.unload_frontend()
-                    log.info("ONNX-фронтенд выгружен")
-        except Exception as e:
-            if priority != BACKGROUND:
-                raise
-            log.warning("ONNX-фронтенд не выгружен: %s", e)
+        """ONNX-фронтенд CosyVoice: по таймеру простоя и кнопкой на вкладке «Статистика»."""
+        await self.makers["cosyvoice"].unload_frontend(priority)
+
+    async def accent(self, text):
+        """Расшифровка образца так, как её прочитает модель (кнопка «Ударения»): {normalized, accented}."""
+        if not self.tts.capabilities.get("accent"):
+            raise ValueError(tr("модель {engine} не показывает ударения", engine=self.tts.title))
+        text = " ".join(str(text).split())[:3000]
+        if not text:
+            raise ValueError(tr("нет расшифровки образца"))
+        return await self.tts.accent(text)
 
     # --- тестовый синтез ---
     async def synth(self, vid, voice, index):
@@ -314,13 +310,13 @@ class Editor:
                     for old in speakers:
                         if old.startswith(DRAFT_PREFIX) and old not in keep:
                             await self.tts.delete_speaker(old)
-                    await self._extract(name, " ".join(v["text"].split()), wav)
+                    await self.maker.register(name, v, " ".join(v["text"].split()), wav, self)
                     log.info("черновик: вариант %s зарегистрирован как %s", vid, name)
                 x = await self.tts.synth(name, text, seed=DEMO_SEED)
         else:
             if voice not in self.voices.names():
                 raise ValueError(tr("нет такого голоса"))
-            out = self._cache(f"ref-{voice}-{_hash(text)}")
+            out = self._cache(f"{self.maker.ref_name(voice)}-{_hash(text)}")
             if os.path.exists(out):
                 return out
             async with self.tts.lane.hold(PREVIEW, tr("пример {voice}", voice=voice)):
@@ -334,6 +330,22 @@ class Editor:
         return out
 
     # --- сохранение и удаление ---
+    @staticmethod
+    def _files(ext):
+        """Имена голосов с файлом ext в папке голосов (корень и наборы)."""
+        return {os.path.splitext(os.path.basename(f))[0] for f in glob.glob(os.path.join(paths.VOICES, "*" + ext)) +
+                glob.glob(os.path.join(paths.VOICES, "*", "*" + ext))}
+
+    def _set_of(self, name):
+        """Где уже лежит голос name любой модели: набор, "" — корень папки голосов, None — нигде."""
+        for ext in install.VOICE_EXTS:
+            if os.path.isfile(os.path.join(paths.VOICES, name + ext)):
+                return ""
+            hit = glob.glob(os.path.join(paths.VOICES, "*", name + ext))
+            if hit:
+                return os.path.basename(os.path.dirname(hit[0]))
+        return self.voices._read_manifests()[2].get(name) or None
+
     async def save(self, vid, name, set_name):
         v = self._variant(vid)
         self._check(v)
@@ -342,25 +354,28 @@ class Editor:
         set_name = install.SET_NAME.sub("-", set_name.lower()).strip("-_")
         if not set_name:
             raise ValueError(tr("укажите набор: латиница, цифры, «-» и «_»"))
-        taken = {n.lower() for n in self.voices.names()} | {n.lower() for n in install._existing_voices(None)}
+        m = self.maker
+        taken = {n.lower() for n in self.voices.names()} | {n.lower() for n in self._files(m.EXT)}
         if name.lower() in taken:
             raise ValueError(tr("голос {voice} уже есть: выберите другое имя", voice=name))
+        other = self._set_of(name)   # голос другой модели: файл этой модели — в тот же набор
+        if other is not None and other != set_name:
+            raise ValueError(tr("голос {voice} другой модели лежит в наборе {set}: сохраните в тот же набор",
+                                voice=name, set=other or tr("голоса без набора")))
         x = await self.sample(v)
         text = " ".join(v["text"].split())
         if self.runtime:
             folder = os.path.join(paths.VOICES, set_name)
-            target = os.path.join(folder, name + ".gguf")
             manifest = os.path.join(folder, "manifest.json")
+            os.makedirs(folder, exist_ok=True)
         else:
             folder = None
-            target = paths.env("COSYVOICE_VOICES", "/voices").rstrip("/") + f"/{name}.gguf"
             manifest = os.path.join(config.DATA, "sets", set_name, "manifest.json")
-        if folder:
-            os.makedirs(folder, exist_ok=True)
+        target = m.target(name, set_name, folder)
         async with self.tts.lane.hold(PREVIEW, tr("сохранение голоса {voice}", voice=name)):
             if name in await self.tts.speakers():
                 raise ValueError(tr("голос {voice} уже есть: выберите другое имя", voice=name))
-            await self._extract(name, text, _wav_bytes(x))
+            text = await m.register(name, v, text, _wav_bytes(x), self)
             try:
                 await self.tts.save_speaker(name, target)
             except Exception:
@@ -370,7 +385,7 @@ class Editor:
         meta = store.read_json(manifest, {})
         meta[name] = dict(meta.get(name) or {}, source="editor")
         store.write_json(manifest, meta)
-        samples = os.path.join(config.DATA, "samples")
+        samples = os.path.join(config.DATA, "samples", *([] if m.ENGINE == "cosyvoice" else [m.ENGINE]))
         os.makedirs(samples, exist_ok=True)
         with open(os.path.join(samples, name + ".wav"), "wb") as f:
             f.write(_wav_bytes(x))

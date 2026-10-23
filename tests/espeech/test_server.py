@@ -4,7 +4,7 @@
 
 Голос создаётся через API (POST /speaker?type=extract → /speaker/save), из него — голоса с адаптером LoRA: нулевой
 (звук должен совпасть с голосом без LoRA бит в бит — ветка считается, но ничего не меняет) и случайный (звук другой)."""
-import http.client, json, os, socket, subprocess, sys, threading, time, uuid
+import http.client, json, os, socket, subprocess, sys, threading, time, urllib.parse, uuid
 
 import numpy as np
 import pytest
@@ -21,15 +21,15 @@ pytestmark = pytest.mark.skipif(not (os.path.isfile(os.path.join(MODELS, "espeec
 
 
 class Server:
-    def __init__(self, voices):
+    def __init__(self, voices, user_accents=""):
         s = socket.socket()
         s.bind(("127.0.0.1", 0))
         self.port = s.getsockname()[1]
         s.close()
-        self.voices = voices
+        self.voices, self.user_accents = voices, user_accents
         self.log = open(os.path.join(voices, "..", "server.log"), "w", encoding="utf-8")
         self.proc = subprocess.Popen([sys.executable, "-m", "espeech", "--models", MODELS, "--voices", voices,
-                                      "--port", str(self.port)], cwd=ROOT, stdout=self.log, stderr=subprocess.STDOUT)
+                                      "--port", str(self.port), "--user-accents", user_accents], cwd=ROOT, stdout=self.log, stderr=subprocess.STDOUT)
         deadline = time.time() + 180
         while time.time() < deadline:
             try:
@@ -71,7 +71,7 @@ def srv(tmp_path_factory):
     d = tmp_path_factory.mktemp("espeech")
     voices = d / "voices"
     voices.mkdir()
-    s = Server(str(voices))
+    s = Server(str(voices), str(d / "user-accents.json"))
     yield s
     s.close()
 
@@ -205,3 +205,44 @@ def test_memory_stable(srv, jaina):
         assert after["uss_mb"] - before["uss_mb"] < 30, (before, after)
     if "vram_mb" in before:
         assert after["vram_mb"] - before["vram_mb"] < 64, (before, after)
+
+
+def test_save_relative_path(srv, jaina):
+    """Относительный path — от папки --voices (так сохраняет голос stream-tts: папку внешнего сервера он не знает)."""
+    st, data = srv.request("POST", "/speaker/save", dict(name=jaina, path="rel/jaina-rel.espeech"))
+    assert st == 200, data
+    path = os.path.join(srv.voices, "rel", "jaina-rel.espeech")
+    try:
+        assert os.path.isfile(path) and "jaina-rel" in srv.get("/speaker")
+        assert srv.request("POST", "/speaker/save", dict(name=jaina, path="../out.espeech"))[0] == 400
+    finally:
+        os.remove(path)
+
+
+def test_user_accents(srv, jaina):
+    """Словарь пользователя перекрывает омограф («замок» решает turbo3.1), меняет звук и пишется в файл
+    --user-accents."""
+    accent = lambda t: json.loads(srv.request("POST", "/accent", dict(text=t))[1])["accented"]
+    assert srv.get("/accents") == {"words": []}
+    text = "Старый замок стоит на горе."
+    before = accent(text)
+    word = before.split()[1]
+    assert word in ("з+амок", "зам+ок"), before
+    other = "зам+ок" if word == "з+амок" else "з+амок"
+    x0 = srv.tts(text=text, voice=jaina, seed=2)
+
+    st, data = srv.request("POST", "/accents", dict(accented=other.upper()))
+    assert st == 200 and json.loads(data)["word"] == "замок", data
+    assert srv.get("/accents") == {"words": [dict(word="замок", accented=other)]}
+    assert accent(text).split()[1] == other
+    assert accent("Замок на горе.").split()[0] == other.capitalize()
+    x1 = srv.tts(text=text, voice=jaina, seed=2)
+    assert not (len(x0) == len(x1) and np.array_equal(x0, x1))   # синтез прочитал по словарю
+
+    saved = json.load(open(srv.user_accents, encoding="utf-8"))
+    assert saved["words"] == {"замок": other}
+    for bad in ("замок", "zam+ok", "два слова", "з+", "з++амок"):
+        assert srv.request("POST", "/accents", dict(accented=bad))[0] == 400, bad
+    assert srv.request("DELETE", "/accents/" + urllib.parse.quote("замок"))[0] == 200
+    assert srv.request("DELETE", "/accents/" + urllib.parse.quote("замок"))[0] == 404
+    assert accent(text) == before and srv.get("/accents") == {"words": []}

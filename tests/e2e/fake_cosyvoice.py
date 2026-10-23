@@ -1,7 +1,9 @@
 """Поддельный сервер синтеза для e2e-тестов stream-tts: те же адреса API, вместо речи — синус. По умолчанию —
 cosyvoice-server; FakeCosy(engine="espeech") — espeech-server (espeech/server.py): /status с engine, capabilities и
-params (схема nfe_steps), POST /accent, поток кусками по SPEECH_PIECE с, chunk_tokens не нужен, nfe_steps
-проверяется по схеме (400, как у настоящего).
+params (схема nfe_steps), POST /accent, словарь ударений пользователя (GET/POST /accents, DELETE /accents/<слово>:
+перекрывает разметку, синтез записывает в tts «accented» — как прочитал бы текст), поток кусками по SPEECH_PIECE с,
+chunk_tokens не нужен, nfe_steps проверяется по схеме (400, как у настоящего). Голос из образца у espeech — без
+фронтенда; извлечение записывает поля tempo и title, текст без «+» размечается, как в /accent.
 
 У каждого голоса своя частота и громкость (voices, сначала VOICES): по частоте тест узнаёт, каким голосом прозвучала
 фраза, а разная громкость проверяет выравнивание до −16 LUFS. Длина звука — как у речи, 12 символов в секунду
@@ -23,7 +25,7 @@ ONNX-фронтенд (FakeCosy(frontend=True)): GET /frontend/model отдаё�
 - down — /status отвечает 500 (сервер недоступен);
 - length_factor — во сколько раз звук длиннее расчётного (проверка жёсткой обрезки);
 - fail_save — /speaker/save отвечает 500."""
-import asyncio, contextlib, io, struct, time, wave
+import asyncio, contextlib, io, re, struct, time, wave
 
 import numpy as np
 from aiohttp import web
@@ -72,6 +74,8 @@ ESPEECH_PARAMS = {"nfe_steps": {"type": "choice", "choices": [16, 32, 12], "defa
                                  "help": "16 — быстро и почти как 32; 32 — максимальное качество, вдвое медленнее; "
                                          "12 — быстрее, звучание заметно другое"}}
 SPEECH_PIECE = 1.0   # с звука в куске потока espeech
+VOWELS = "аеёиоуыэюя"
+WORD = re.compile(r"[А-Яа-яЁё+]+")
 
 
 class FakeCosy:
@@ -96,6 +100,7 @@ class FakeCosy:
         self.length_factor = 1.0
         self.fail_save = False
         self.chunk_delay = 0.0
+        self.user_accents = {}   # слово -> разметка: словарь ударений пользователя (espeech)
         self.tts = []
         self.calls = []
         self.lists = 0       # сколько раз stream-tts перечитал список голосов (GET /speaker)
@@ -131,6 +136,9 @@ class FakeCosy:
         app.router.add_post("/tts/stop", self.stop)
         if self.engine == "espeech":
             app.router.add_post("/accent", self.accent)
+            app.router.add_get("/accents", self.accents)
+            app.router.add_post("/accents", self.accents_put)
+            app.router.add_delete("/accents/{word}", self.accents_delete)
         self.runner = web.AppRunner(app, access_log=None)
         await self.runner.setup()
         site = web.TCPSite(self.runner, "127.0.0.1", 0)
@@ -150,17 +158,52 @@ class FakeCosy:
         d = dict(model_loaded=True, model="fake", frontend_available=self.frontend_loaded)
         if self.engine == "espeech":
             d.update(engine="espeech", api_version=1, params=ESPEECH_PARAMS,
-                     capabilities=dict(stream=True, accent=True, extract=True, train=False, voice_formats=["espeech"]))
+                     capabilities=dict(stream=True, accent=True, extract=True, train=False, voice_formats=["espeech"],
+                                       user_accents=True))
         return web.json_response(d)
 
+    def _accent(self, text):
+        """Как у espeech-server: цифры словами (только 2 — для теста), «+» перед первой гласной каждого слова, поверх —
+        словарь пользователя (регистр — из текста)."""
+        norm = text.replace("2", "два")
+        acc = " ".join(next((w[:i] + "+" + w[i:] for i, ch in enumerate(w) if ch.lower() in VOWELS), w)
+                       for w in norm.split())
+
+        def user(m):
+            w = m.group(0)
+            v = self.user_accents.get(w.replace("+", "").lower())
+            if not v:
+                return w
+            letters, out = iter(w.replace("+", "")), []
+            for c in v:
+                out.append(c if c == "+" else next(letters))
+            return "".join(out)
+        return norm, WORD.sub(user, acc)
+
     async def accent(self, request):
-        """Как у espeech-server: цифры словами (только 2 — для теста), «+» перед первой гласной каждого слова."""
         text = str((await request.json()).get("text", ""))
         self.calls.append(dict(call="accent", text=text, ts=time.time()))
-        norm = text.replace("2", "два")
-        acc = " ".join(next((w[:i] + "+" + w[i:] for i, ch in enumerate(w) if ch.lower() in "аеёиоуыэюя"), w)
-                       for w in norm.split())
+        norm, acc = self._accent(text)
         return web.json_response(dict(normalized=norm, accented=acc))
+
+    async def accents(self, request):
+        return web.json_response(dict(words=[dict(word=k, accented=v) for k, v in sorted(self.user_accents.items())]))
+
+    async def accents_put(self, request):
+        v = str((await request.json()).get("accented", "")).strip().lower()
+        self.calls.append(dict(call="accents_put", accented=v, ts=time.time()))
+        if not re.fullmatch(r"[а-яё+]+", v) or not any(c == "+" and v[i + 1:i + 2] in tuple(VOWELS)
+                                                     for i, c in enumerate(v)):
+            return web.Response(status=400, text="одно слово русскими буквами, ударение — «+» перед гласной")
+        self.user_accents[v.replace("+", "")] = v
+        return web.json_response(dict(ok=True, word=v.replace("+", ""), accented=v))
+
+    async def accents_delete(self, request):
+        word = request.match_info["word"]
+        self.calls.append(dict(call="accents_delete", word=word, ts=time.time()))
+        if self.user_accents.pop(word, None) is None:
+            return web.Response(status=404, text="нет такого слова")
+        return web.json_response(dict(ok=True))
 
     # --- ONNX-фронтенд и голоса из образца ---
     async def frontend_paths(self, request):
@@ -195,8 +238,12 @@ class FakeCosy:
             name, text, f = form.get("name", ""), form.get("text", ""), form.get("audio")
             data = f.file.read() if hasattr(f, "file") else b""
             rec = dict(call="extract", name=name, text=text, ts=time.time(), bytes=len(data))
+            if self.engine == "espeech":
+                rec.update(tempo=form.get("tempo"), title=form.get("title"))
+                if "+" not in text:
+                    text = rec["accented"] = self._accent(text)[1]
             self.calls.append(rec)
-            if not self.frontend_loaded:
+            if not self.frontend_loaded and self.engine != "espeech":
                 return web.Response(status=400, text="frontend not loaded")
             if name in self.voices:
                 return web.Response(status=409, text=f"speaker {name} exists")
@@ -210,7 +257,7 @@ class FakeCosy:
             rec["hz"] = round(dominant_hz(x)) if len(x) else 0
             await asyncio.sleep(0.05)
             self.voices[name] = (float(rec["hz"]), EXTRACTED_AMP)
-        return web.json_response(dict(ok=True, name=name))
+        return web.json_response(dict(ok=True, name=name, text=text))
 
     async def speaker_save(self, request):
         body = await request.json()
@@ -248,6 +295,8 @@ class FakeCosy:
     async def synth(self, request):
         body = await request.json()
         rec = dict(body, ts=time.time(), stopped=False, done=False)
+        if self.engine == "espeech":
+            rec["accented"] = self._accent(str(body.get("text", "")))[1]
         self.tts.append(rec)
         self._stop = False   # /tts/stop останавливает только текущий синтез
         self.active += 1

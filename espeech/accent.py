@@ -13,7 +13,8 @@ RUAccent.load не вызывать: он лезет в сеть (HfFileSystem) 
 config.json), onnx/<модель>.onnx + .onnx.data, accents.sqlite.
 
 Поверх разметки — правило «вс+ём»: «Внимание всем!» RUAccent размечает «вс+ём», а «всём» (предложный падеж «всё»)
-бывает только после предлога."""
+бывает только после предлога. Последним — словарь ударений пользователя (UserAccents, файл --user-accents сервера):
+его слова перекрывают и словарь, и омографы, и это правило."""
 import gzip, json, os, re, sqlite3, sys, types
 
 import numpy as np
@@ -99,13 +100,17 @@ class FastTok:
 
 # ------------------------------------------------------------------------------------------- словарь
 class SqliteAccents:
-    """dict.get поверх таблицы a(w PRIMARY KEY, s) и небольшого словаря поверх (буквы, словарь пользователя)."""
+    """dict.get поверх таблицы a(w PRIMARY KEY, s) и небольшого словаря поверх (буквы, custom_dict), а над ним —
+    словарь пользователя (UserAccents)."""
 
-    def __init__(self, path, overlay=()):
+    def __init__(self, path, overlay=(), user=None):
         self.db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
         self.overlay = dict(overlay)
+        self.user = user.words if user is not None else {}
 
     def get(self, key, default=None):
+        if key in self.user:
+            return self.user[key]
         if key in self.overlay:
             return self.overlay[key]
         row = self.db.execute("SELECT s FROM a WHERE w=?", (key,)).fetchone()
@@ -117,6 +122,89 @@ class SqliteAccents:
     def __contains__(self, word):
         """Есть ли форма в словаре — для транслита латиницы в normalize."""
         return self.get(word.lower()) is not None
+
+
+# ------------------------------------------------------------------------------------------- словарь пользователя
+VOWELS = "аеёиоуыэюя"
+ENTRY = re.compile(r"[а-яё+]+(?:-[а-яё+]+)*")
+TOKEN = re.compile(r"(?<![\w+])[А-Яа-яЁё+]+(?:-[А-Яа-яЁё+]+)*")
+MAX_WORD = 64
+
+
+def _mark(src, val):
+    """Ударения из val на буквы слова src: регистр и «ё» — как в тексте («ЗАМ+ОК», «з+амок» → «З+АМОК»)."""
+    letters, out, i = src.replace("+", ""), [], 0
+    for c in val:
+        out.append("+" if c == "+" else letters[i])
+        i += c != "+"
+    return "".join(out)
+
+
+class UserAccents:
+    """Свои ударения пользователя поверх RUAccent: слово (строчными, без «+») → его разметка («з+амок»).
+
+    Применяются к готовой разметке и перекрывают всё — словарь, омографы (turbo3.1 их решает до словаря, поэтому
+    одной подмены в SqliteAccents мало) и правило «вс+ём». Слово ищется как есть, потом с «ё» → «е»: «ежик» из
+    словаря подходит и к «ёжик», который поставил RUAccent; «вс+ё» — только там, где RUAccent сам прочитал «всё».
+    Хранится в JSON-файле path (None — только в памяти); вызывать под одной блокировкой с разметкой."""
+
+    def __init__(self, path=None):
+        self.path = path
+        self.words = {}
+        if path and os.path.isfile(path):
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+            for v in (d.get("words") or {}).values():
+                try:
+                    k, v = self.parse(v)
+                except ValueError:
+                    continue
+                self.words[k] = v
+
+    @staticmethod
+    def parse(accented):
+        """«З+амок» → («замок», «з+амок»); ValueError — не одно русское слово с ударением перед гласной."""
+        v = str(accented).strip().lower()
+        if not v or len(v) > MAX_WORD or not ENTRY.fullmatch(v):
+            raise ValueError("одно слово русскими буквами, ударение — «+» перед гласной")
+        if "+" not in v or "++" in v or any(v[i + 1:i + 2] not in tuple(VOWELS) for i, c in enumerate(v) if c == "+"):
+            raise ValueError("ударение — «+» перед гласной")
+        return v.replace("+", ""), v
+
+    def items(self):
+        return sorted(self.words.items())
+
+    def put(self, accented):
+        k, v = self.parse(accented)
+        self.words[k] = v
+        self._save()
+        return k, v
+
+    def delete(self, word):
+        if self.words.pop(str(word).strip().lower().replace("+", ""), None) is None:
+            return False
+        self._save()
+        return True
+
+    def _save(self):
+        if not self.path:
+            return
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(dict(version=1, words=dict(self.items())), f, ensure_ascii=False, indent=1)
+        os.replace(tmp, self.path)
+
+    def apply(self, text):
+        if not self.words:
+            return text
+
+        def sub(m):
+            w = m.group(0)
+            plain = w.replace("+", "").lower()
+            v = self.words.get(plain) or self.words.get(plain.replace("ё", "е"))
+            return _mark(w, v) if v else w
+        return TOKEN.sub(sub, text)
 
 
 # ------------------------------------------------------------------------------------------- «вс+ём»
@@ -154,7 +242,7 @@ def _import_ruaccent():
 
 
 class Accentor:
-    def __init__(self, workdir, threads=None):
+    def __init__(self, workdir, threads=None, user=None):
         import onnxruntime as ort
         rm = _import_ruaccent()
 
@@ -195,7 +283,8 @@ class Accentor:
         ym.session = session("nn_yo_homograph_resolver")
         ym.id2label = labels("nn_yo_homograph_resolver")
         ym.tokenizer = FastTok(nn("nn_yo_homograph_resolver"))
-        acc.accents = SqliteAccents(os.path.join(workdir, "accents.sqlite"))
+        self.user = user if user is not None else UserAccents()
+        acc.accents = SqliteAccents(os.path.join(workdir, "accents.sqlite"), user=self.user)
         acc.accents.update(acc.custom_dict)
         acc.accents.update(acc.letters_accent)
         sp = acc.stress_usage_predictor
@@ -206,5 +295,5 @@ class Accentor:
         self.lexicon = acc.accents
 
     def __call__(self, text):
-        """Текст (после normalize) → с ударениями «+» перед гласной."""
-        return VSEM.sub(_vsem, self.acc.process_all(text)) if text.strip() else ""
+        """Текст (после normalize) → с ударениями «+» перед гласной; слова пользователя — последними."""
+        return self.user.apply(VSEM.sub(_vsem, self.acc.process_all(text))) if text.strip() else ""

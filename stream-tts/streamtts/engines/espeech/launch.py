@@ -7,6 +7,7 @@ paths.RUNTIME/espeech/python(.exe) (поставка программы, эта�
 
 Аргументы: --models paths.MODELS/espeech (tools/espeech/prepare.py; без весов сервер не запускается),
 --voices paths.VOICES (голоса <имя>.espeech и <набор>/<имя>.espeech; сервер перечитывает папку сам),
+--user-accents <данные>/espeech/accents.json (словарь ударений пользователя, правится из админки),
 --device cuda|cpu: ESPEECH_DEVICE, иначе выбор в админке (settings.espeech_device), auto — CUDA, если есть драйвер
 NVIDIA. Порт — ESPEECH_PORT (иначе свободный), адрес сервера — ESPEECH_HOST (по умолчанию 127.0.0.1)."""
 import glob, os, shutil
@@ -128,4 +129,5 @@ class Launcher:
         self.voices = len(glob.glob(os.path.join(paths.VOICES, "*.espeech")) +
                           glob.glob(os.path.join(paths.VOICES, "*", "*.espeech")))
         return [self.server, "-m", "espeech", "--models", self.models, "--voices", paths.VOICES,
+                "--user-accents", os.path.join(paths.DATA, "espeech", "accents.json"),
                 "--host", host, "--port", str(port), "--device", "cuda" if cuda else "cpu"]

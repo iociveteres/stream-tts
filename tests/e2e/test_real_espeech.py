@@ -8,12 +8,13 @@ stream-tts в режиме managed запускает espeech-server интер�
 версию не трогает, при нехватке видеопамяти тесты пропускаются.
 
 Речь проверяется как в test_real.py: длина, громкость и текст, распознанный faster-whisper. Время синтеза и первого
-звука — в итог прогона, без порогов."""
+звука — в итог прогона, без порогов. Редактор голоса: из той же записи Джайны — кусок 6,4 с целой фразой (паузы — по
+ffmpeg silencedetect), темп — по всей записи; словарь ударений — омограф «замок»."""
 import json, os, shutil, subprocess, tempfile, time
 
 import pytest
 
-from harness import ROOT, StreamTTS, wait_for
+from harness import ROOT, StreamTTS, decode, wait_for
 from test_real import ASR_PY, LONG, MODEL, NEED_VRAM_MB, SERVER, SHORT, VOICE, Real, free_vram, link
 
 pytestmark = pytest.mark.real
@@ -26,6 +27,9 @@ JAINA = "wc3-jaina"
 # Фраза для ESpeech: «синтеза речи» из SHORT голос Джайны иногда смазывает так, что faster-whisper узнаёт меньше 60 %
 # слов (57 % в одном прогоне из пяти)
 PHRASE = "Привет, чат! Сегодня играем до победного, никто не уходит."
+# Кусок записи wc3-jaina между паузами (1,48 и 7,64 с по silencedetect −40 дБ) и ровно то, что в нём звучит
+PIECE = (1.35, 7.75, "Чтобы спасти своего друга Задиру, ты должен заключить его душу в Камень и принести его обратно "
+                     "в лагерь.")
 
 
 def link_tree(src, dst):
@@ -116,6 +120,58 @@ def test_espeech_bench_steps(esp, report):
         esp.api.ok("/api/settings", dict(espeech_steps=16))
 
 
+def test_espeech_editor(esp, report):
+    """Редактор с настоящей моделью: разметка расшифровки, синтез ячейки куском с темпом по всей записи, сохранение в
+    .espeech — голос в списке и звучит."""
+    api = esp.api
+    api.ok("/api/draft/discard")
+    r = api.upload("/api/draft/upload", open(REF + ".wav", "rb").read(), "wc3-jaina.wav")
+    assert r.json()["ok"], r.text
+    src = r.json()["source"]
+    acc = api.ok("/api/draft/accent", dict(text=PIECE[2]))["accented"]
+    assert acc.count("+") >= 10 and acc.replace("+", "") == PIECE[2]
+    full = open(REF + ".txt", encoding="utf-8").read().strip()
+    v = dict(id="a", src=src["id"], start=PIECE[0], end=PIECE[1], text=acc, denoise=False,
+             tempo=dict(start=0, end=src["dur"], text=full))
+    api.ok("/api/draft", dict(variants=[v]))
+    phrase = api.state()["settings"]["test_phrases"][0]
+    t0 = time.monotonic()
+    r = api.get("/api/draft/synth?variant=a&phrase=0", timeout=300)
+    assert r.status == 200, r.text
+    esp.check_speech(decode(r.body), phrase, report, f"редактор, ячейка за {time.monotonic() - t0:.1f} с")
+    name = "jaina-editor"
+    r = api.ok("/api/draft/save", dict(variant="a", name=name, set="editor"))
+    path = os.path.join(esp.server.dir, "voices", "editor", name + ".espeech")
+    assert r["path"] == f"editor/{name}.espeech" and os.path.isfile(path)
+    with open(path, "rb") as f:   # заголовок safetensors: в stream-tts/.venv пакета safetensors нет
+        n = int.from_bytes(f.read(8), "little")
+        md = json.loads(f.read(n))["__metadata__"]
+    assert md["text"] == acc and md["format"] == "espeech-voice"
+    report(f"голос из редактора: темп {float(md['tempo']):.3f} кадров на байт (по всей записи)")
+    wait_for(lambda: name in [x["name"] for x in api.state()["voices"]], 30, "голоса из редактора в списке")
+    esp.idle()
+    x, _ = esp.speak(PHRASE, report, "голос из редактора", voice=name)
+    esp.check_speech(x, PHRASE, report, "голос из редактора")
+    api.ok("/api/draft/discard")
+
+
+def test_espeech_user_accents(esp, report):
+    """Словарь ударений: слово перекрывает омограф в «Как прочитает» и хранится в <данные>/espeech/accents.json."""
+    api = esp.api
+    text = "Старый замок стоит на горе."
+    word = api.ok("/api/accent", dict(text=text))["accented"].split()[1]
+    other = "зам+ок" if word == "з+амок" else "з+амок"
+    api.ok("/api/accents", dict(accented=other))
+    try:
+        assert api.ok("/api/accent", dict(text=text))["accented"].split()[1] == other
+        saved = json.load(open(os.path.join(esp.server.data, "espeech", "accents.json"), encoding="utf-8"))
+        assert saved["words"] == {"замок": other}
+        report(f"словарь ударений: модель — «{word}», словарь — «{other}»")
+    finally:
+        api.ok("/api/accents/delete", dict(word="замок"))
+    assert api.ok("/api/accent", dict(text=text))["accented"].split()[1] == word
+
+
 def test_switch_model(esp, report):
     """Смена модели в режиме managed: перезапуск сервера другого движка на том же порту, голоса — свои у каждой.
     Последним: сервер перезапускается."""
@@ -130,7 +186,8 @@ def test_switch_model(esp, report):
                  f"смены модели на {engine}\n{esp.server.tail()}", step=0.5)
         report(f"смена модели на {engine}: {time.monotonic() - t0:.1f} с")
         esp.idle()
-        assert [v["name"] for v in esp.api.state()["voices"]] == [voice]
+        names = [v["name"] for v in esp.api.state()["voices"]]   # у ESpeech ещё голос из редактора
+        assert voice in names and ({"dota2-pudge", JAINA} - {voice}).isdisjoint(names), names
         text = SHORT if engine == "cosyvoice" else PHRASE
         x, _ = esp.speak(text, report, engine, voice=voice)
         esp.check_speech(x, text, report, engine)

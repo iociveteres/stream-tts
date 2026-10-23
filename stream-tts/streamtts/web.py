@@ -57,6 +57,7 @@ def make_app(ctx):
     r.add_get("/api/draft/source/{id}.wav", api_draft_source)
     r.add_get("/api/draft/sample", api_draft_sample)
     r.add_get("/api/draft/synth", api_draft_synth)
+    r.add_get("/api/accents", api_accents)
     for path, fn in POSTS.items():
         r.add_post(path, fn)
     r.add_post("/api/voicesets/import", api_voiceset_import)
@@ -527,6 +528,56 @@ async def post_accent(request, ctx, data):
     return ok(text=text.replace(filters.BEEP, beep.strip()), normalized=beep.join(norm), accented=beep.join(acc))
 
 
+# --- словарь ударений пользователя (capabilities.user_accents, хранит сервер модели: espeech-server) ---
+def _user_accents(ctx):
+    if not ctx.tts.capabilities.get("user_accents"):
+        raise ValueError(tr("у модели {engine} нет словаря ударений", engine=ctx.tts.title))
+
+
+async def api_accents(request):
+    ctx = request.app["ctx"]
+    try:
+        _user_accents(ctx)
+        return ok(words=await ctx.tts.user_accents())
+    except ValueError as e:
+        return fail(str(e))
+    except Exception as e:
+        return fail(tr("сервер синтеза: {e}", e=str(e) or type(e).__name__))
+
+
+async def post_accents(request, ctx, data):
+    """Добавить или заменить слово: {accented: «з+амок»}."""
+    try:
+        _user_accents(ctx)
+    except ValueError as e:
+        return fail(str(e))
+    try:
+        r = await ctx.tts.put_user_accent(str(data.get("accented", "")))
+        words = await ctx.tts.user_accents()
+    except ValueError:   # текст ошибки сервера не переводится
+        return fail(tr("одно слово русскими буквами, ударение — «+» перед гласной"))
+    except Exception as e:
+        return fail(tr("сервер синтеза: {e}", e=str(e) or type(e).__name__))
+    log.info("словарь ударений: %s", r["accented"])
+    return ok(word=r["word"], accented=r["accented"], words=words)
+
+
+async def post_accents_delete(request, ctx, data):
+    try:
+        _user_accents(ctx)
+    except ValueError as e:
+        return fail(str(e))
+    word = str(data.get("word", ""))
+    try:
+        if not await ctx.tts.delete_user_accent(word):
+            return fail(tr("нет такого слова"))
+        words = await ctx.tts.user_accents()
+    except Exception as e:
+        return fail(tr("сервер синтеза: {e}", e=str(e) or type(e).__name__))
+    log.info("словарь ударений: убрано %s", word)
+    return ok(words=words)
+
+
 async def post_bench(request, ctx, data):
     _install(ctx)
     ctx.bench.start(bool(data.get("all")))
@@ -623,6 +674,16 @@ async def post_draft(request, ctx, data):
         return ok(draft=ctx.editor.update(data))
     except ValueError as e:
         return fail(str(e))
+
+
+async def post_draft_accent(request, ctx, data):
+    """Расшифровка образца с ударениями модели — без фильтров озвучки: это не сообщение чата."""
+    try:
+        return ok(**await ctx.editor.accent(data.get("text", "")))
+    except ValueError as e:
+        return fail(str(e))
+    except Exception as e:
+        return fail(tr("сервер синтеза: {e}", e=str(e) or type(e).__name__))
 
 
 async def post_draft_source_delete(request, ctx, data):
@@ -744,9 +805,12 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/backend": post_backend,
     "/api/engine": post_engine,
     "/api/accent": post_accent,
+    "/api/accents": post_accents,
+    "/api/accents/delete": post_accents_delete,
     "/api/bench": post_bench,
     "/api/voicesets/delete": post_voiceset_delete,
     "/api/draft": post_draft,
+    "/api/draft/accent": post_draft_accent,
     "/api/draft/source/delete": post_draft_source_delete,
     "/api/draft/save": post_draft_save,
     "/api/draft/discard": post_draft_discard,

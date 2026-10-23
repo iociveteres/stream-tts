@@ -8,12 +8,17 @@ API (всё JSON, кроме звука):
 - GET  /speaker — имена голосов (папка --voices перечитывается при каждом запросе);
 - POST /speaker?type=extract — голос из образца в памяти: multipart name, text (то, что звучит; без «+» — ударения
   ставит RUAccent), audio (WAV PCM16 моно 24 кГц, 4–12 с), необязательные tempo (кадров на байт), title; 409 — имя занято;
-- POST /speaker/save {name, path} — голос в файл .espeech (path — на машине сервера);
+- POST /speaker/save {name, path} — голос в файл .espeech (path — на машине сервера; относительный — от папки
+  --voices, например «<набор>/<имя>.espeech»);
 - DELETE /speaker/<имя> — выгрузить голос (файл остаётся; голос вернётся, когда файл изменится, или после перезапуска);
 - POST /tts {text, voice, seed?, stream?, nfe_steps?} — WAV 24 кГц PCM16; stream=true — WAV-заголовок с неизвестной
   длиной и PCM по мере готовности кусков (chunked). Поля cosyvoice (mode, chunk_tokens, …) игнорируются;
 - POST /tts/stop — остановить текущий синтез (шаг Эйлера доработает, видеокарта свободна через 0,1–0,2 с);
 - POST /accent {text} — как прочитает модель: {normalized, accented};
+- GET /accents — словарь ударений пользователя {words: [{word, accented}]}; POST /accents {accented} — добавить или
+  заменить слово («з+амок»; 400 — не одно русское слово с «+» перед гласной); DELETE /accents/<слово> — убрать.
+  Слова пользователя перекрывают словарь RUAccent и омографы (accent.UserAccents), хранятся в файле --user-accents
+  (без флага — только в памяти);
 - POST /model/unload, POST /model/load — выгрузить и загрузить модель (torch возвращает системе не всю память:
   stream-tts выгружает модель остановкой процесса).
 
@@ -59,7 +64,9 @@ class Engine:
         self.tts = self.acc = self.voices = self.adapters = None
         self.error = ""
         self.loading = False
-        self.text_lock = threading.Lock()    # RUAccent не потокобезопасен
+        self.text_lock = threading.Lock()    # RUAccent не потокобезопасен; под ней же — правка словаря пользователя
+        from .accent import UserAccents
+        self.user = UserAccents(args.user_accents or None)
         self.stop = threading.Event()
         self.device = None
         self.jobs = queue.Queue()
@@ -116,7 +123,7 @@ class Engine:
                 dev = "cuda" if torch.cuda.is_available() else "cpu"
             t = time.perf_counter()
             if self.acc is None:
-                self.acc = accent.Accentor(os.path.join(self.args.models, "ruaccent"))
+                self.acc = accent.Accentor(os.path.join(self.args.models, "ruaccent"), user=self.user)
             tts = M.ESpeech(self.args.models, dev)
             self.adapters = lora.Adapters(tts.dit)
             self.voices = voices.Registry(tts, self.args.voices)
@@ -200,7 +207,8 @@ class Engine:
     def status(self):
         d = dict(model_loaded=self.tts is not None, loading=self.loading, model=MODEL_NAME, engine="espeech",
                  api_version=API_VERSION, device=self.device or "",
-                 capabilities=dict(stream=True, accent=True, extract=True, train=False, voice_formats=["espeech"]),
+                 capabilities=dict(stream=True, accent=True, extract=True, train=False, voice_formats=["espeech"],
+                                   user_accents=True),
                  params=PARAMS, frontend_available=True, error=self.error, memory=self.memory())
         return d
 
@@ -262,6 +270,8 @@ class Handler(BaseHTTPRequestHandler):
             fn = ROUTES.get((method, path))
             if fn is None and path.startswith("/speaker/") and method == "DELETE":
                 fn = Handler.speaker_delete
+            if fn is None and path.startswith("/accents/") and method == "DELETE":
+                fn = Handler.accents_delete
             if fn is None:
                 raise HTTPError(404, "not found")
             fn(self, path, query)
@@ -331,6 +341,11 @@ class Handler(BaseHTTPRequestHandler):
         name, target = d.get("name"), d.get("path")
         if not name or not target:
             raise HTTPError(400, "name и path обязательны")
+        if not os.path.isabs(target):   # от папки голосов: stream-tts не знает, где она у внешнего сервера
+            root = os.path.abspath(e.args.voices or "")
+            target = os.path.abspath(os.path.join(root, target))
+            if not e.args.voices or os.path.commonpath([root, target]) != root:
+                raise HTTPError(400, "относительный path — внутри папки --voices")
         try:
             e.voices.save(name, target)
         except KeyError:
@@ -354,6 +369,32 @@ class Handler(BaseHTTPRequestHandler):
         text = str(self.json().get("text", ""))
         norm = e.normalize(text)
         self.send(200, dict(normalized=norm, accented=e.accent(norm)))
+
+    def accents(self, path, q):
+        e = self.engine
+        with e.text_lock:
+            words = [dict(word=k, accented=v) for k, v in e.user.items()]
+        self.send(200, dict(words=words))
+
+    def accents_put(self, path, q):
+        e = self.engine
+        try:
+            with e.text_lock:
+                word, acc = e.user.put(self.json().get("accented", ""))
+        except ValueError as ex:
+            raise HTTPError(400, str(ex))
+        log.info("словарь ударений: %s", acc)
+        self.send(200, dict(ok=True, word=word, accented=acc))
+
+    def accents_delete(self, path, q):
+        e = self.engine
+        word = urllib.parse.unquote(path[len("/accents/"):])
+        with e.text_lock:
+            found = e.user.delete(word)
+        if not found:
+            raise HTTPError(404, "нет такого слова")
+        log.info("словарь ударений: убрано %s", word)
+        self.send(200, dict(ok=True))
 
     def tts_stop(self, path, q):
         self.engine.stop.set()
@@ -425,6 +466,7 @@ class Handler(BaseHTTPRequestHandler):
 ROUTES = {("GET", "/status"): Handler.status, ("GET", "/speaker"): Handler.speakers,
           ("POST", "/speaker"): Handler.speaker_extract, ("POST", "/speaker/save"): Handler.speaker_save,
           ("POST", "/tts"): Handler.tts, ("POST", "/tts/stop"): Handler.tts_stop, ("POST", "/accent"): Handler.accent,
+          ("GET", "/accents"): Handler.accents, ("POST", "/accents"): Handler.accents_put,
           ("POST", "/model/unload"): Handler.model_unload, ("POST", "/model/load"): Handler.model_load}
 
 
@@ -435,6 +477,7 @@ def main(argv=None):
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8094)
     ap.add_argument("--device", default="auto", choices=("auto", "cuda", "cpu"))
+    ap.add_argument("--user-accents", default="", help="файл словаря ударений пользователя (JSON; без него — в памяти)")
     ap.add_argument("--steps", type=int, default=16, choices=STEPS, help="шагов синтеза по умолчанию")
     ap.add_argument("--log-level", default="INFO")
     args = ap.parse_args(argv)
