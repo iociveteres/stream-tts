@@ -5,9 +5,8 @@ import numpy as np
 from aiohttp import WSMsgType, web
 
 from . import audio, filters
-from .config import (SR, TARGET_LUFS, CHARS_PER_SEC, MAX_LEN_FACTOR, MAX_SECONDS, MIN_SECONDS, TOKENS_PER_SEC,
-                     STREAM_MIN_CHUNKS)
-from .cosy import LIVE
+from .config import SR, TARGET_LUFS, CHARS_PER_SEC, MAX_LEN_FACTOR, MAX_SECONDS, MIN_SECONDS
+from .engines.client import LIVE
 from .i18n import tr
 
 log = logging.getLogger("engine")
@@ -131,8 +130,8 @@ class Overlay:
 
 
 class Engine:
-    def __init__(self, settings, db, cosy, voices, profanity):
-        self.s, self.db, self.cosy, self.voices, self.profanity = settings, db, cosy, voices, profanity
+    def __init__(self, settings, db, tts, voices, profanity):
+        self.s, self.db, self.tts, self.voices, self.profanity = settings, db, tts, voices, profanity
         self.twitch = None
         self.queue = []
         self.current = None
@@ -317,7 +316,7 @@ class Engine:
                 await self.overlay.active.send({"type": "stop", "id": item.id})
         await self.resolve(item, "refund", reason)
         if synthesizing:
-            await self.cosy.stop()
+            await self.tts.stop()
 
     async def skip(self, by=""):
         if self.queue:
@@ -417,7 +416,7 @@ class Engine:
                 await self.cond.wait_for(lambda: self._next_synth() is not None)
                 item = self._next_synth()
             try:
-                async with self.cosy.lane.hold(LIVE, item.voice):
+                async with self.tts.lane.hold(LIVE, item.voice):
                     if item.cancelled:
                         continue
                     item.state = "synth"
@@ -447,31 +446,28 @@ class Engine:
         cfg = self.s.voice(item.voice)
         post = self.voices.post(item.voice)
         limit_n = max_samples(item.speak.replace(filters.BEEP, " пип "))
-        ratio = self.s["token_ratio"]
         parts = item.speak.split(filters.BEEP)
         beep = audio.beep()
-        chunk = int(self.s["chunk_tokens"])
-        long_enough = len(item.speak) / CHARS_PER_SEC * TOKENS_PER_SEC > STREAM_MIN_CHUNKS * chunk
-        if self.s["streaming"] and not post and long_enough:
+        if self.s["streaming"] and not post and self.tts.streams(item.speak):
             gain = audio.db(cfg.get("calib_db", 0.0) + cfg["gain_db"])
             for k, part in enumerate(parts):
                 if k and await self._push_limited(item, beep, limit_n):
                     return
                 if not filters.has_words(part):
                     continue
-                async with contextlib.aclosing(self.cosy.stream(item.voice, part.strip(), ratio, chunk)) as chunks:
+                async with contextlib.aclosing(self.tts.stream(item.voice, part.strip())) as chunks:
                     async for x in chunks:
                         if item.cancelled:
                             return   # /tts/stop уже вызван в cancel()
                         if await self._push_limited(item, audio.soft_clip(x * gain), limit_n):
-                            await self.cosy.stop()
+                            await self.tts.stop()
                             return
         else:
             speech = []
             for part in parts:
                 x = np.zeros(0, np.float32)
                 if filters.has_words(part):
-                    x = await self.cosy.synth(item.voice, part.strip(), ratio)
+                    x = await self.tts.synth(item.voice, part.strip())
                     if item.cancelled:
                         return
                     if post:

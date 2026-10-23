@@ -13,7 +13,7 @@
   путь в `COSYVOICE_SERVER`). Так работают программа для Windows и `docker-compose.yml`. stream-tts сам запускает
   сервер (адрес `COSYVOICE_HOST`, по умолчанию `127.0.0.1`; порт — свободный или `COSYVOICE_PORT`), ходит к нему по
   `127.0.0.1`, перезапускает при падении и завершает при выходе (на Windows через Job Object, даже если stream-tts
-  убит, на Linux через `PR_SET_PDEATHSIG`). Аргументы — как в `cosyvoice/entrypoint.sh` (`runtime.py`): модель
+  убит, на Linux через `PR_SET_PDEATHSIG`). Аргументы — как в `cosyvoice/entrypoint.sh` (`engines/cosyvoice/launch.py`): модель
   (`MODEL` или единственный `*.gguf` в папке моделей; без модели сервер ждёт её появления), голоса `*.gguf` из папки
   голосов и её подпапок-наборов (имя голоса — имя файла), пути ONNX-фронтенда из `<модели>/frontend-onnx` (сам
   фронтенд грузится, только когда создаётся голос), проверка AVX2.

@@ -3,8 +3,9 @@ import asyncio, contextlib, hashlib, hmac, json, logging, os, re, secrets, tempf
 
 from aiohttp import web
 
-from . import config, editor, i18n, install, runtime, separate, stats, updates
-from .cosy import LIVE
+from . import config, editor, i18n, install, separate, stats, updates
+from .engines import cosyvoice
+from .engines.client import LIVE
 from .i18n import tr
 from .engine import SERVICE_COMMANDS
 from .twitch import TwitchError, explain
@@ -151,15 +152,15 @@ def state(ctx, full=True):
     out = dict(
         engine=ctx.engine.snapshot(),
         twitch=ctx.twitch.public(),
-        cosy=dict(ok=ctx.cosy.ok, error=ctx.cosy.error, url=ctx.cosy.url,
-                  busy=ctx.cosy.lane.holder[1] if ctx.cosy.lane.holder else "", waiting=ctx.cosy.lane.queued(),
+        cosy=dict(ok=ctx.tts.ok, error=ctx.tts.error, url=ctx.tts.url,
+                  busy=ctx.tts.lane.holder[1] if ctx.tts.lane.holder else "", waiting=ctx.tts.lane.queued(),
                   runtime=ctx.runtime.public() if ctx.runtime else None),
         load=ctx.load.public(history=full),
         models=models(ctx),
         demos=dict(ctx.voices.progress),
         setup=ctx.install.public() if ctx.install else None,
         # необязательные пакеты; с внешним сервером файлов не видно — о фронтенде говорит GET /frontend/model
-        packages=install.packages() if ctx.install else install.packages(dict(frontend=ctx.cosy.frontend_ready)),
+        packages=install.packages() if ctx.install else install.packages(dict(frontend=ctx.tts.frontend_ready)),
         bench=ctx.bench.public() if ctx.bench else None,
         update=ctx.updates.public(),
         ts=time.time(),
@@ -179,15 +180,15 @@ def models(ctx):
     Модель синтеза выгружается только у встроенного сервера: внешний после POST /model/unload без перезапуска
     контейнера голоса не вернёт (путь к модели и голоса знает только его entrypoint.sh)."""
     rt = ctx.runtime.public() if ctx.runtime else None
-    up = ctx.cosy.ok is True
-    out = [dict(id="tts", name=(rt and rt["model"]) or ctx.cosy.info.get("model") or "CosyVoice3",
+    up = ctx.tts.ok is True
+    out = [dict(id="tts", name=(rt and rt["model"]) or ctx.tts.info.get("model") or "CosyVoice3",
                 what=tr("синтез речи"), where=(rt and rt["backend"]) or tr("внешний сервер"), loaded=up,
                 unload=bool(rt) and not rt["unloaded"] and rt["state"] == "running",
                 load=bool(rt and rt["unloaded"]))]
-    if ctx.cosy.frontend_ready:
+    if ctx.tts.frontend_ready:
         out.append(dict(id="frontend", name="speech_tokenizer + campplus", what=tr("создание голосов из записи"),
-                        where=tr("сервер синтеза, ~300 МБ ОЗУ"), loaded=up and ctx.cosy.frontend_loaded,
-                        unload=up and ctx.cosy.frontend_loaded, load=False))
+                        where=tr("сервер синтеза, ~300 МБ ОЗУ"), loaded=up and ctx.tts.frontend_loaded,
+                        unload=up and ctx.tts.frontend_loaded, load=False))
     if separate.available():
         sep = ctx.editor.separator
         out.append(dict(id="music", name="htdemucs int8", what=tr("очистка образца от музыки"),
@@ -463,7 +464,7 @@ async def post_model_use(request, ctx, data):
 async def post_backend(request, ctx, data):
     _install(ctx)
     backend = str(data.get("backend", "auto"))
-    if backend not in runtime.BACKENDS:
+    if backend not in cosyvoice.DEVICES:
         return fail(tr("ожидалось auto, cuda, vulkan или cpu"))
     ctx.settings.update(backend=backend)
     await ctx.runtime.restart()
@@ -612,9 +613,9 @@ async def post_model_unload(request, ctx, data):
         if not ctx.runtime:
             return fail(tr("сервер синтеза внешний: модель выгружается на нём"))
         # после текущего запроса к серверу, иначе он оборвётся на середине
-        async with ctx.cosy.lane.hold(LIVE, tr("выгрузка модели")):
+        async with ctx.tts.lane.hold(LIVE, tr("выгрузка модели")):
             await ctx.runtime.unload()
-        ctx.cosy.ok, ctx.cosy.error = False, tr("модель выгружена")
+        ctx.tts.ok, ctx.tts.error = False, tr("модель выгружена")
         log.info("модель синтеза выгружена: сервер остановлен")
     elif what == "frontend":
         try:

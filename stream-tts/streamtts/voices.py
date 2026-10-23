@@ -4,7 +4,7 @@ import asyncio, glob, hashlib, html, importlib.util, io, json, logging, math, os
 import numpy as np
 
 from . import audio, config, i18n, paths, store
-from .cosy import BACKGROUND, PREVIEW
+from .engines.client import BACKGROUND, PREVIEW
 from .i18n import tr
 
 log = logging.getLogger("voices")
@@ -40,8 +40,8 @@ def load_effect(path):
 
 
 class Voices:
-    def __init__(self, settings, cosy):
-        self.s, self.cosy = settings, cosy
+    def __init__(self, settings, tts):
+        self.s, self.tts = settings, tts
         self.engine = None
         self.dir = os.path.join(config.DATA, "demos")
         os.makedirs(self.dir, exist_ok=True)
@@ -78,7 +78,7 @@ class Voices:
 
     async def refresh(self):
         """Список голосов с сервера. При изменении досинтезируются примеры."""
-        names = [n for n in await self.cosy.speakers() if not n.startswith(DRAFT_PREFIX)]
+        names = [n for n in await self.tts.speakers() if not n.startswith(DRAFT_PREFIX)]
         if names != self.s["known_voices"]:
             added = set(names) - set(self.s["known_voices"])
             for n in names:
@@ -146,9 +146,9 @@ class Voices:
     async def make_demo(self, voice, priority=BACKGROUND):
         """Демо-фраза целиком: по ней же калибруется усиление голоса для стриминга."""
         phrase = self.s["demo_phrase"]
-        async with self.cosy.lane.hold(priority, tr("пример {voice}", voice=voice)):
+        async with self.tts.lane.hold(priority, tr("пример {voice}", voice=voice)):
             self.preempted = False
-            x = await self.cosy.synth(voice, phrase, self.s["token_ratio"], seed=DEMO_SEED)
+            x = await self.tts.synth(voice, phrase, seed=DEMO_SEED)
             if self.preempted:  # остановлен ради живой очереди: звук неполный
                 raise Preempted()
         if self.post(voice):
@@ -175,7 +175,7 @@ class Voices:
             while True:
                 todo = self.missing()
                 self.progress.update(todo=len(todo), current="")
-                if not todo or not self.cosy.ok:
+                if not todo or not self.tts.ok:
                     break
                 while self.engine and self.engine.busy():
                     await asyncio.sleep(1)
@@ -194,10 +194,10 @@ class Voices:
 
     async def preempt(self):
         """Живая фраза не ждёт фоновый пример: его синтез останавливается и повторится позже."""
-        holder = self.cosy.lane.holder
+        holder = self.tts.lane.holder
         if holder and holder[0] == BACKGROUND:
             self.preempted = True
-            await self.cosy.stop()
+            await self.tts.stop()
 
     async def preview(self, voice):
         if not self.has_demo(voice):

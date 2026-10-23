@@ -23,8 +23,9 @@
 │                          # THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
-│   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер), install.py (модель и наборы
-│                          # голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
+│   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер: процесс, перезапуски),
+│                          # engines/ (движки синтеза: client.py — общий клиент и очередь к серверу, cosyvoice/ —
+│                          # описание, запуск и клиент CosyVoice), install.py (модель и наборы голосов из админки), editor.py (новый голос из записи), bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
 │                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
@@ -82,7 +83,7 @@
 - Стадия `base` — рантайм-библиотеки сервера (ICU, libgomp, FFmpeg `libav*`) и `/opt/cosyvoice`, без curl и
   компиляторов. Цель `stream-tts` добавляет Python 3.14 из apt (пакеты — в venv `/opt/venv`, PEP 668) и ffmpeg.
 - `LD_LIBRARY_PATH=/opt/cosyvoice` задан только в цели `cosyvoice`: там свой `libonnxruntime.so` (1.30), в
-  stream-tts он перебил бы onnxruntime из venv, поэтому путь серверу добавляет `runtime.py`.
+  stream-tts он перебил бы onnxruntime из venv, поэтому путь серверу добавляет `engines/cosyvoice/launch.py`.
 - Контекст сборки — весь проект, `.dockerignore` пускает в него только `cosyvoice/entrypoint.sh`,
   `stream-tts/requirements.txt` и `stream-tts/streamtts/`.
 
@@ -92,15 +93,15 @@
 **GPU** (`GPU=cuda`, образы `stream-tts:cuda` и `cosyvoice-server:cuda`) берёт GGML из CUDA-сборки того же
 релиза llama.cpp (`libggml-cuda.so`) и рантайм CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`. Без двух
 настроек CUDA-бэкенд выдаёт плохой звук, и обе уже заданы:
-- `GGML_CUDA_DISABLE_GRAPHS=1` (в образе и в `runtime.py`). С включёнными CUDA Graphs звук тихий (около −36 дБ
+- `GGML_CUDA_DISABLE_GRAPHS=1` (в образе и в `engines/cosyvoice/launch.py`). С включёнными CUDA Graphs звук тихий (около −36 дБ
   вместо −17) и шумный, а с flash attention в LLM вместо речи получается мусор. Ошибок в логах при этом нет. Это тот
   же эффект, что в [Lourdle/cosyvoice.cpp#15](https://github.com/Lourdle/cosyvoice.cpp/issues/15). GGML,
   собранный из исходников, без этой настройки ведёт себя так же, поэтому образ использует готовую сборку.
-- `--llm-flash-attn 0` (`runtime.py` на бэкенде CUDA, для `server-only` — `docker-compose.gpu.yml`). С flash
+- `--llm-flash-attn 0` (`engines/cosyvoice/launch.py` на бэкенде CUDA, для `server-only` — `docker-compose.gpu.yml`). С flash
   attention в LLM в начале фразы чаще появляются лишние звуки: 8 из 24 тестовых фраз против 4 из 24 без него и
   3 из 24 на CPU с теми же seed. Flash attention во flow на качество не влияет и остаётся включённым.
 
-**`cosyvoice/entrypoint.sh`** (только профиль `server-only`; встроенному серверу аргументы собирает `runtime.py`):
+**`cosyvoice/entrypoint.sh`** (только профиль `server-only`; встроенному серверу аргументы собирает `engines/cosyvoice/launch.py`):
 - проверяет поддержку AVX2;
 - передаёт серверу `--model`: из `MODEL` или единственный `*.gguf` в `/models`;
 - регистрирует голоса из `/voices/**/*.gguf` (путь в подпапках превращается в имя через `_`; у встроенного сервера
@@ -134,7 +135,7 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 ```
 
 После обновления версий на GPU стоит проверить, не исправлена ли ошибка с CUDA Graphs: уберите
-`GGML_CUDA_DISABLE_GRAPHS` (в `Dockerfile` и `runtime.py`) и сравните громкость и разборчивость одной фразы с CPU-образом.
+`GGML_CUDA_DISABLE_GRAPHS` (в `Dockerfile` и `engines/cosyvoice/launch.py`) и сравните громкость и разборчивость одной фразы с CPU-образом.
 
 ## stream-tts из исходников
 

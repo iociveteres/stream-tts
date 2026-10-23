@@ -24,6 +24,7 @@ import asyncio, contextlib, hashlib, json, logging, os, re, shutil, time, zipfil
 import aiohttp
 
 from . import paths
+from .engines import cosyvoice
 from .i18n import tr
 
 log = logging.getLogger("install")
@@ -45,28 +46,17 @@ def cuda_archives():
     return out
 CUDA_VERSION_FILE = "cuda-version.txt"
 
-REPO = "Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF"
+# Модель CosyVoice: репозиторий, кванты и видеопамять — в описании движка (engines/cosyvoice), размеры — из
+# downloads.json
+REPO = cosyvoice.REPO
 BASE = f"https://huggingface.co/{REPO}/resolve/main"
-# Кванты на выбор (полный список — scripts/download-model.sh --list): размер файла в байтах и видеопамять
-# cosyvoice-server на CUDA, МБ — обычно и на самых длинных образцах (замеры на RTX 3060 Ti, 2026-10-17;
-# на Vulkan пик примерно на 0,5 ГБ больше). На 54 фразах (6 голосов × 3 seed) разборчивость по Whisper и
-# сходство CAM++ у всех трёх в пределах шума. Ниже Q5 не проверяли, F16 не лучше Q8_0 и вдвое больше.
-# Примеры звука — static/quants/<голос>-<квант>.mp3 (одна фраза, seed 42), те же файлы берёт установщик. Голос
-# ohf-denis — из датасета ru_RU-denis (OHF-Voice/voice-datasets, CC0), чтобы примеры можно было распространять;
-# как он собран — docs/stream-tts-deploy.md, «Первый запуск».
-QUANTS = {
-    "Q8_0": dict(vram=1500, vram_max=1900),
-    "Q6_K": dict(vram=1450, vram_max=1800),
-    "Q5_K_M": dict(vram=1300, vram_max=1700),
-}
-for _q, _d in QUANTS.items():
-    _d["size"] = DOWNLOADS["model"]["quants"][_q]["size"]
-DEFAULT_QUANT = "Q8_0"  # рекомендация автора модели
+QUANTS = {q: dict(d, size=DOWNLOADS["model"]["quants"][q]["size"]) for q, d in cosyvoice.QUANTS.items()}
+DEFAULT_QUANT = cosyvoice.DEFAULT_QUANT
 SAMPLES = (("ohf-denis", "Пример"),)  # голос в установщике — SampleVoice в StreamTTS.iss
 SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет. Вперёд!"
 # Квант, выбранный в установщике (StreamTTS.iss): при первом запуске без модели он качается сам
 SETUP_CHOICE = os.path.join(paths.APP, "setup-model.txt")
-FRONTEND = ("frontend-onnx/campplus.int8.onnx", "frontend-onnx/speech_tokenizer_v3.int8.onnx")
+FRONTEND = cosyvoice.FRONTEND
 # Необязательные пакеты: качаются из админки (настройки и редактор голоса). files — пути в репозитории source на
 # Hugging Face, локально — paths.MODELS/<into>/<путь>. size — байт. alt — те же файлы в полной точности
 # (scripts/download-model.sh --frontend full): тоже считаются установленными. restart — файлы читает
@@ -103,8 +93,7 @@ def package_files(pid):
             for f in p["files"]]
 
 
-def model_name(quant):
-    return f"CosyVoice3-2512_{quant}.gguf"
+model_name = cosyvoice.model_name
 
 
 def installed_models():
@@ -129,16 +118,17 @@ class Installer:
     def public(self):
         quants = [dict(QUANTS[q], quant=q, file=model_name(q)) for q in QUANTS]
         samples = [(voice, tr(label)) for voice, label in SAMPLES]
+        model = self.runtime.launcher.model
         return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=samples, sample_phrase=SAMPLE_PHRASE,
                     models=installed_models(),
-                    model=os.path.basename(self.runtime.model) if self.runtime.model else self.s.get("model", ""),
+                    model=os.path.basename(model) if model else self.s.get("model", ""),
                     models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets(),
                     packages=packages(), cuda=self.cuda_state())
 
     # --- CUDA ---
     def cuda_state(self):
         """CUDA для вкладки «Сервер»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda.dll нет)."""
-        d = self.runtime.dir
+        d = self.runtime.launcher.dir
         version = ""
         with contextlib.suppress(OSError):
             with open(os.path.join(d, CUDA_VERSION_FILE), encoding="utf-8-sig") as f:
@@ -158,7 +148,7 @@ class Installer:
         self.task = asyncio.create_task(self._download_cuda())
 
     async def _download_cuda(self):
-        d = self.runtime.dir
+        d = self.runtime.launcher.dir
         archives = cuda_archives()
         try:
             timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
@@ -175,7 +165,7 @@ class Installer:
             self._push(force=True)
             async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll
                 await asyncio.to_thread(_extract_cuda, archives, d)
-                self.runtime.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
+                self.runtime.launcher.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
             self.dl.update(state="done", file="", speed=0.0)
             log.info("CUDA %s установлена в %s", CUDA["version"], d)
         except asyncio.CancelledError:
@@ -382,7 +372,7 @@ def _extract_cuda(archives, dest):
 def package_installed(pid):
     have = lambda f: os.path.isfile(os.path.join(paths.MODELS, *f.split("/")))
     files = [rel for _, rel in package_files(pid)]
-    # фронтенд: каждый файл в int8 или в полной точности (как выбирает runtime.py)
+    # фронтенд: каждый файл в int8 или в полной точности (как выбирает engines/cosyvoice/launch.py)
     alt = PACKAGES[pid].get("alt") or files
     return all(have(a) or have(b) for a, b in zip(files, alt))
 

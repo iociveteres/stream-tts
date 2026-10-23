@@ -377,7 +377,7 @@
  "процессор без AVX2: cosyvoice.cpp на нём не работает": "the CPU has no AVX2: cosyvoice.cpp doesn't run on it",
  "нет {path}": "{path} is missing",
  "сервер остановлен: меняются голоса": "server stopped: voices are being changed",
- "cosyvoice-server завершился (код {code})": "cosyvoice-server exited (code {code})",
+ "{server} завершился (код {code})": "{server} exited (code {code})",
 
  "проверка уже идёт": "a test is already running",
  "идёт озвучка: проверьте, когда очередь пуста": "TTS is busy: test when the queue is empty",

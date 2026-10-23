@@ -77,7 +77,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   `import-voices.sh`, `synth.py` и `editor.py`; stream-tts выгружает его после 10 минут простоя.
 - Повторная регистрация имени даёт 409: сначала `DELETE /speaker/<имя>` (так делает `import-voices.sh --force`).
   `POST /model/load` ждёт поле `model`; после выгрузки модели голоса сбрасываются.
-- Не убирать `GGML_CUDA_DISABLE_GRAPHS=1` (образ, `runtime.py`) и `--llm-flash-attn 0` (`runtime.py`,
+- Не убирать `GGML_CUDA_DISABLE_GRAPHS=1` (образ, `engines/cosyvoice/launch.py`) и `--llm-flash-attn 0` (`launch.py`,
   `docker-compose.gpu.yml` для `server-only`): без них на GPU тихий шум или мусор вместо речи, причём без ошибок в
   логах.
 - Замеры скорости — по `elapsed_ms` из `docker compose logs stream-tts` (вывод сервера — логгер `cosyvoice`) или
@@ -93,7 +93,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - `MODEL` закрепляет модель и отключает выбор в админке, поэтому в stream-tts не передаётся; он нужен только
   профилю `server-only`. Выбор модели stream-tts хранит в `settings.json` (`model`), при нескольких `*.gguf` без
   выбора сервер не запускается. В `/opt/cosyvoice` свой `libonnxruntime.so`: `LD_LIBRARY_PATH` в образе stream-tts
-  не задавать, путь серверу добавляет `runtime.py`.
+  не задавать, путь серверу добавляет `engines/cosyvoice/launch.py`.
 - Nuitka: собранную программу `paths.py` узнаёт по `__compiled__` (`sys.frozen` не задаётся); данные пакета и
   `effects/` лежат рядом с exe. Импорты эффектов Nuitka не видит: новые зависимости — в `--include-module` в
   `build-exe.py`.
@@ -143,7 +143,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - stream-tts: `stream-tts/.venv/Scripts/python -m pytest tests/e2e` (~1 мин, без видеокарты и модели; свой процесс
   на свободном порту, Docker-версию не трогает). Новое поведение очереди, фильтров, синтеза, голосов, редактора,
   статистики, доступа — сценарием в `tests/e2e/`; новый запрос к cosyvoice-server — и в `fake_cosyvoice.py`, новый
-  тег IRC — в `fake_irc.py`. После правок синтеза, `runtime.py` или обновления cosyvoice.cpp — ещё `-m real`
+  тег IRC — в `fake_irc.py`. После правок синтеза, `runtime.py`, `engines/` или обновления cosyvoice.cpp — ещё `-m real`
   (настоящая модель на видеокарте и CPU, распознавание faster-whisper; при нехватке видеопамяти пропускается).
 - espeech-server: `espeech/.venv/Scripts/python -m pytest tests/espeech` (~1,5 мин, настоящая модель; без
   `models/espeech` пропускается).

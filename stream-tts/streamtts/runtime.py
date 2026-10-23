@@ -1,108 +1,35 @@
-"""Встроенный cosyvoice-server (режим managed): stream-tts сам запускает сервер и следит за ним.
+"""Встроенный сервер синтеза (режим managed): stream-tts сам запускает сервер движка и следит за ним.
 
-Включается, если COSYVOICE_URL не задан, а cosyvoice-server(.exe) лежит в рантайме (paths.RUNTIME, рядом с
-программой) или путь к нему (или к его папке) указан в COSYVOICE_SERVER. Иначе режим external, как раньше.
+Здесь — общее для всех движков: процесс, порт, перезапуски, вывод в лог, остановка на время смены файлов (paused),
+выгрузка модели. Что запускать и с какими аргументами, решает запуск движка (engines/<id>/launch.py, Launcher):
+args(host, port) собирает командную строку или бросает Unavailable (нет модели и т. п.), env() — окружение
+процесса, public() — его поля для админки.
 
-Аргументы собираются как в cosyvoice/entrypoint.sh:
-- без AVX2 рантайм cosyvoice.cpp не работает — сервер не запускается;
-- модель: MODEL, иначе выбранная в админке (settings.model), иначе единственный *.gguf в paths.MODELS
-  (нет модели — ждём, пока появится: её можно скачать в админке, install.py);
-- голоса: paths.VOICES/*.gguf и paths.VOICES/<набор>/*.gguf, имя голоса — имя файла;
-- ONNX-фронтенд из paths.MODELS/frontend-onnx (полные версии приоритетнее int8): в режиме --webui флаги только
-  заполняют форму (GET /frontend/model), загружает его editor.py перед созданием голоса;
-- бэкенд (COSYVOICE_BACKEND=auto|cuda|vulkan|cpu, иначе выбор в админке, по умолчанию auto) — по выводу
-  cosyvoice-cli --list-backends:
-  CUDA, если есть ggml-cuda.dll и видеокарта NVIDIA, иначе Vulkan (дискретная видеокарта приоритетнее
-  встроенной), иначе CPU. Набор, где лежат и ggml-cuda, и ggml-vulkan, на машине без них уходит на CPU;
-- всегда GGML_CUDA_DISABLE_GRAPHS=1, а на CUDA ещё --llm-flash-attn 0: без них вместо речи шум (AGENTS.md).
-Порт: COSYVOICE_PORT или любой свободный; адрес, на котором сервер слушает, — COSYVOICE_HOST (по умолчанию 127.0.0.1;
-образ Docker задаёт 0.0.0.0, чтобы порт сервера был виден снаружи контейнера), а сам stream-tts всегда ходит к нему
-по 127.0.0.1. Упавший сервер перезапускается (пауза растёт до минуты, если он
-падает сразу после старта). Сервер завершается вместе с stream-tts: на Windows через Job Object (даже если
-stream-tts убит), на Linux через PR_SET_PDEATHSIG. Выгрузка модели синтеза (вкладка «Статистика») — остановка сервера:
-так освобождается и контекст видеокарты; загрузка — новый запуск."""
-import asyncio, collections, contextlib, glob, logging, os, re, socket, subprocess, sys
+Порт: Launcher.port (переменная движка, у CosyVoice — COSYVOICE_PORT) или любой свободный; адрес, на котором сервер
+слушает, — Launcher.host (по умолчанию 127.0.0.1; образ Docker задаёт 0.0.0.0, чтобы порт сервера был виден снаружи
+контейнера), а сам stream-tts всегда ходит к нему по 127.0.0.1. Упавший сервер перезапускается (пауза растёт до
+минуты, если он падает сразу после старта). Сервер завершается вместе с stream-tts: на Windows через Job Object
+(даже если stream-tts убит), на Linux через PR_SET_PDEATHSIG. Выгрузка модели синтеза (вкладка «Статистика») —
+остановка сервера: так освобождается и контекст видеокарты (и память torch, которую он сам не отдаёт); загрузка —
+новый запуск. Вывод сервера — в лог под именем движка (логгер cosyvoice: по elapsed_ms в нём меряют скорость)."""
+import asyncio, collections, contextlib, logging, os, socket, subprocess, sys
 
 import aiohttp
 
 from . import paths
 from .i18n import tr
-from .paths import EXE, env
 
 log = logging.getLogger("runtime")
-srv_log = logging.getLogger("cosyvoice")
-
-BACKENDS = ("auto", "cuda", "vulkan", "cpu")
 
 
 class Unavailable(Exception):
     """Сервер пока нельзя запустить (нет модели, нет AVX2): причина показывается в админке."""
 
 
-def find_server():
-    """Путь к cosyvoice-server для режима managed или None."""
-    p = env("COSYVOICE_SERVER")
-    if p:
-        return os.path.join(p, "cosyvoice-server" + EXE) if os.path.isdir(p) else p
-    for d in (paths.RUNTIME, paths.APP):
-        p = os.path.join(d, "cosyvoice-server" + EXE)
-        if os.path.isfile(p):
-            return p
-    return None
-
-
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
-
-
-def has_avx2():
-    if os.name == "nt":
-        import ctypes
-        return bool(ctypes.windll.kernel32.IsProcessorFeaturePresent(40))  # PF_AVX2_INSTRUCTIONS_AVAILABLE
-    try:
-        with open("/proc/cpuinfo") as f:
-            return " avx2" in f.read()
-    except OSError:
-        return True  # не Linux: пусть решает сам сервер
-
-
-def first_existing(*files):
-    return next((f for f in files if os.path.isfile(f)), None)
-
-
-def parse_backends(text):
-    """Вывод cosyvoice-cli --list-backends: [(имя, встроенная ли видеокарта)] в порядке вывода."""
-    uma = {m[1]: m[2] == "1" for m in re.finditer(r"ggml_vulkan: (\d+) = .*?\buma: (\d)", text)}
-    out, listing = [], False
-    for line in text.splitlines():
-        if line.startswith("Available GGML backends"):
-            listing = True
-        elif listing and line.startswith((" ", "\t")) and line.strip():
-            name = line.split()[0]
-            m = re.fullmatch(r"vulkan(\d+)", name.lower())
-            out.append((name, bool(m and uma.get(m[1]))))
-    return out
-
-
-def choose_backend(found, prefer="auto"):
-    """Имя бэкенда для --backend: CUDA, потом Vulkan (дискретная раньше встроенной), потом CPU."""
-    names = [n for n, _ in found]
-    cuda = [n for n in names if n.lower().startswith("cuda")]
-    vulkan = sorted((n for n, _ in found if n.lower().startswith("vulkan")), key=lambda n: dict(found)[n])
-    order = {"auto": cuda + vulkan, "cuda": cuda, "vulkan": vulkan, "cpu": []}[prefer]
-    return order[0] if order else "CPU"
-
-
-def backend_args(name):
-    kind = name.lower()
-    if kind.startswith("cuda"):
-        # flash attention в LLM на CUDA даёт лишние звуки в начале фразы (docker-compose.gpu.yml)
-        return ["--backend", kind, "--llm-flash-attn", "0"]
-    if kind.startswith("vulkan"):
-        return ["--backend", kind]
-    return ["--cpu"]
 
 
 class _Job:
@@ -151,26 +78,25 @@ def _die_with_parent():
     ctypes.CDLL(None).prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG
 
 
+def spawn_kwargs():
+    """Для create_subprocess_exec: без окна консоли на Windows, смерть вместе с stream-tts на Linux."""
+    if os.name == "nt":
+        return dict(creationflags=subprocess.CREATE_NO_WINDOW)
+    return dict(preexec_fn=_die_with_parent) if sys.platform.startswith("linux") else {}
+
+
 class Managed:
-    def __init__(self, server, settings=None):
-        self.server, self.dir = server, os.path.dirname(os.path.abspath(server))
-        self.s = settings
-        self.port = int(env("COSYVOICE_PORT", "0")) or free_port()
-        self.host = env("COSYVOICE_HOST", "127.0.0.1")  # только --host сервера
+    def __init__(self, launcher):
+        self.launcher = launcher
+        self.port = launcher.port or free_port()
         self.url = f"http://127.0.0.1:{self.port}"
-        self.backend = ""          # выбранный бэкенд: CUDA0, Vulkan0, CPU
-        self.backends = None       # [(имя, встроенная)] из --list-backends, на время работы stream-tts
-        self.model = ""
-        self.voices = 0
         self.state = "stopped"     # waiting (нет модели и т. п.) | starting | running | crashed | stopped
         self.error = ""
         self.restarts = 0
         self.starts = 0            # сколько раз сервер становился готов: stream-tts перечитывает голоса
         self.tail = collections.deque(maxlen=40)  # последние строки вывода сервера: причина падения
-        self.frontend = None       # (speech_tokenizer, campplus), флаги сервера
         self.proc = None
         self.task = None
-        self.override = ""         # устройство на время проверки скорости (bench.py), в настройки не пишется
         self._restarting = False
         self._hold = 0             # paused(): сервер остановлен, пока меняются файлы голосов
         self.unloaded = False      # модель выгружена кнопкой: сервер не запускается до load()
@@ -183,114 +109,13 @@ class Managed:
                 log.warning("Job Object не создан, сервер может пережить stream-tts: %s", e)
 
     @property
-    def prefer(self):
-        """Бэкенд: COSYVOICE_BACKEND, иначе проверка скорости, иначе выбор в админке, иначе auto."""
-        v = (env("COSYVOICE_BACKEND") or self.override or (self.s.get("backend", "") if self.s else "")
-             or "auto").lower()
-        return v if v in BACKENDS else "auto"
+    def server(self):
+        return self.launcher.server
 
     def public(self):
-        return dict(mode="managed", backend=self.backend, prefer=self.prefer, state=self.state, error=self.error,
-                    model=os.path.basename(self.model), voices=self.voices, restarts=self.restarts,
-                    backends=[n for n, _ in self.backends or []], server=self.server,
-                    locked=dict(backend=bool(env("COSYVOICE_BACKEND")), model=bool(env("MODEL"))),
-                    unloaded=self.unloaded,
-                    pid=self.proc.pid if self.proc and self.proc.returncode is None else None)
-
-    def _env(self):
-        e = dict(os.environ, GGML_CUDA_DISABLE_GRAPHS="1")
-        if os.name != "nt":
-            e["LD_LIBRARY_PATH"] = os.pathsep.join(filter(None, (self.dir, e.get("LD_LIBRARY_PATH"))))
-        return e
-
-    def _spawn_kwargs(self):
-        if os.name == "nt":
-            return dict(creationflags=subprocess.CREATE_NO_WINDOW)
-        return dict(preexec_fn=_die_with_parent) if sys.platform.startswith("linux") else {}
-
-    # --- аргументы ---
-    async def _detect_backends(self):
-        cli = os.path.join(self.dir, "cosyvoice-cli" + EXE)
-        if not os.path.isfile(cli):
-            log.warning("нет %s: бэкенд не проверить, беру CPU", cli)
-            return []
-        proc = await asyncio.create_subprocess_exec(
-            cli, "--list-backends", cwd=self.dir, env=self._env(), stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT, **self._spawn_kwargs())
-        try:
-            out, _ = await asyncio.wait_for(proc.communicate(), 120)
-        except asyncio.TimeoutError:
-            proc.kill()
-            log.warning("cosyvoice-cli --list-backends завис: беру CPU")
-            return []
-        found = parse_backends(out.decode(errors="replace"))
-        log.info("бэкенды: %s", ", ".join(n + (" (встроенная)" if i else "") for n, i in found) or "нет")
-        return found
-
-    def _model(self):
-        model = env("MODEL")
-        if model:
-            if not os.path.isfile(model):
-                raise Unavailable(tr("модель не найдена: {model}", model=model))
-            return model
-        ggufs = sorted(glob.glob(os.path.join(paths.MODELS, "*.gguf")))
-        chosen = os.path.join(paths.MODELS, self.s.get("model", "")) if self.s and self.s.get("model") else ""
-        if chosen in ggufs:
-            return chosen
-        if not ggufs:
-            raise Unavailable(tr("нет модели: скачайте её в админке (вкладка «Сервер») или положите *.gguf в {dir}",
-                                 dir=paths.MODELS))
-        if len(ggufs) > 1:
-            raise Unavailable(tr("в {dir} несколько моделей: выберите одну в админке (вкладка «Сервер»)", dir=paths.MODELS))
-        return ggufs[0]
-
-    def _voices(self):
-        """[(имя, путь от paths.VOICES)]: короткие пути, чтобы много голосов влезло в командную строку Windows."""
-        out, seen = [], {}
-        files = sorted(glob.glob(os.path.join(paths.VOICES, "*.gguf"))) + \
-            sorted(glob.glob(os.path.join(paths.VOICES, "*", "*.gguf")))
-        for f in files:
-            name = os.path.splitext(os.path.basename(f))[0]
-            rel = os.path.relpath(f, paths.VOICES)
-            if name in seen:
-                log.warning("голос %s уже взят из %s, пропускаю %s", name, seen[name], rel)
-                continue
-            seen[name] = rel
-            out.append((name, rel))
-        return out
-
-    async def _args(self):
-        if not has_avx2():
-            raise Unavailable(tr("процессор без AVX2: cosyvoice.cpp на нём не работает"))
-        if not os.path.isfile(self.server):
-            raise Unavailable(tr("нет {path}", path=self.server))
-        if self.backends is None:  # до модели: выбор устройства в админке виден и без неё
-            self.backends = await self._detect_backends()
-        self.backend = choose_backend(self.backends, self.prefer)
-        self.model = ""
-        self.model = self._model()
-        if self.prefer not in ("auto", "cpu") and not self.backend.lower().startswith(self.prefer):
-            log.warning("бэкенд %s не найден, работаю на CPU", self.prefer)
-        args = [self.server, "--model", self.model, "--host", self.host, "--port", str(self.port), "--webui",
-                *backend_args(self.backend)]
-        fe = os.path.join(paths.MODELS, "frontend-onnx")
-        self.frontend = (first_existing(os.path.join(fe, "speech_tokenizer_v3.onnx"),
-                                        os.path.join(fe, "speech_tokenizer_v3.int8.onnx")),
-                         first_existing(os.path.join(fe, "campplus.onnx"), os.path.join(fe, "campplus.int8.onnx")))
-        if all(self.frontend):
-            args += ["--speech-tokenizer", self.frontend[0], "--campplus", self.frontend[1]]
-        else:
-            self.frontend = None
-            log.info("ONNX-фронтенд не найден в %s: извлечение голоса из аудио недоступно", fe)
-        voices = self._voices()
-        for name, rel in voices:
-            if len(subprocess.list2cmdline(args)) > 30000:  # предел командной строки Windows — 32767 символов
-                log.error("голосов слишком много для командной строки: загружено %d из %d",
-                          args.count("--voice-prompt"), len(voices))
-                break
-            args += ["--voice-prompt", f"{name}={rel}"]
-        self.voices = args.count("--voice-prompt")
-        return args
+        return dict(mode="managed", state=self.state, error=self.error, restarts=self.restarts, server=self.server,
+                    unloaded=self.unloaded, pid=self.proc.pid if self.proc and self.proc.returncode is None else None,
+                    **self.launcher.public())
 
     # --- процесс ---
     async def start(self):
@@ -305,7 +130,7 @@ class Managed:
         self.state = "stopped"
 
     async def restart(self):
-        """Перезапуск с новыми моделью, бэкендом и голосами."""
+        """Перезапуск с новыми моделью, устройством и голосами."""
         self._restarting = True
         await self._kill()
         self._wake.set()
@@ -348,6 +173,7 @@ class Managed:
             await p.wait()
 
     async def _pump(self, stream):
+        srv_log = logging.getLogger(self.launcher.ID)
         while line := await stream.readline():
             text = line.decode(errors="replace").rstrip()
             if text:
@@ -373,14 +199,14 @@ class Managed:
         return True
 
     async def _run(self, args):
+        name = self.launcher.NAME
         os.makedirs(paths.VOICES, exist_ok=True)
-        shown = [a for i, a in enumerate(args) if "--voice-prompt" not in args[max(i - 1, 0):i + 1]]
-        log.info("запуск: %s (голосов: %d)", subprocess.list2cmdline(shown), self.voices)
+        log.info("запуск: %s%s", subprocess.list2cmdline(self.launcher.shown(args)), self.launcher.started())
         self.tail.clear()
         self.state, self.error = "starting", ""
         self.proc = await asyncio.create_subprocess_exec(
-            *args, cwd=paths.VOICES, env=self._env(), stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, **self._spawn_kwargs())
+            *args, cwd=paths.VOICES, env=self.launcher.env(), stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, **spawn_kwargs())
         if self._job:
             try:
                 self._job.add(self.proc.pid)
@@ -392,9 +218,9 @@ class Managed:
         try:
             async with aiohttp.ClientSession() as session:
                 if await self._ready(session):
-                    log.info("cosyvoice-server готов: %s, бэкенд %s, голосов %d", self.url, self.backend, self.voices)
+                    log.info("%s готов: %s, %s", name, self.url, self.launcher.ready())
                 elif self.proc.returncode is None:
-                    log.error("cosyvoice-server не ответил за 5 минут, перезапускаю")
+                    log.error("%s не ответил за 5 минут, перезапускаю", name)
                     await self._kill()
             await self.proc.wait()
         finally:
@@ -404,6 +230,7 @@ class Managed:
     async def _supervise(self):
         loop, delay = asyncio.get_running_loop(), 2
         while True:
+            name = self.launcher.NAME
             if self._hold:
                 self.state, self.error = "stopped", tr("сервер остановлен: меняются голоса")
                 await self._sleep(1)
@@ -413,10 +240,10 @@ class Managed:
                 await self._sleep(5)
                 continue
             try:
-                args = await self._args()
+                args = await self.launcher.args(self.launcher.host, self.port)
             except Unavailable as e:
                 if self.error != str(e):
-                    log.warning("cosyvoice-server не запущен: %s", e)
+                    log.warning("%s не запущен: %s", name, e)
                 self.state, self.error = "waiting", str(e)
                 await self._sleep(5)
                 continue
@@ -430,8 +257,9 @@ class Managed:
                 continue
             code = self.proc.returncode
             code = code - 2 ** 32 if code >= 2 ** 31 else code  # Windows отдаёт код без знака
-            last = next((t for t in reversed(self.tail) if "[REQ]" not in t), "")
-            self.state, self.error = "crashed", tr("cosyvoice-server завершился (код {code})", code=code) +                 (": " + last if last else "")
+            last = next((t for t in reversed(self.tail) if not self.launcher.noise(t)), "")
+            self.state, self.error = "crashed", tr("{server} завершился (код {code})", server=name, code=code) + \
+                (": " + last if last else "")
             self.restarts += 1
             delay = 2 if loop.time() - started > 60 else min(delay * 2, 60)
             log.warning("%s; перезапуск через %d с", self.error, delay)

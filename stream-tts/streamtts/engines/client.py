@@ -1,12 +1,18 @@
-"""Клиент cosyvoice-server и очередь доступа к нему: строго один запрос за раз."""
+"""Общий клиент сервера синтеза и очередь доступа к нему: строго один запрос за раз.
+
+Протокол — подмножество API cosyvoice-server (его код не наш), другие движки (espeech-server) повторяют его:
+GET /status, GET /speaker, DELETE /speaker/<имя>, POST /speaker?type=extract, POST /speaker/save,
+POST /tts {text, voice, seed?, stream?, …} — ответ WAV-заголовок и PCM16 24 кГц, POST /tts/stop. Свои поля
+запроса (настройки модели из settings) движок добавляет в params(). Ядро stream-tts (engine.py, voices.py, bench.py)
+пользуется только lane, ok/error, status, speakers, synth, stream, streams и stop."""
 import asyncio, contextlib, heapq, itertools, logging, time
 
 import aiohttp
 
-from . import audio
-from .i18n import tr
+from .. import audio
+from ..i18n import tr
 
-log = logging.getLogger("cosy")
+log = logging.getLogger("tts")
 
 LIVE, PREVIEW, BACKGROUND = 0, 1, 2   # приоритеты: озвучка наград, «послушать» в интерфейсе, примеры голосов
 
@@ -56,9 +62,12 @@ class Lane:
         return sum(not f.done() for _, _, f in self.waiters)
 
 
-class Cosy:
-    def __init__(self, url, api_key=""):
+class Client:
+    ENGINE = "tts"   # id движка: в тексте ошибок сервера
+
+    def __init__(self, url, settings, api_key=""):
         self.url = url
+        self.s = settings
         self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.session = None
         self.lane = Lane()
@@ -66,7 +75,6 @@ class Cosy:
         self.error = ""
         self.info = {}
         self.checked = 0.0
-        self.frontend_paths = None   # пути ONNX-фронтенда с сервера (GET /frontend/model); {} — не настроен
 
     async def start(self):
         self.session = aiohttp.ClientSession(headers=self.headers)
@@ -74,6 +82,9 @@ class Cosy:
     async def close(self):
         if self.session:
             await self.session.close()
+
+    async def _fail(self, r):
+        raise RuntimeError(f"{self.ENGINE} {r.status}: {(await r.text())[:200]}")
 
     async def status(self):
         try:
@@ -85,86 +96,53 @@ class Cosy:
             self.ok, self.error = bool(self.info.get("model_loaded")), ""
             if not self.ok:
                 self.error = tr("модель не загружена")
-            if self.frontend_paths is None:
-                try:
-                    self.frontend_paths = await self._frontend_paths()
-                except Exception as e:   # синтезу это не мешает: повтор при следующей проверке
-                    log.warning("пути ONNX-фронтенда: %s", e)
+            await self._checked()
         except Exception as e:
             self.ok, self.error = False, str(e) or type(e).__name__
-            self.frontend_paths = None   # перезапущенный сервер мог получить другие флаги
+            self._lost()
         self.checked = time.time()
         return self.ok
 
-    # --- ONNX-фронтенд: нужен только для голосов из записи (editor.py), грузится по требованию ---
-    async def _frontend_paths(self):
-        """Пути из флагов --speech-tokenizer/--campplus: сервер отдаёт их и до загрузки фронтенда."""
-        async with self.session.get(f"{self.url}/frontend/model", timeout=aiohttp.ClientTimeout(total=5)) as r:
-            if r.status == 404:   # сборка cosyvoice.cpp без этого API
-                return {}
-            r.raise_for_status()
-            d = await r.json()
-        return d if d.get("speech_tokenizer") and d.get("campplus") else {}
+    async def _checked(self):
+        """Сервер ответил на /status: движок дочитывает своё."""
 
-    @property
-    def frontend_loaded(self):
-        return bool(self.info.get("frontend_available"))
-
-    @property
-    def frontend_ready(self):
-        """Фронтенд загружен или его можно загрузить."""
-        return self.frontend_loaded or bool(self.frontend_paths)
-
-    async def load_frontend(self):
-        """Вызывать под lane.hold: загрузка занимает сервер ~3 с."""
-        if self.frontend_loaded:
-            return False
-        if not self.frontend_paths:
-            raise RuntimeError(tr("на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"))
-        async with self.session.post(f"{self.url}/frontend/model/load", json=self.frontend_paths,
-                                     timeout=aiohttp.ClientTimeout(total=120)) as r:
-            if r.status != 200:
-                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
-        self.info["frontend_available"] = True
-        return True
-
-    async def unload_frontend(self):
-        async with self.session.post(f"{self.url}/frontend/model/unload", timeout=aiohttp.ClientTimeout(total=30)) as r:
-            if r.status != 200:
-                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
-        self.info["frontend_available"] = False
+    def _lost(self):
+        """Сервер не ответил: перезапущенный мог получить другие флаги."""
 
     async def speakers(self):
         async with self.session.get(f"{self.url}/speaker", timeout=aiohttp.ClientTimeout(total=10)) as r:
             r.raise_for_status()
             return sorted(await r.json())
 
-    def _body(self, voice, text, ratio, stream, seed=None, chunk=None):
-        body = dict(text=text, voice=voice, mode="zero-shot", response_format="wav", stream=stream)
-        if ratio:
-            body["max_token_text_ratio"] = ratio
-        if chunk:
-            body["chunk_tokens"] = chunk
+    # --- синтез ---
+    def params(self, stream):
+        """Поля запроса /tts из настроек модели: передаются в каждом запросе."""
+        return {}
+
+    def streams(self, text):
+        """Стоит ли синтезировать text потоком (при включённом стриминге)."""
+        return True
+
+    def _body(self, voice, text, stream, seed=None):
+        body = dict(text=text, voice=voice, stream=stream, **self.params(stream))
         if seed is not None:
             body["seed"] = seed
         return body
 
-    async def synth(self, voice, text, ratio=None, seed=None):
+    async def synth(self, voice, text, seed=None):
         """Целиком, float32 24 кГц."""
-        async with self.session.post(f"{self.url}/tts", json=self._body(voice, text, ratio, False, seed),
+        async with self.session.post(f"{self.url}/tts", json=self._body(voice, text, False, seed),
                                      timeout=aiohttp.ClientTimeout(total=300)) as r:
             if r.status != 200:
-                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+                await self._fail(r)
             return audio.read_wav(await r.read())
 
-    async def stream(self, voice, text, ratio=None, chunk=None):
-        """Потоком: куски float32 по мере синтеза. Поток — это WAV-заголовок и дальше PCM16.
-
-        chunk передаётся всегда: сервер запоминает chunk_tokens из прошлого запроса и не сбрасывает его."""
-        async with self.session.post(f"{self.url}/tts", json=self._body(voice, text, ratio, True, chunk=chunk),
+    async def stream(self, voice, text):
+        """Потоком: куски float32 по мере синтеза. Поток — это WAV-заголовок и дальше PCM16."""
+        async with self.session.post(f"{self.url}/tts", json=self._body(voice, text, True),
                                      timeout=aiohttp.ClientTimeout(total=None, sock_read=60)) as r:
             if r.status != 200:
-                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+                await self._fail(r)
             buf, header = b"", True
             async for chunk in r.content.iter_any():
                 buf += chunk
@@ -180,7 +158,15 @@ class Cosy:
                     yield audio.from_pcm16(buf[:n])
                     buf = buf[n:]
 
-    # --- голоса из записи (editor.py): нужен ONNX-фронтенд на сервере ---
+    async def stop(self):
+        """POST /tts/stop: сервер дорабатывает текущий шаг и останавливается."""
+        try:
+            async with self.session.post(f"{self.url}/tts/stop", timeout=aiohttp.ClientTimeout(total=15)) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    # --- голоса из записи (editor.py) ---
     async def extract(self, name, text, wav):
         """POST /speaker?type=extract: голос из образца (WAV) и его расшифровки, сразу доступен для синтеза."""
         form = aiohttp.FormData()
@@ -190,24 +176,16 @@ class Cosy:
         async with self.session.post(f"{self.url}/speaker", params={"type": "extract"}, data=form,
                                      timeout=aiohttp.ClientTimeout(total=300)) as r:
             if r.status != 200:
-                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+                await self._fail(r)
 
     async def save_speaker(self, name, path):
-        """POST /speaker/save: голос в .gguf; path — на машине сервера."""
+        """POST /speaker/save: голос в файл; path — на машине сервера."""
         async with self.session.post(f"{self.url}/speaker/save", json=dict(name=name, path=path),
                                      timeout=aiohttp.ClientTimeout(total=60)) as r:
             if r.status != 200:
-                raise RuntimeError(f"cosyvoice {r.status}: {(await r.text())[:200]}")
+                await self._fail(r)
 
     async def delete_speaker(self, name):
         with contextlib.suppress(aiohttp.ClientError, asyncio.TimeoutError):
             async with self.session.delete(f"{self.url}/speaker/{name}", timeout=aiohttp.ClientTimeout(total=15)):
                 pass
-
-    async def stop(self):
-        """POST /tts/stop: сервер дорабатывает текущий шаг и останавливается (только в режиме --webui)."""
-        try:
-            async with self.session.post(f"{self.url}/tts/stop", timeout=aiohttp.ClientTimeout(total=15)) as r:
-                return r.status == 200
-        except Exception:
-            return False

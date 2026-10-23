@@ -13,8 +13,8 @@
 _draft-<ключ>, где ключ — хеш параметров: изменённый вариант регистрируется заново, прежний выгружается.
 Служебные голоса в список голосов не попадают (voices.refresh). Синтез — с приоритетом «послушать» и тем же seed,
 что у примеров, поэтому варианты различаются только образцом. ONNX-фронтенд сервер держит выгруженным: он
-грузится перед первым извлечением голоса (пути — из флагов сервера, cosy.frontend_paths) и выгружается через
-FRONTEND_IDLE простоя.
+грузится перед первым извлечением голоса (пути — из флагов сервера, frontend_paths клиента engines/cosyvoice) и
+выгружается через FRONTEND_IDLE простоя.
 
 Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет .gguf. Со встроенным сервером —
 в paths.VOICES/<набор>/ с manifest.json набора (так и в Docker); с внешним (COSYVOICE_URL) — в COSYVOICE_VOICES (по
@@ -26,7 +26,7 @@ import numpy as np
 
 from . import audio, config, install, paths, separate, store
 from .config import SR
-from .cosy import BACKGROUND, PREVIEW
+from .engines.client import BACKGROUND, PREVIEW
 from .i18n import tr
 from .voices import DEMO_SEED, DRAFT_PREFIX
 
@@ -61,8 +61,8 @@ def _wav_bytes(x):
 
 
 class Editor:
-    def __init__(self, settings, cosy, voices, runtime):
-        self.s, self.cosy, self.voices, self.runtime = settings, cosy, voices, runtime
+    def __init__(self, settings, tts, voices, runtime):
+        self.s, self.tts, self.voices, self.runtime = settings, tts, voices, runtime
         self.dir = os.path.join(config.DATA, "draft")
         self.path = os.path.join(self.dir, "draft.json")
         self.separator = separate.Separator()
@@ -102,7 +102,7 @@ class Editor:
         for v in d["variants"]:
             v["ready"] = ready(self.key(v))
         d["compare_ready"] = ready("ref-" + d["compare"]) if d["compare"] else []
-        d["frontend"] = self.cosy.frontend_ready
+        d["frontend"] = self.tts.frontend_ready
         d["music"] = separate.available()
         d["sets"] = self.sets()
         d["managed"] = self.runtime is not None
@@ -259,16 +259,16 @@ class Editor:
                                 min=int(SAMPLE_MIN), max=int(SAMPLE_MAX)))
         if not v["text"].strip():
             raise ValueError(tr("нет расшифровки образца"))
-        if not self.cosy.frontend_ready:
+        if not self.tts.frontend_ready:
             raise ValueError(tr("на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"))
 
     # --- ONNX-фронтенд ---
     async def _extract(self, name, text, wav):
         """Под lane.hold: голос из образца; фронтенд грузится к первому и выгружается после простоя."""
-        if await self.cosy.load_frontend():
+        if await self.tts.load_frontend():
             log.info("ONNX-фронтенд загружен")
         try:
-            await self.cosy.extract(name, text, wav)
+            await self.tts.extract(name, text, wav)
         finally:
             if self._fe_timer:
                 self._fe_timer.cancel()
@@ -281,9 +281,9 @@ class Editor:
             self._fe_timer.cancel()
             self._fe_timer = None
         try:
-            async with self.cosy.lane.hold(priority, tr("выгрузка фронтенда")):
-                if self.cosy.ok is not False and self.cosy.frontend_loaded:
-                    await self.cosy.unload_frontend()
+            async with self.tts.lane.hold(priority, tr("выгрузка фронтенда")):
+                if self.tts.ok is not False and self.tts.frontend_loaded:
+                    await self.tts.unload_frontend()
                     log.info("ONNX-фронтенд выгружен")
         except Exception as e:
             if priority != BACKGROUND:
@@ -305,26 +305,26 @@ class Editor:
             self._check(v)
             wav = _wav_bytes(await self.sample(v))
             name = DRAFT_PREFIX + self.key(v)
-            async with self.cosy.lane.hold(PREVIEW, tr("черновик голоса")):
-                speakers = await self.cosy.speakers()
+            async with self.tts.lane.hold(PREVIEW, tr("черновик голоса")):
+                speakers = await self.tts.speakers()
                 if name not in speakers:
                     # Прежние регистрации изменённых и удалённых вариантов — по списку сервера, а не по памяти:
                     # после перезапуска stream-tts они иначе оставались на сервере до «Удалить черновик»
                     keep = {DRAFT_PREFIX + self.key(d) for d in self._load()["variants"]}
                     for old in speakers:
                         if old.startswith(DRAFT_PREFIX) and old not in keep:
-                            await self.cosy.delete_speaker(old)
+                            await self.tts.delete_speaker(old)
                     await self._extract(name, " ".join(v["text"].split()), wav)
                     log.info("черновик: вариант %s зарегистрирован как %s", vid, name)
-                x = await self.cosy.synth(name, text, self.s["token_ratio"], seed=DEMO_SEED)
+                x = await self.tts.synth(name, text, seed=DEMO_SEED)
         else:
             if voice not in self.voices.names():
                 raise ValueError(tr("нет такого голоса"))
             out = self._cache(f"ref-{voice}-{_hash(text)}")
             if os.path.exists(out):
                 return out
-            async with self.cosy.lane.hold(PREVIEW, tr("пример {voice}", voice=voice)):
-                x = await self.cosy.synth(voice, text, self.s["token_ratio"], seed=DEMO_SEED)
+            async with self.tts.lane.hold(PREVIEW, tr("пример {voice}", voice=voice)):
+                x = await self.tts.synth(voice, text, seed=DEMO_SEED)
             if self.voices.post(voice):
                 x = await self.voices.apply_post(voice, x, text)
         y, _ = await asyncio.to_thread(audio.normalize, x, config.TARGET_LUFS)
@@ -357,14 +357,14 @@ class Editor:
             manifest = os.path.join(config.DATA, "sets", set_name, "manifest.json")
         if folder:
             os.makedirs(folder, exist_ok=True)
-        async with self.cosy.lane.hold(PREVIEW, tr("сохранение голоса {voice}", voice=name)):
-            if name in await self.cosy.speakers():
+        async with self.tts.lane.hold(PREVIEW, tr("сохранение голоса {voice}", voice=name)):
+            if name in await self.tts.speakers():
                 raise ValueError(tr("голос {voice} уже есть: выберите другое имя", voice=name))
             await self._extract(name, text, _wav_bytes(x))
             try:
-                await self.cosy.save_speaker(name, target)
+                await self.tts.save_speaker(name, target)
             except Exception:
-                await self.cosy.delete_speaker(name)
+                await self.tts.delete_speaker(name)
                 raise
         os.makedirs(os.path.dirname(manifest), exist_ok=True)
         meta = store.read_json(manifest, {})
@@ -383,8 +383,8 @@ class Editor:
     async def discard(self):
         """Черновик целиком: файлы и служебные голоса на сервере."""
         shutil.rmtree(self.dir, ignore_errors=True)
-        if self.cosy.ok:
-            async with self.cosy.lane.hold(PREVIEW, tr("черновик голоса")):
-                for n in await self.cosy.speakers():
+        if self.tts.ok:
+            async with self.tts.lane.hold(PREVIEW, tr("черновик голоса")):
+                for n in await self.tts.speakers():
                     if n.startswith(DRAFT_PREFIX):
-                        await self.cosy.delete_speaker(n)
+                        await self.tts.delete_speaker(n)
