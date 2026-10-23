@@ -4,7 +4,12 @@
 GET /status, GET /speaker, DELETE /speaker/<имя>, POST /speaker?type=extract, POST /speaker/save,
 POST /tts {text, voice, seed?, stream?, …} — ответ WAV-заголовок и PCM16 24 кГц, POST /tts/stop. Свои поля
 запроса (настройки модели из settings) движок добавляет в params(). Ядро stream-tts (engine.py, voices.py, bench.py)
-пользуется только lane, ok/error, status, speakers, synth, stream, streams и stop."""
+пользуется только lane, ok/error, status, speakers, synth, stream, streams и stop.
+
+Расширения сервер объявляет в /status: engine, api_version, capabilities (stream, accent, extract, train,
+voice_formats), params — схема настроек модели для админки ({имя: {type: choice, choices, default, title, help}}).
+Движок связывает параметры схемы с ключами settings (SETTINGS) и передаёт их в каждом запросе; схема на случай,
+когда сервер ещё не ответил, — DEFAULT_PARAMS."""
 import asyncio, contextlib, heapq, itertools, logging, time
 
 import aiohttp
@@ -15,6 +20,10 @@ from ..i18n import tr
 log = logging.getLogger("tts")
 
 LIVE, PREVIEW, BACKGROUND = 0, 1, 2   # приоритеты: озвучка наград, «послушать» в интерфейсе, примеры голосов
+# Сколько держать простаивающее соединение с сервером. cosyvoice-server (cpp-httplib) закрывает keep-alive через 5 с,
+# а aiohttp по умолчанию переиспользует соединение до 15 с: фраза через 5–15 с после прошлого запроса уходила в
+# закрытое соединение и падала с «Server disconnected» (возврат баллов; так падал test_real.py::test_synth_whole)
+KEEPALIVE = 2.0
 
 
 class Lane:
@@ -63,21 +72,25 @@ class Lane:
 
 
 class Client:
-    ENGINE = "tts"   # id движка: в тексте ошибок сервера
+    ENGINE = "tts"      # id движка: в тексте ошибок сервера
+    SETTINGS = {}       # параметр из /status.params -> ключ settings
+    DEFAULT_PARAMS = {}
+    frontend_ready = frontend_loaded = False   # ONNX-фронтенд для голосов из записи есть только у CosyVoice
 
-    def __init__(self, url, settings, api_key=""):
+    def __init__(self, url, settings, api_key="", lane=None):
         self.url = url
         self.s = settings
         self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.session = None
-        self.lane = Lane()
+        self.lane = lane or Lane()   # общая для всех движков: при смене модели очередь к серверу та же
         self.ok = None          # доступен ли сервер (последняя проверка)
         self.error = ""
         self.info = {}
         self.checked = 0.0
 
     async def start(self):
-        self.session = aiohttp.ClientSession(headers=self.headers)
+        self.session = aiohttp.ClientSession(headers=self.headers,
+                                             connector=aiohttp.TCPConnector(keepalive_timeout=KEEPALIVE))
 
     async def close(self):
         if self.session:
@@ -113,6 +126,36 @@ class Client:
         async with self.session.get(f"{self.url}/speaker", timeout=aiohttp.ClientTimeout(total=10)) as r:
             r.raise_for_status()
             return sorted(await r.json())
+
+    @property
+    def capabilities(self):
+        return self.info.get("capabilities") or {}
+
+    # --- настройки модели ---
+    def schema(self):
+        """Настройки модели для админки: [{key (в settings), param, type, choices, default, title, help, value}]."""
+        params = self.info.get("params") or {}
+        out = []
+        for name, key in self.SETTINGS.items():
+            p = params.get(name) or self.DEFAULT_PARAMS.get(name)
+            if p:
+                out.append(dict(p, key=key, param=name, value=self.s[key]))
+        return out
+
+    def check_param(self, key, value):
+        """Значение настройки модели из админки; ValueError — не из вариантов схемы."""
+        p = next((p for p in self.schema() if p["key"] == key), None)
+        if p is None:
+            raise ValueError(key)
+        if p.get("type") == "choice":
+            value = type(p["choices"][0])(value)
+            if value not in p["choices"]:
+                raise ValueError(f"{key}: {value}")
+        return value
+
+    def bench_info(self):
+        """Настройки модели, с которыми сделан замер скорости (bench.py)."""
+        return {}
 
     # --- синтез ---
     def params(self, stream):
@@ -184,6 +227,14 @@ class Client:
                                      timeout=aiohttp.ClientTimeout(total=60)) as r:
             if r.status != 200:
                 await self._fail(r)
+
+    async def accent(self, text):
+        """POST /accent: как прочитает модель — {normalized, accented} (capabilities.accent)."""
+        async with self.session.post(f"{self.url}/accent", json=dict(text=text),
+                                     timeout=aiohttp.ClientTimeout(total=30)) as r:
+            if r.status != 200:
+                await self._fail(r)
+            return await r.json()
 
     async def delete_speaker(self, name):
         with contextlib.suppress(aiohttp.ClientError, asyncio.TimeoutError):

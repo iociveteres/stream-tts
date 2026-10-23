@@ -18,8 +18,8 @@ STREAM_MIN_CHUNKS = 1.5
 class Client(Base):
     ENGINE = "cosyvoice"
 
-    def __init__(self, url, settings, api_key=""):
-        super().__init__(url, settings, api_key)
+    def __init__(self, url, settings, api_key="", lane=None):
+        super().__init__(url, settings, api_key, lane)
         self.frontend_paths = None   # пути ONNX-фронтенда с сервера (GET /frontend/model); {} — не настроен
 
     async def _checked(self):
@@ -42,6 +42,9 @@ class Client(Base):
         if stream:
             body["chunk_tokens"] = int(self.s["chunk_tokens"])
         return body
+
+    def bench_info(self):
+        return dict(chunk=int(self.s["chunk_tokens"]))
 
     def streams(self, text):
         """Фраза короче полутора чанков стриминга — целиком."""

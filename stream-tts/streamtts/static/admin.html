@@ -58,8 +58,11 @@
           <label class="grow">Голос <select name="voice"></select></label>
           <label style="flex-basis:100%">Текст <input name="text" required maxlength="500"
             value="Привет, чат! Проверка озвучки."></label>
+          <button type="button" id="test-accent" hidden title="Текст после фильтров, как его прочитает модель: числа и
+            латиница словами, ударения знаком «+»">Как прочитает</button>
           <button class="primary">Отправить</button>
         </form>
+        <div id="accent-out" class="small" hidden></div>
       </div>
     </div>
     <div>
@@ -268,11 +271,20 @@
  </div>
 </section>
 
-<!-- ============ Сервер (встроенный cosyvoice-server: модель, устройство, наборы голосов) ============ -->
+<!-- ============ Сервер (модель синтеза; встроенный сервер: модель, устройство, наборы голосов) ============ -->
 <section id="tab-server" class="tab">
   <div class="grid2">
     <div>
-      <div class="card">
+      <div class="card" id="engine-card">
+        <h2>Модель синтеза</h2>
+        <form id="engine-form" class="radios"></form>
+        <p class="muted small">Работает одна модель: при смене сервер синтеза перезапускается, озвучка ждёт в очереди.
+          Голос звучит той моделью, для которой у него есть файл (CosyVoice — .gguf, ESpeech — .espeech); голоса без
+          файла для выбранной модели зрителям не выдаются, их выбор сохраняется.</p>
+        <div id="model-params"></div>
+        <p id="engine-state" class="small"></p>
+      </div>
+      <div class="card managed" id="quants-card">
         <h2>Модель</h2>
         <p class="muted small">Более лёгкие варианты могут давать немного больше артефактов.</p>
         <ul id="models" class="setlist quants"></ul>
@@ -290,7 +302,13 @@
           <p id="dl-text" class="small"></p>
         </div>
       </div>
-      <div class="card">
+      <div class="card managed" id="espeech-card" hidden>
+        <h2>Модель ESpeech</h2>
+        <p class="muted small">Папка модели: <code id="espeech-dir"></code></p>
+        <p class="muted small" data-t>Её собирает <code>tools/espeech/prepare.py</code> из файлов Hugging Face;
+          загрузка из программы — позже.</p>
+      </div>
+      <div class="card managed">
         <h2>Наборы голосов</h2>
         <p class="muted small">Набор — zip с голосами. Повторная установка заменяет набор.
           Папка: <code id="voices-dir"></code></p>
@@ -303,7 +321,7 @@
       </div>
     </div>
     <div>
-      <div class="card">
+      <div class="card managed">
         <h2>Устройство синтеза</h2>
         <form id="backend-form" class="radios"></form>
         <p class="muted small">Для стрима нужна видеокарта: процессор обычно не успевает за реальным временем.
@@ -311,7 +329,7 @@
         <p id="backend-lock" class="warn small" hidden></p>
         <ul id="cuda" class="setlist mt" hidden></ul>
       </div>
-      <div class="card">
+      <div class="card managed">
         <h2>Скорость синтеза</h2>
         <p class="muted small">Замер на этом компьютере: синтез фразы и задержка первого звука при стриминге.
           Пока идёт проверка, озвучка ждёт в очереди.</p>
@@ -322,7 +340,7 @@
           <span id="bench-state" class="small muted"></span>
         </div>
       </div>
-      <div class="card">
+      <div class="card managed">
         <h2>Состояние сервера</h2>
         <div id="runtime-info" class="small"></div>
       </div>
@@ -347,7 +365,7 @@
         <h2 class="mt">Синтез</h2>
         <label class="check"><input type="checkbox" name="streaming"> Стриминг длинных фраз: звучат, не дожидаясь конца синтеза</label>
         <p class="warn small" id="stream-note" hidden></p>
-        <details class="mt">
+        <details class="mt" id="cosy-settings">
           <summary class="muted small">Дополнительно</summary>
           <label class="mt">Размер куска стриминга, токенов <input type="number" name="chunk_tokens" min="10" max="1000" step="10"></label>
           <p class="muted small">25 токенов — секунда звука. Чем меньше кусок, тем раньше первый звук, но тем медленнее

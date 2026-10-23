@@ -89,6 +89,7 @@ def backend_args(name):
 class Launcher:
     ID = "cosyvoice"            # логгер вывода сервера
     NAME = "cosyvoice-server"
+    DEVICE_KEY, DEVICE_ENV = "backend", "COSYVOICE_BACKEND"   # выбор устройства: settings и переменная
 
     def __init__(self, server, settings=None):
         self.server, self.dir = server, os.path.dirname(os.path.abspath(server))
@@ -111,7 +112,8 @@ class Launcher:
 
     def public(self):
         return dict(backend=self.backend, prefer=self.prefer, model=os.path.basename(self.model), voices=self.voices,
-                    backends=[n for n, _ in self.backends or []],
+                    backends=[n for n, _ in self.backends or []], devices=list(BACKENDS),
+                    device_env=self.DEVICE_ENV,
                     locked=dict(backend=bool(env("COSYVOICE_BACKEND")), model=bool(env("MODEL"))))
 
     def env(self):

@@ -13,7 +13,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | Путь | Что | В git |
 |---|---|---|
 | `setup.sh`, `Dockerfile`, `docker-compose*.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server (:8090 и :8080), профиль `server-only` — только сервер (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
-| `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent) для stream-tts, HTTP API как у cosyvoice-server ([docs/espeech.md](docs/espeech.md)); в stream-tts пока не подключён | да, кроме `.venv` |
+| `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent) для stream-tts, HTTP API как у cosyvoice-server ([docs/espeech.md](docs/espeech.md)); вторая модель stream-tts (`streamtts/engines/espeech`) | да, кроме `.venv` |
 | `stream-tts/streamtts/` | stream-tts на :8090: озвучка наград Twitch, админка, оверлей OBS (спецификация [docs/stream-tts.md](docs/stream-tts.md), развёртывание `stream-tts-deploy.md`, Windows `stream-tts-windows.md`) | да |
 | `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
@@ -37,11 +37,16 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - `post` в `alts.json` и `manifest.json` — `[скрипт, аргументы…]`, путь от корня проекта. stream-tts ищет скрипт в
   `STREAM_TTS_PROJECT` (в контейнере `/project`), грузит через importlib и вызывает `apply(звук, аргументы)`;
   командная строка эффекта нужна `synth.py`.
+- Модели синтеза — `streamtts/engines/<id>/` (описание, запуск, клиент), одна единовременно (`settings.engine`).
+  Ядро зовёт у клиента только lane/synth/stream/streams/stop/speakers/ok/status; поле запроса модели — в `params()`
+  её клиента, настройка модели — схемой `params` в `/status` сервера (`SETTINGS` клиента), новый запрос к серверу —
+  и в `fake_cosyvoice.py` (оба режима). Голос без файла для текущей модели (`.gguf`/`.espeech`) зрителям не выдаётся,
+  но `users.voice` не перезаписывается; примеры и `calib_db` — свои у каждой модели (`voices.py`).
 - `engine.chat` принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
   (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах.
 - Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767, espeech-server 8094; из исходников
   `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
-  модели) — 8093. Конфигурации — `.claude/launch.json`.
+  модели) — 8093. Встроенный espeech-server (режим managed, выбор ESpeech) — на свободном порту или `ESPEECH_PORT`. Конфигурации — `.claude/launch.json`.
 
 ## Запуск
 
@@ -72,6 +77,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   stream-tts раз в минуту перечитывает голоса и синтезирует примеры новых, то есть может вклиниться в
   `import-voices.sh`.
 - Сервер помнит `chunk_tokens` из прошлого запроса, поэтому stream-tts передаёт его в каждом.
+- cosyvoice-server закрывает простаивающее keep-alive соединение через 5 с: клиент stream-tts держит их не дольше
+  2 с (`KEEPALIVE` в `engines/client.py`), иначе фраза после паузы падает с «Server disconnected».
 - ONNX-фронтенд (нужен для `POST /speaker?type=extract`) сервер держит выгруженным: флаги дают только пути
   (`GET /frontend/model`). Кто извлекает голос, сначала грузит его (`POST /frontend/model/load` с этими путями), как
   `import-voices.sh`, `synth.py` и `editor.py`; stream-tts выгружает его после 10 минут простоя.

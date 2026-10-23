@@ -83,6 +83,9 @@ RETRIES = 5
 SET_NAME = re.compile(r"[^a-z0-9_-]+")
 VOICE_NAME = re.compile(r"^[\w.-]{1,64}$")
 MAX_GGUF = 64 << 20        # голос ~120 КБ; больше — точно не голос
+# Файлы голосов всех моделей (.gguf CosyVoice, .espeech ESpeech): набор может нести голоса для обеих. Из zip пока
+# ставятся только .gguf (поставка наборов ESpeech — этап 4)
+VOICE_EXTS = (cosyvoice.VOICE_EXT, ".espeech")
 MAX_ZIP_FILES = 2000
 
 
@@ -108,8 +111,9 @@ class Cancelled(Exception):
 
 
 class Installer:
-    def __init__(self, settings, runtime, changed):
+    def __init__(self, settings, runtime, changed, cosy=None):
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
+        self.cosy = cosy   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
         self.task = None
         self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
         self._last_push = 0.0
@@ -118,7 +122,7 @@ class Installer:
     def public(self):
         quants = [dict(QUANTS[q], quant=q, file=model_name(q)) for q in QUANTS]
         samples = [(voice, tr(label)) for voice, label in SAMPLES]
-        model = self.runtime.launcher.model
+        model = self.cosy.model if self.cosy else ""
         return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=samples, sample_phrase=SAMPLE_PHRASE,
                     models=installed_models(),
                     model=os.path.basename(model) if model else self.s.get("model", ""),
@@ -128,7 +132,9 @@ class Installer:
     # --- CUDA ---
     def cuda_state(self):
         """CUDA для вкладки «Сервер»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda.dll нет)."""
-        d = self.runtime.launcher.dir
+        if not self.cosy:
+            return dict(offer=False, installed=False, version="", size=0, unpacked=0, dir="")
+        d = self.cosy.dir
         version = ""
         with contextlib.suppress(OSError):
             with open(os.path.join(d, CUDA_VERSION_FILE), encoding="utf-8-sig") as f:
@@ -148,7 +154,7 @@ class Installer:
         self.task = asyncio.create_task(self._download_cuda())
 
     async def _download_cuda(self):
-        d = self.runtime.launcher.dir
+        d = self.cosy.dir
         archives = cuda_archives()
         try:
             timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
@@ -165,7 +171,7 @@ class Installer:
             self._push(force=True)
             async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll
                 await asyncio.to_thread(_extract_cuda, archives, d)
-                self.runtime.launcher.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
+                self.cosy.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
             self.dl.update(state="done", file="", speed=0.0)
             log.info("CUDA %s установлена в %s", CUDA["version"], d)
         except asyncio.CancelledError:
@@ -262,7 +268,7 @@ class Installer:
                 self.s.update(model=model_name(quant))
             else:
                 log.info("пакет %s скачан", self.dl["package"])
-            if quant or PACKAGES[self.dl["package"]].get("restart"):
+            if (quant or PACKAGES[self.dl["package"]].get("restart")) and self.runtime.launcher is self.cosy:
                 await self.runtime.restart()  # новая модель или фронтенд подхватываются только при запуске
         except asyncio.CancelledError:
             self.dl.update(state="cancelled", speed=0.0, error="")
@@ -422,7 +428,7 @@ def list_sets():
         d = os.path.join(paths.VOICES, n)
         if n.startswith(".") or not os.path.isdir(d):
             continue
-        voices = sorted(f[:-5] for f in os.listdir(d) if f.endswith(".gguf"))
+        voices = sorted({os.path.splitext(f)[0] for f in os.listdir(d) if f.endswith(VOICE_EXTS)})
         if voices:
             out.append(dict(name=n, voices=voices, manifest=os.path.isfile(os.path.join(d, "manifest.json"))))
     return out
@@ -432,8 +438,8 @@ def _existing_voices(skip_set):
     """Голос -> где лежит (набор или корень), кроме заменяемого набора."""
     out = {}
     for f in os.listdir(paths.VOICES) if os.path.isdir(paths.VOICES) else []:
-        if f.endswith(".gguf"):
-            out[f[:-5]] = tr("голоса без набора")
+        if f.endswith(VOICE_EXTS):
+            out[os.path.splitext(f)[0]] = tr("голоса без набора")
     for s in list_sets():
         if s["name"] != skip_set:
             out.update(dict.fromkeys(s["voices"], tr("набор {name}", name=s["name"])))

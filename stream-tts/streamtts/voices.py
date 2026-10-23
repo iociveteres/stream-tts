@@ -43,10 +43,8 @@ class Voices:
     def __init__(self, settings, tts):
         self.s, self.tts = settings, tts
         self.engine = None
-        self.dir = os.path.join(config.DATA, "demos")
-        os.makedirs(self.dir, exist_ok=True)
-        self.index_path = os.path.join(self.dir, "index.json")
-        self.index = store.read_json(self.index_path, {})   # голос -> {phrase, lufs, ts}
+        self.root = os.path.join(config.DATA, "demos")
+        self._indexes = {}   # модель -> {голос: {phrase, lufs, ts}}
         self.wake = asyncio.Event()
         self.progress = dict(todo=0, current="", error="")
         self._manifests = (0, {}, {})
@@ -132,12 +130,42 @@ class Voices:
             raise RuntimeError(tr("эффект {fx}: {e}", fx=post[0], e=e)) from e
         return audio.pcm16(np.clip(y, -1, 1))
 
-    # --- примеры и калибровка ---
-    def demo_path(self, voice):
-        return os.path.join(self.dir, voice + ".mp3")
+    # --- примеры и калибровка: свои у каждой модели (голос с тем же именем звучит у них по-разному) ---
+    def _dir(self, eid=None):
+        """Примеры CosyVoice — в demos/, как до второй модели; других моделей — в demos/<модель>/."""
+        eid = eid or self.tts.id
+        d = self.root if eid == "cosyvoice" else os.path.join(self.root, eid)
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _index(self, eid=None):
+        eid = eid or self.tts.id
+        if eid not in self._indexes:
+            self._indexes[eid] = store.read_json(os.path.join(self._dir(eid), "index.json"), {})
+        return self._indexes[eid]
+
+    @staticmethod
+    def _calib_key(eid):
+        return "calib_db" if eid == "cosyvoice" else f"calib_db_{eid}"
+
+    def calib(self, voice):
+        """Усиление голоса для стриминга по примеру текущей модели, дБ."""
+        return self.s.voice(voice).get(self._calib_key(self.tts.id))
+
+    def demo_path(self, voice, eid=None):
+        return os.path.join(self._dir(eid), voice + ".mp3")
+
+    def forget(self, names=None):
+        """Примеры пересинтезировать: все текущей модели (names=None) или эти голоса у всех моделей."""
+        if names is None:
+            self._index().clear()
+            return
+        for eid in list(self._indexes):
+            for n in names:
+                self._indexes[eid].pop(n, None)
 
     def has_demo(self, voice):
-        meta = self.index.get(voice)
+        meta = self._index().get(voice)
         return bool(meta and meta.get("phrase") == self.s["demo_phrase"] and os.path.exists(self.demo_path(voice)))
 
     def missing(self):
@@ -147,6 +175,7 @@ class Voices:
         """Демо-фраза целиком: по ней же калибруется усиление голоса для стриминга."""
         phrase = self.s["demo_phrase"]
         async with self.tts.lane.hold(priority, tr("пример {voice}", voice=voice)):
+            eid = self.tts.id   # модель могла смениться, пока пример ждал очереди; после синтеза пишем в её папку
             self.preempted = False
             x = await self.tts.synth(voice, phrase, seed=DEMO_SEED)
             if self.preempted:  # остановлен ради живой очереди: звук неполный
@@ -155,14 +184,15 @@ class Voices:
             x = await self.apply_post(voice, x, phrase)
         y, lufs = await asyncio.to_thread(audio.normalize, x, config.TARGET_LUFS)
         mp3 = await audio.encode_mp3(y)
-        with open(self.demo_path(voice), "wb") as f:
+        with open(self.demo_path(voice, eid), "wb") as f:
             f.write(mp3)
         v = self.s.voice(voice)
         if math.isfinite(lufs):
-            v["calib_db"] = round(config.TARGET_LUFS - lufs, 2)
+            v[self._calib_key(eid)] = round(config.TARGET_LUFS - lufs, 2)
         self.s.save()
-        self.index[voice] = dict(phrase=phrase, lufs=round(lufs, 2) if math.isfinite(lufs) else None, ts=time.time())
-        store.write_json(self.index_path, self.index)
+        index = self._index(eid)
+        index[voice] = dict(phrase=phrase, lufs=round(lufs, 2) if math.isfinite(lufs) else None, ts=time.time())
+        store.write_json(os.path.join(self._dir(eid), "index.json"), index)
         log.info("пример %s: %.1f LUFS, %d КБ", voice, lufs, len(mp3) // 1024)
         self.changed()
 
@@ -246,6 +276,6 @@ class Voices:
         out = []
         for n in self.names():
             v = self.s.voice(n)
-            out.append(dict(name=n, enabled=v["enabled"], gain_db=v["gain_db"], calib_db=v.get("calib_db"),
+            out.append(dict(name=n, enabled=v["enabled"], gain_db=v["gain_db"], calib_db=self.calib(n),
                             demo=self.has_demo(n), post=" ".join(self.post(n) or [])))
         return out

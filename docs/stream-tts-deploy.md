@@ -5,9 +5,12 @@
 
 ## Режимы
 
-Два режима работы с cosyvoice-server, ядро одно:
-- **external** — задан `COSYVOICE_URL`: сервер запущен отдельно (другая машина, профиль `server-only`). Модель и
-  голоса ставятся на нём, вкладки «Сервер» нет.
+Два режима работы с сервером синтеза, ядро одно. Моделей две — CosyVoice3 (cosyvoice-server) и ESpeech
+(espeech-server, [espeech.md](espeech.md)), работает одна, выбранная на вкладке «Сервер» (`settings.engine`;
+спецификация — [stream-tts.md](stream-tts.md), «Модели синтеза»):
+- **external** — задан `COSYVOICE_URL` или `TTS_SERVERS=cosyvoice=http://…,espeech=http://…`: серверы запущены
+  отдельно (другая машина, профиль `server-only`), `COSYVOICE_URL` — то же, что `cosyvoice=…`. Модель и голоса
+  ставятся на них. Вкладка «Сервер» есть, только если моделей несколько (выбор модели и её настройки).
 - **managed** — `COSYVOICE_URL` не задан, а рядом есть нативный `cosyvoice-server(.exe)` (папка `runtime/` рядом с
   программой, в исходниках — в корне проекта, в образе Docker — `/opt/cosyvoice` через `STREAM_TTS_RUNTIME`, или
   путь в `COSYVOICE_SERVER`). Так работают программа для Windows и `docker-compose.yml`. stream-tts сам запускает
@@ -21,6 +24,12 @@
   Vulkan (дискретная раньше встроенной), иначе CPU; `COSYVOICE_BACKEND=cuda|vulkan|cpu` задаёт его явно. Всегда
   `GGML_CUDA_DISABLE_GRAPHS=1`, на CUDA ещё `--llm-flash-attn 0`. В админке рядом с адресом сервера видны
   «встроенный», бэкенд, модель и число голосов.
+  ESpeech (`engines/espeech/launch.py`): `python -m espeech` интерпретатором его окружения — `ESPEECH_SERVER` (путь
+  к `python(.exe)` или папке с ним), иначе `runtime/espeech/` (поставка — позже), иначе `espeech/.venv` проекта;
+  `--models <модели>/espeech` (без весов сервер ждёт, причина — в админке), `--voices <голоса>`, `--device cuda`, если
+  есть драйвер NVIDIA (`ESPEECH_DEVICE=cpu|cuda` или выбор в админке). Встроенный сервер один: смена модели
+  перезапускает его с другим движком на том же порту (`COSYVOICE_PORT` или `ESPEECH_PORT` модели, выбранной при
+  запуске, иначе свободный).
 
 ## Первый запуск (режим managed)
 
@@ -121,7 +130,11 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 | `STREAM_TTS_BIND` | `127.0.0.1` | `0.0.0.0`, чтобы OBS на другом ПК дотянулся по сети |
 | `STREAM_TTS_PASSWORD` | — | пароль админки; обязателен, если `BIND` не localhost |
 | `STREAM_TTS_LANG` | язык установщика, иначе `ru` | `ru` или `en`: язык при первом запуске, дальше — переключатель в админке |
-| `COSYVOICE_URL` | — | внешний сервер; без него — режим managed |
+| `COSYVOICE_URL` | — | внешний сервер CosyVoice; без него и `TTS_SERVERS` — режим managed |
+| `TTS_SERVERS` | — | внешние серверы моделей: `cosyvoice=http://…,espeech=http://…` (выбор модели — в админке) |
+| `ESPEECH_SERVER` | `espeech/.venv` проекта | managed: python окружения espeech-server или папка с ним |
+| `ESPEECH_DEVICE` | `auto` | managed: `cuda` или `cpu` для ESpeech |
+| `ESPEECH_PORT`, `ESPEECH_HOST` | свободный, `127.0.0.1` | managed: как `COSYVOICE_PORT` и `COSYVOICE_HOST`, если при запуске выбрана ESpeech |
 | `COSYVOICE_SERVER` | `runtime/cosyvoice-server(.exe)` | managed: путь к серверу или его папке |
 | `COSYVOICE_BACKEND` | `auto` | managed: `cuda`, `vulkan` или `cpu` |
 | `COSYVOICE_PORT` | свободный, `8080` в Docker | managed: порт сервера |

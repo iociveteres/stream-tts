@@ -8,7 +8,6 @@
  "🔊 Включить звук": "🔊 Enable sound",
  "Оверлей неактивен: звук играет в другом окне": "Overlay inactive: sound plays in another window",
  "Нет связи с сервером, переподключение…": "No connection to the server, reconnecting…",
-
  "Озвучка": "TTS",
  "Выключено: награда на паузе, очередь очищена": "Off: the reward is paused, the queue is cleared",
  "Очередь": "Queue",
@@ -16,7 +15,6 @@
  "Сервер": "Server",
  "Настройки": "Settings",
  "Статистика": "Stats",
-
  "Сейчас": "Now",
  "⏭ Пропустить": "⏭ Skip",
  "Прервать текущую фразу и вернуть баллы": "Stop the current message and refund the points",
@@ -39,7 +37,6 @@
  "Страница голосов для зрителей": "Voices page for viewers",
  "Дайте ссылку зрителям (команда бота, панель канала) или <a href=\"/voices.zip\">скачайте zip</a> и выложите на любой хостинг.": "Share the link with viewers (a bot command, a channel panel) or <a href=\"/voices.zip\">download a zip</a> and put it on any hosting.",
  "Журнал": "Log",
-
  "Награда за баллы канала": "Channel points reward",
  "Название": "Title",
  "Цена, баллов": "Cost, points",
@@ -51,7 +48,6 @@
  "Свернуть": "Collapse",
  "Показать": "Show",
  "Каждый, кто хостит сервис, регистрирует своё приложение: общего Client ID нет, иначе все инсталляции зависели бы от одного приложения и делили его лимиты. Это бесплатно и занимает пару минут.": "Everyone who hosts the service registers their own application: there is no shared Client ID, otherwise all installations would depend on one application and share its limits. It is free and takes a couple of minutes.",
-
  "Поиск": "Search",
  "Поиск голоса": "Search voices",
  "Включить все": "Enable all",
@@ -65,7 +61,6 @@
  "Фраза примера": "Sample phrase",
  "Сохранить": "Save",
  "Пересинтезировать все": "Resynthesize all",
-
  "Модель": "Model",
  "Дополнительно": "Advanced",
  "Папка:": "Folder:",
@@ -81,7 +76,6 @@
  "Сравнить все устройства": "Compare all devices",
  "Сервер перезапускается на каждом устройстве": "The server restarts on each device",
  "Состояние сервера": "Server status",
-
  "все": "everyone",
  "сабы, VIP и модеры": "subs, VIPs and mods",
  "VIP и модеры": "VIPs and mods",
@@ -107,7 +101,6 @@
  "проверить фразу": "test a phrase",
  "Сохранить и проверить": "Save and test",
  "Выйти из админки": "Sign out of admin",
-
  "За период": "For the period",
  "24 часа": "24 hours",
  "7 дней": "7 days",
@@ -120,22 +113,17 @@
  "Зрители": "Viewers",
  "Возвраты по причинам": "Refunds by reason",
  "Отмена": "Cancel",
-
  "Да": "Yes",
  "Ошибка": "Error",
  "Ошибка: {e}": "Error: {e}",
  "Сервер недоступен: {e}": "Server unavailable: {e}",
  "Скопировано": "Copied",
  "Сохранено": "Saved",
-
  "Twitch: подключение": "Twitch: connecting",
  "Twitch: ждёт входа": "Twitch: waiting for login",
  "Twitch: вход истёк": "Twitch: login expired",
  "Twitch: нет входа": "Twitch: not logged in",
  "Twitch: нет Client ID": "Twitch: no Client ID",
- "cosyvoice: синтез": "cosyvoice: synthesizing",
- "cosyvoice недоступен": "cosyvoice unavailable",
- "cosyvoice недоступен ({url}): {error}": "cosyvoice unavailable ({url}): {error}",
  "оверлей": "overlay",
  "оверлей не подключён": "overlay not connected",
  "оверлей ждёт клика": "overlay waits for a click",
@@ -143,7 +131,6 @@
  "Вход в Twitch истёк: войдите заново на вкладке Twitch. Пока входа нет, активации не обрабатываются, баллы за них вернутся после входа.": "The Twitch login has expired: log in again on the Twitch tab. Until then redemptions are not processed; their points will be refunded after login.",
  "Модель синтеза не установлена: скачайте её на вкладке": "No synthesis model installed: download it on the",
  "«Сервер»": "Server tab",
-
  "ждёт": "waiting",
  "синтез": "synthesis",
  "готово": "ready",
@@ -160,7 +147,6 @@
  "Очистить очередь и вернуть баллы за всё в ней?": "Clear the queue and refund everything in it?",
  "как у зрителя (по нику)": "viewer's own (by nick)",
  "Отправлено в очередь": "Sent to the queue",
-
  "Вход в Twitch": "Twitch login",
  "Сначала зарегистрируйте своё приложение Twitch по шагам ниже и вставьте его Client ID.": "First register your Twitch application following the steps below and paste its Client ID.",
  "Откройте страницу активации на любом устройстве, войдите аккаунтом канала и введите код:": "Open the activation page on any device, sign in with the channel account and enter the code:",
@@ -177,7 +163,6 @@
  "Вход истёк: refresh-токен больше не действует.": "Login expired: the refresh token is no longer valid.",
  "(из .env)": "(from .env)",
  "Войти через Twitch": "Log in with Twitch",
-
  "канал": "channel",
  "Включите двухфакторную аутентификацию": "Enable two-factor authentication",
  "Без 2FA консоль разработчика Twitch не даст зарегистрировать приложение.": "Without 2FA the Twitch developer console won't let you register an application.",
@@ -203,14 +188,12 @@
  "Client ID принят, войдите кодом": "Client ID accepted, log in with the code",
  "Проверить и войти": "Check and log in",
  "Сервис сразу пробует начать вход: если Twitch не примет ID, здесь будет ошибка. ID можно задать и в .env (TWITCH_CLIENT_ID).": "The service tries to start the login right away: if Twitch rejects the ID, you'll see an error here. The ID can also be set in .env (TWITCH_CLIENT_ID).",
-
  "Награда ещё не создана.": "The reward hasn't been created yet.",
  "Награда на паузе (озвучка выключена).": "The reward is paused (TTS is off).",
  "Награда активна.": "The reward is active.",
  "Награда создана": "Reward created",
  "Удалить награду с канала?": "Delete the reward from the channel?",
  "Удалить": "Delete",
-
  "Пример: {e}": "Sample: {e}",
  "включён": "enabled",
  "эффект": "effect",
@@ -229,7 +212,6 @@
  ", сейчас {voice}": ", now {voice}",
  "(ждут свободного cosyvoice)": "(waiting for cosyvoice to be free)",
  "Примеры всех включённых голосов готовы.": "Samples of all enabled voices are ready.",
-
  "{n} МБ": "{n} MB",
  "{n} МБ/с": "{n} MB/s",
  "{n} мин": "{n} min",
@@ -256,7 +238,6 @@
  "Загрузка отменена на {done} из {total}: «Скачать» продолжит с этого места.": "Download cancelled at {done} of {total}: “Download” will resume from there.",
  "Ошибка: {e}. «Скачать» продолжит с того же места.": "Error: {e}. “Download” will resume from the same place.",
  "— не найдено": "— not found",
- "Устройство задано переменной COSYVOICE_BACKEND.": "The device is set by the COSYVOICE_BACKEND variable.",
  "— голосов: {n}: {voices}": "— {n} voices: {voices}",
  "Удалить набор": "Delete pack",
  "Удалить набор «{name}» (голосов: {n})?": "Delete the pack “{name}” ({n} voices)?",
@@ -268,7 +249,6 @@
  "Адрес": "Address",
  "Перезапусков": "Restarts",
  "Программа": "Program",
-
  "хватает для стрима с запасом": "enough for streaming with headroom",
  "хватает для стрима, впритык": "enough for streaming, barely",
  "без запаса или медленнее реального времени: для стрима не годится, стриминг выключить": "no headroom or slower than real time: not suitable for streaming, turn streaming off",
@@ -287,13 +267,11 @@
  ", пропущено {n}: {voices}": ", {n} skipped: {voices}",
  ". Не голоса, пропущены: {files}": ". Not voices, skipped: {files}",
  "— встроенный, {backend}{model}, голосов: {n}": "— built-in, {backend}{model}, {n} voices",
-
  "Интерфейс: {addr}, пароль задан": "Interface: {addr}, password set",
  "Интерфейс: {addr}, пароль не задан (доступ только с этого ПК)": "Interface: {addr}, no password (access from this PC only)",
  "Разбанить": "Unban",
  "никого": "nobody",
  "Список корней сохранён": "Root list saved",
-
  "В очереди": "In queue",
  "синтезируется: {n}": "synthesizing: {n}",
  "Играет": "Playing",
@@ -313,7 +291,6 @@
  "Час": "Hour",
  "Возврат": "Refunded",
  "Активаций не было.": "No redemptions.",
-
  "озвучка выключена": "TTS is off",
  "бан": "ban",
  "уровень доступа": "access level",
@@ -322,7 +299,6 @@
  "нет голосов": "no voices",
  "ошибка синтеза": "synthesis error",
  "остались после перезапуска": "left over after restart",
-
  "интерфейс": "interface",
  "{who}: сообщение чата не озвучено ({reason})": "{who}: chat message not read ({reason})",
  "{who}: возврат ({reason})": "{who}: refunded ({reason})",
@@ -337,7 +313,6 @@
  "{who}: ошибка синтеза, возврат ({error})": "{who}: synthesis error, refunded ({error})",
  "пустой звук": "empty audio",
  "возвращены баллы за {n} активаций, оставшихся с прошлого запуска": "refunded {n} redemptions left over from the previous run",
-
  "Баллы канала есть только у компаньонов и партнёров Twitch.": "Channel points are only available to Twitch affiliates and partners.",
  "Награда с таким названием уже есть на канале.": "A reward with this title already exists on the channel.",
  "Вставьте Client ID": "Paste the Client ID",
@@ -352,7 +327,6 @@
  "нет входа в Twitch": "not logged in to Twitch",
  "вход истёк": "login expired",
  "Подписка {kind}: {e}": "Subscription {kind}: {e}",
-
  "нужен пароль": "password required",
  "чужой Origin": "foreign Origin",
  "нужен application/json": "application/json required",
@@ -367,8 +341,6 @@
  "архив больше 512 МБ": "the archive is larger than 512 MB",
  "неверный JSON": "invalid JSON",
  "неверный запрос: {e}": "invalid request: {e}",
-
- "cosyvoice-server запускается": "cosyvoice-server is starting",
  "неверный COSYVOICE_API_KEY": "wrong COSYVOICE_API_KEY",
  "модель не загружена": "model not loaded",
  "модель не найдена: {model}": "model not found: {model}",
@@ -378,10 +350,8 @@
  "нет {path}": "{path} is missing",
  "сервер остановлен: меняются голоса": "server stopped: voices are being changed",
  "{server} завершился (код {code})": "{server} exited (code {code})",
-
  "проверка уже идёт": "a test is already running",
  "идёт озвучка: проверьте, когда очередь пуста": "TTS is busy: test when the queue is empty",
- "устройство задано переменной COSYVOICE_BACKEND": "the device is set by the COSYVOICE_BACKEND variable",
  "проверка скорости": "speed test",
  "{dev}: перезапуск сервера": "{dev}: restarting the server",
  "возврат прежнего устройства": "restoring the previous device",
@@ -389,7 +359,6 @@
  "{dev}: разогрев": "{dev}: warm-up",
  "{dev}: фраза целиком": "{dev}: whole phrase",
  "{dev}: стриминг": "{dev}: streaming",
-
  "неизвестный квант {quant}": "unknown quant {quant}",
  "загрузка уже идёт": "a download is already running",
  "{file}: проверка": "{file}: verifying",
@@ -407,7 +376,6 @@
  "manifest.json: ожидался объект {голос: {...}}": "manifest.json: expected an object {voice: {...}}",
  "{voice} (уже есть: {where})": "{voice} (already in {where})",
  "все голоса набора уже установлены в других наборах: {voices}": "all voices of the pack are already installed in other packs: {voices}",
-
  "Игры": "Games",
  "Стримеры": "Streamers",
  "Другие": "Other",
@@ -422,7 +390,6 @@
  "Голосов: %COUNT%. Выбрать голос — написать в чат команду, например <code>!ttssf dota2-pudge</code> (регистр не важен). Пример звучания каждого: «%PHRASE%»": "Voices: %COUNT%. To pick a voice, type a command in chat, e.g. <code>!ttssf dota2-pudge</code> (case doesn't matter). Each sample says: “%PHRASE%”",
  "Поиск по имени": "Search by name",
  "Ничего не найдено.": "Nothing found.",
-
  "StreamTTS уже запущен: {url}": "StreamTTS is already running: {url}",
  "StreamTTS: админка {url}, оверлей для OBS {url}overlay": "StreamTTS: admin {url}, OBS overlay {url}overlay",
  "Данные: {dir}": "Data: {dir}",
@@ -430,14 +397,12 @@
  "Нажмите Enter, чтобы закрыть окно…": "Press Enter to close the window…",
  "не удалось запустить: {e}": "failed to start: {e}",
  "порт {port} занят другой программой? Его можно сменить в {file} (STREAM_TTS_PORT)": "is port {port} used by another program? It can be changed in {file} (STREAM_TTS_PORT)",
-
  "Более лёгкие варианты могут давать немного больше артефактов.": "Lighter variants may produce slightly more artifacts.",
  "Поле обязательное, но для входа по коду не используется. Twitch может написать, что адрес должен быть HTTPS: к localhost это не относится, http://localhost он принимает.": "The field is required but isn't used for code login. Twitch may say the URL must use HTTPS: that doesn't apply to localhost, http://localhost is accepted.",
  "×4 — синтез в 4 раза быстрее звучания фразы, ×0,5 — вдвое медленнее. Для стрима нужно больше ×1, лучше ×2 и выше (зелёный).": "×4 means synthesis is 4 times faster than the audio, ×0.5 means twice as slow. Streaming needs more than ×1, preferably ×2 or higher (green).",
  "Скорость синтеза сейчас {speed}: стриминг будет заикаться, лучше его выключить.": "Synthesis speed is now {speed}: streaming will stutter, better turn it off.",
  "последние фразы, во сколько раз быстрее звучания": "recent messages, times faster than the audio",
  "Вставьте Client ID в шаге 4 и нажмите «Проверить и войти».": "Paste the Client ID in step 4 and press “Check and log in”.",
-
  "Как зрители заказывают озвучку": "How viewers request TTS",
  "Способы работают одновременно. Бан, фильтры и лимит очереди действуют везде. Стример, модеры и ники из списка «Всегда доступно» проходят мимо уровня доступа и кулдаунов. Статус зрителя сервис узнаёт по значкам в чате: кто ещё не писал в чат, пока сервис работает, считается обычным зрителем.": "The methods work at the same time. Bans, filters and the queue limit apply everywhere. The streamer, moderators and names on the “Always allowed” list skip the access level and cooldowns. The service learns a viewer's status from their chat badges: someone who hasn't written in chat while the service is running counts as a regular viewer.",
  "Награду создаёт сервис: только у награды, созданной своим Client ID, можно отмечать активации сыгранными и возвращать баллы. Текст от зрителя обязателен. Если озвучить не вышло, баллы возвращаются. Выключенный способ ставит награду на паузу.": "The service creates the reward itself: only a reward created with your own Client ID can have redemptions marked as played and points refunded. The viewer must enter text. If the message couldn't be read aloud, the points are refunded. Turning this method off pauses the reward.",
@@ -479,7 +444,6 @@
  "озвучка снова будет доступна через {n} с": "TTS will be available again in {n} s",
  "очередь озвучки заполнена, попробуйте позже": "the TTS queue is full, try again later",
  "после фильтров озвучивать нечего": "nothing left to read after filtering",
-
  "+ Вариант из выделения": "+ Variant from selection",
  "ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса). Нужен, чтобы сделать голос из записи; для озвучки не нужен.": "CosyVoice3 ONNX frontend: speech tokenizer and CAM++ (voice fingerprint). Needed to make a voice from a recording; not needed for TTS.",
  "{file}: взяты первые 15 минут": "{file}: only the first 15 minutes were taken",
@@ -654,7 +618,6 @@
  "Замеры идут, только пока открыта админка.": "Measured only while the admin page is open.",
  "Модели в памяти": "Models in memory",
  "Фронтенд и очистка от музыки загружаются сами, когда создаётся голос, и выгружаются после простоя. Модель синтеза нужна для озвучки: без неё награды возвращаются.": "The frontend and music removal load by themselves when a voice is being created and unload after idling. The speech model is needed for text-to-speech: without it redemptions are refunded.",
-
  "Подключение к Twitch": "Twitch connection",
  "Через приложение Twitch": "Through a Twitch application",
  "TTS доступен через награды за баллы, команды или озвучку всех сообщений": "TTS via channel point rewards, a command or reading every message",
@@ -674,5 +637,41 @@
  "неизвестный режим": "unknown mode",
  "чат очищен модером: убрано фраз — {n}": "chat cleared by a moderator: {n} phrases removed",
  "{who}: сообщение удалено модером, убрано фраз — {n}": "{who}: message deleted by a moderator, {n} phrases removed",
- "удалено модером": "deleted by a moderator"
+ "удалено модером": "deleted by a moderator",
+ ", {n} шагов": ", {n} steps",
+ "{date}, фраза {audio} с, шагов {steps}": "{date}, phrase {audio} s, {steps} steps",
+ "{engine} недоступен": "{engine} unavailable",
+ "{engine} недоступен ({url}): {error}": "{engine} unavailable ({url}): {error}",
+ "{engine}: синтез": "{engine}: synthesizing",
+ "{server} запускается": "{server} is starting",
+ "{v} (по умолчанию)": "{v} (default)",
+ "Модель прочитает:": "The model will read:",
+ "После нормализации: {text}": "After normalization: {text}",
+ "Смена модели синтеза: сервер перезапускается, озвучка ждёт в очереди.": "Switching the synthesis model: the server is restarting, speech waits in the queue.",
+ "Смена модели: {engine}…": "Switching model: {engine}…",
+ "Сменить": "Switch",
+ "Сменить модель синтеза на {engine}? Сервер синтеза перезапустится, озвучка подождёт в очереди.": "Switch the synthesis model to {engine}? The synthesis server will restart, speech will wait in the queue.",
+ "Устройство задано переменной {var}.": "The device is set by the {var} variable.",
+ "устройство задано переменной {var}": "the device is set by the {var} variable",
+ "идёт проверка скорости": "a speed test is running",
+ "модель {engine} не показывает ударения": "the {engine} model does not show stress marks",
+ "модель {engine} недоступна": "the {engine} model is unavailable",
+ "не задан в TTS_SERVERS": "not set in TTS_SERVERS",
+ "недопустимое значение {key}: {value}": "invalid value {key}: {value}",
+ "нет {name}": "no {name}",
+ "нет модели ESpeech: соберите папку {dir} (tools/espeech/prepare.py)": "no ESpeech model: build the folder {dir} (tools/espeech/prepare.py)",
+ "нечего озвучивать: после фильтров текста не осталось": "nothing to speak: no text left after the filters",
+ "ожидалось {values}": "expected {values}",
+ "рядом с {path} нет пакета espeech": "no espeech package next to {path}",
+ "сервер синтеза недоступен": "the synthesis server is unavailable",
+ "смена модели": "switching model",
+ "Модель синтеза": "Synthesis model",
+ "Работает одна модель: при смене сервер синтеза перезапускается, озвучка ждёт в очереди. Голос звучит той моделью, для которой у него есть файл (CosyVoice — .gguf, ESpeech — .espeech); голоса без файла для выбранной модели зрителям не выдаются, их выбор сохраняется.": "One model works at a time: switching restarts the synthesis server, speech waits in the queue. A voice is spoken by the model it has a file for (CosyVoice — .gguf, ESpeech — .espeech); voices without a file for the selected model are not given to viewers, their choice is kept.",
+ "Модель ESpeech": "ESpeech model",
+ "Папка модели:": "Model folder:",
+ "Её собирает <code>tools/espeech/prepare.py</code> из файлов Hugging Face; загрузка из программы — позже.": "It is built by <code>tools/espeech/prepare.py</code> from the Hugging Face files; downloading from the program comes later.",
+ "Как прочитает": "How it reads",
+ "Текст после фильтров, как его прочитает модель: числа и латиница словами, ударения знаком «+»": "The text after the filters as the model will read it: numbers and Latin as words, stress marked with “+”",
+ "Шагов синтеза": "Synthesis steps",
+ "16 — быстро и почти как 32; 32 — максимальное качество, вдвое медленнее; 12 — быстрее, звучание заметно другое": "16 — fast and almost like 32; 32 — best quality, twice as slow; 12 — faster, sounds noticeably different"
 }

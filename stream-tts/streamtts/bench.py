@@ -1,12 +1,13 @@
 """Проверка скорости синтеза на этом компьютере (вкладка «Сервер», режим managed).
 
 Текущее устройство — одна фраза целиком (скорость относительно реального времени) и она же стримингом (через
-сколько секунд первый звук, с текущим chunk_tokens). «Все устройства» — то же по очереди на CUDA, Vulkan и CPU:
+сколько секунд первый звук) с текущими настройками модели (bench_info клиента: у CosyVoice — chunk_tokens, у ESpeech —
+число шагов). «Все устройства» — то же по очереди на CUDA, Vulkan и CPU:
 встроенный сервер перезапускается на каждом, в конце возвращается выбранное устройство. Перед замером короткая
 фраза-разогрев: на Vulkan первая фраза после запуска готовит шейдеры до минуты.
 
 Пока идёт проверка, доступ к cosyvoice занят (Lane, приоритет PREVIEW): озвучка ждёт в очереди, а не теряется.
-Результаты — settings["bench"], последний замер на пару устройство + модель."""
+Результаты — settings["bench"], последний замер на устройство + модель + её настройки."""
 import asyncio, contextlib, logging, os, time
 
 from .config import SR
@@ -40,9 +41,9 @@ class Bench:
         if self.engine.busy():
             raise ValueError(tr("идёт озвучка: проверьте, когда очередь пуста"))
         if not self.tts.ok:
-            raise ValueError(tr("cosyvoice недоступен"))
+            raise ValueError(tr("сервер синтеза недоступен"))
         if every and self.runtime.public()["locked"]["backend"]:
-            raise ValueError(tr("устройство задано переменной COSYVOICE_BACKEND"))
+            raise ValueError(tr("устройство задано переменной {var}", var=self.runtime.launcher.DEVICE_ENV))
         if not self._voice():
             raise ValueError(tr("нет голосов"))
         self.task = asyncio.create_task(self._run(self.devices() if every else [None]))
@@ -112,9 +113,9 @@ class Bench:
                 await self.tts.stop()
                 break
         row = dict(backend=name, model=os.path.basename(self.runtime.launcher.model), rtf=round(whole / audio, 3),
-                   first=round(first, 2) if first is not None else None, chunk=int(self.s["chunk_tokens"]),
-                   audio=round(audio, 1),
-                   ts=time.time())
+                   first=round(first, 2) if first is not None else None, audio=round(audio, 1), ts=time.time(),
+                   **self.tts.bench_info())
         log.info("скорость %s: %.2f× реального времени, первый звук %s с", name, row["rtf"], row["first"])
-        results = [r for r in self.s.get("bench", []) if (r["backend"], r["model"]) != (row["backend"], row["model"])]
+        same = lambda r: (r["backend"], r["model"], r.get("steps")) == (row["backend"], row["model"], row.get("steps"))
+        results = [r for r in self.s.get("bench", []) if not same(r)]
         self.s.update(bench=results + [row])

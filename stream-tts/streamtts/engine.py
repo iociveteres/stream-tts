@@ -194,6 +194,10 @@ class Engine:
         enabled = set(self.voices.enabled())
         if u and u["voice"] in enabled:
             return u["voice"]
+        if u and u["voice"] and u["voice"] not in self.voices.names():
+            # голоса нет у текущей модели (нет файла .gguf/.espeech или удалён с сервера): выбор зрителя сохраняется
+            # — вернётся вместе с моделью
+            return self.voices.by_hash(login)
         v = self.voices.by_hash(login)   # голос не выбран или его выключили
         if v:
             self.db.set_voice(user_id, login, v)
@@ -449,7 +453,7 @@ class Engine:
         parts = item.speak.split(filters.BEEP)
         beep = audio.beep()
         if self.s["streaming"] and not post and self.tts.streams(item.speak):
-            gain = audio.db(cfg.get("calib_db", 0.0) + cfg["gain_db"])
+            gain = audio.db((self.voices.calib(item.voice) or 0.0) + cfg["gain_db"])
             for k, part in enumerate(parts):
                 if k and await self._push_limited(item, beep, limit_n):
                     return

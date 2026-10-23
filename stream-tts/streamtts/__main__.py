@@ -3,10 +3,9 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import bench, config, editor, filters, i18n, install, paths, runtime, stats, store, updates, web as webapp
+from . import bench, config, editor, engines, filters, i18n, install, paths, stats, store, updates, web as webapp
 from .i18n import tr
 from .engine import Engine
-from .engines import cosyvoice
 from .twitch import Twitch
 from .voices import Voices
 
@@ -24,14 +23,15 @@ class Ctx:
 
 async def tts_monitor(ctx):
     """Доступность сервера синтеза и список голосов."""
-    last_list, last_start = 0, 0
+    last_list, last_start = 0, None
     while True:
         was = ctx.tts.ok
         await ctx.tts.status()
         if not ctx.tts.ok and ctx.runtime and ctx.runtime.state != "running":
-            ctx.tts.error = ctx.runtime.error or tr("cosyvoice-server запускается")
-        # встроенный сервер перезапущен с новыми голосами (между проверками он мог не успеть пропасть)
-        started = ctx.runtime.starts if ctx.runtime else 0
+            ctx.tts.error = ctx.runtime.error or tr("{server} запускается", server=ctx.runtime.launcher.NAME)
+        # встроенный сервер перезапущен с новыми голосами (между проверками он мог не успеть пропасть) или сменилась
+        # модель: у неё свои голоса
+        started = (ctx.runtime.starts if ctx.runtime else 0, ctx.tts.switches)
         stale = asyncio.get_running_loop().time() - last_list > VOICES_CHECK
         if ctx.tts.ok and (not was or started != last_start or stale):
             last_start = started
@@ -42,7 +42,7 @@ async def tts_monitor(ctx):
             except Exception as e:
                 log.warning("список голосов: %s", e)
         if was is not ctx.tts.ok:
-            log.info("cosyvoice %s", "доступен" if ctx.tts.ok else f"недоступен: {ctx.tts.error}")
+            log.info("%s %s", ctx.tts.id, "доступен" if ctx.tts.ok else f"недоступен: {ctx.tts.error}")
             ctx.engine.dirty.set()
         await asyncio.sleep(COSY_CHECK)
 
@@ -101,16 +101,20 @@ def main():
     i18n.init(ctx.settings)
     ctx.db = store.DB(os.path.join(config.DATA, "stream-tts.sqlite"))
     ctx.profanity = filters.Profanity(prof)
-    # Режим: external (COSYVOICE_URL задан или встроенного сервера нет) или managed (runtime.py)
-    url, ctx.runtime = config.COSYVOICE_URL, None
-    if not url:
-        server = cosyvoice.find_server()
-        if server:
-            ctx.runtime = runtime.Managed(cosyvoice.Launcher(server, ctx.settings))
-            url = ctx.runtime.url
+    # Режим: external (TTS_SERVERS или COSYVOICE_URL заданы или встроенного сервера нет) или managed (runtime.py):
+    # серверы движков, которые нашлись (engines/<id>/launch.py), запускается сервер выбранной модели
+    servers, launchers = {}, {}
+    for k, url in config.TTS_SERVERS.items():
+        if k in engines.ENGINES:
+            servers[k] = url
         else:
-            url = "http://cosyvoice:8080"
-    ctx.tts = cosyvoice.Client(url, ctx.settings, config.COSYVOICE_API_KEY)
+            log.warning("TTS_SERVERS: неизвестная модель %s (есть: %s)", k, ", ".join(engines.ENGINES))
+    if not servers:
+        launchers = {k: E.Launcher(p, ctx.settings) for k, E in engines.ENGINES.items() if (p := E.find_server())}
+        if not launchers:
+            servers = {"cosyvoice": "http://cosyvoice:8080"}
+    ctx.tts = engines.Tts(ctx.settings, servers, launchers, config.COSYVOICE_API_KEY)
+    ctx.runtime = ctx.tts.runtime
     ctx.voices = Voices(ctx.settings, ctx.tts)
     ctx.engine = Engine(ctx.settings, ctx.db, ctx.tts, ctx.voices, ctx.profanity)
     ctx.voices.engine = ctx.engine
@@ -118,7 +122,8 @@ def main():
     ctx.engine.twitch = ctx.twitch
     ctx.load = stats.Load()
     # Первый запуск через админку (модель, устройство, наборы голосов) — только для встроенного сервера
-    ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set) if ctx.runtime else None
+    ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set,
+                                    launchers.get("cosyvoice")) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.tts, ctx.voices, ctx.runtime)
     ctx.bench = bench.Bench(ctx.settings, ctx.tts, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
     ctx.updates = updates.Updates(ctx.settings, ctx.engine.dirty.set)
@@ -126,8 +131,8 @@ def main():
     app = webapp.make_app(ctx)
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
-    log.info("интерфейс: http://%s:%d  оверлей: /overlay  cosyvoice: %s%s",
-             config.BIND if config.BIND != "0.0.0.0" else "<адрес>", config.PORT, url,
+    log.info("интерфейс: http://%s:%d  оверлей: /overlay  синтез: %s %s%s",
+             config.BIND if config.BIND != "0.0.0.0" else "<адрес>", config.PORT, ctx.tts.title, ctx.tts.url,
              f" (встроенный: {ctx.runtime.server})" if ctx.runtime else "")
     web.run_app(app, host=config.LISTEN_HOST, port=config.LISTEN_PORT, print=None, shutdown_timeout=5)
 

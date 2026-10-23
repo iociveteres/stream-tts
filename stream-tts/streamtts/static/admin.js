@@ -119,24 +119,28 @@ function renderHeader() {
     logged_out: [T("Twitch: нет входа"), "bad"], no_client: [T("Twitch: нет Client ID"), "bad"] }[t.state] || [t.state, ""];
   const pills = [pill(...tw, chat ? t.chat.error : t.error)];
   if (t.state === "ok") pills.push(pill("EventSub", t.ws === "connected" ? "good" : "warn", t.ws));
-  pills.push(pill(c.ok ? (c.busy ? T("cosyvoice: синтез") : "cosyvoice") : T("cosyvoice недоступен"),
-    c.ok ? "good" : "bad", c.ok ? c.url + runtimeInfo(c.runtime) : c.error));
+  pills.push(pill(c.ok ? (c.busy ? T("{engine}: синтез", { engine: c.title }) : c.title)
+    : T("{engine} недоступен", { engine: c.title }), c.ok ? "good" : "bad", c.ok ? c.url + runtimeInfo(c.runtime) : c.error));
   pills.push(pill(!ov.active ? T("оверлей не подключён") : ov.ready ? T("оверлей") : T("оверлей ждёт клика"),
     !ov.active ? "bad" : ov.ready ? "good" : "warn"));
   if (!wsOnline) pills.push(pill(T("нет связи с сервисом"), "bad"));
   $("#pills").replaceChildren(...pills);
   $("#enabled").checked = S.engine.enabled;
+  $("#test-accent").hidden = !c.capabilities.accent;      // «Как прочитает» — у моделей с POST /accent (ESpeech)
+  $("#ed-open").hidden = c.engine !== "cosyvoice";        // голос из записи пока только для CosyVoice
 
   const banner = [];
   if (t.state === "expired") banner.push(T("Вход в Twitch истёк: войдите заново на вкладке Twitch. Пока входа нет, " +
     "активации не обрабатываются, баллы за них вернутся после входа."));
-  if (c.ok === false && S.setup && !S.setup.models.length)
+  if (c.switching) banner.push(T("Смена модели синтеза: сервер перезапускается, озвучка ждёт в очереди."));
+  else if (c.ok === false && S.setup && c.engine === "cosyvoice" && !S.setup.models.length)
     banner.push(h("span", {}, T("Модель синтеза не установлена: скачайте её на вкладке "),
       h("a", { href: "#server" }, T("«Сервер»")), "."));
   else if (c.ok === false && c.runtime && c.runtime.unloaded)
     banner.push(h("span", {}, T("Модель синтеза выгружена, озвучка не работает. Загрузить — на вкладке "),
       h("a", { href: "#stats" }, T("«Статистика»")), "."));
-  else if (c.ok === false) banner.push(T("cosyvoice недоступен ({url}): {error}", { url: c.url, error: c.error }));
+  else if (c.ok === false) banner.push(T("{engine} недоступен ({url}): {error}", { engine: c.title, url: c.url,
+    error: c.error }));
   $("#banner").hidden = !banner.length;
   $("#banner").replaceChildren(...banner.map(b => h("div", {}, b)));
 }
@@ -186,6 +190,13 @@ function renderTestVoices() {
     ...S.voices.filter(v => v.enabled).map(v => h("option", { value: v.name }, v.name)));
   sel.value = cur;
 }
+$("#test-accent").onclick = async () => {
+  const out = $("#accent-out"), text = $("#test").text.value;
+  const r = await api("/api/accent", { text });
+  out.hidden = !r.ok;
+  if (r.ok) out.replaceChildren(h("div", {}, h("span", { class: "muted" }, T("Модель прочитает: ")), r.accented),
+    r.normalized !== r.text ? h("div", { class: "muted" }, T("После нормализации: {text}", { text: r.normalized })) : null);
+};
 $("#test").onsubmit = async e => {
   e.preventDefault();
   const f = new FormData(e.target);
@@ -1066,9 +1077,15 @@ function renderPackages() {
 
 let backendKey = "";
 function renderServer() {
-  const st = S.setup, rt = S.cosy.runtime;
-  $('#tabs [data-tab="server"]').hidden = !st;
+  const st = S.setup, rt = S.cosy.runtime, c = S.cosy;
+  const choice = c.engines.filter(e => e.available).length > 1;
+  $('#tabs [data-tab="server"]').hidden = !st && !choice && !c.params.length;
+  renderEngine();
+  $$("#tab-server .managed").forEach(el => el.hidden = !st);
   if (!st) return;
+  $("#quants-card").hidden = c.engine !== "cosyvoice";
+  $("#espeech-card").hidden = c.engine !== "espeech";
+  if (rt.models_dir) $("#espeech-dir").textContent = rt.models_dir;
   $("#models-dir").textContent = st.models_dir;
   $("#voices-dir").textContent = st.voices_dir;
   const d = st.download, running = d.state === "running";
@@ -1111,17 +1128,18 @@ function renderServer() {
     error: T("Ошибка: {e}. «Скачать» продолжит с того же места.", { e: d.error }),
   }[d.state] || "";
   // Устройство: перерисовка только при смене вариантов, чтобы не сбивать выбор
-  const key = JSON.stringify([rt.backends, rt.prefer, rt.locked.backend]);
+  const key = JSON.stringify([rt.backends, rt.prefer, rt.locked.backend, rt.devices]);
   if (key !== backendKey) {
     backendKey = key;
     const have = k => k === "auto" || k === "cpu" || rt.backends.some(b => b.toLowerCase().startsWith(k));
-    $("#backend-form").replaceChildren(...Object.entries(BACKEND_NAMES).map(([k, name]) =>
+    const names = Object.entries(BACKEND_NAMES).filter(([k]) => rt.devices.includes(k));
+    $("#backend-form").replaceChildren(...names.map(([k, name]) =>
       h("label", { class: have(k) ? "" : "na" }, h("input", { type: "radio", name: "backend", value: k,
         checked: rt.prefer === k, disabled: rt.locked.backend || !have(k) }),
         h("span", {}, name, have(k) ? "" : h("span", { class: "muted small" }, T(" — не найдено"))))));
   }
   $("#backend-lock").hidden = !rt.locked.backend;
-  $("#backend-lock").textContent = T("Устройство задано переменной COSYVOICE_BACKEND.");
+  $("#backend-lock").textContent = T("Устройство задано переменной {var}.", { var: rt.device_env });
   renderCuda(st, d);
   // Наборы голосов
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
@@ -1144,6 +1162,38 @@ function renderServer() {
     row(T("Программа"), rt.server)));
 }
 $("#model-cancel").onclick = () => api("/api/model/cancel");
+
+// Модель синтеза (engines/): выбор и её настройки по схеме params из /status сервера
+let engineKey = "";
+function renderEngine() {
+  const c = S.cosy, key = JSON.stringify([c.engines, c.engine, c.switching, c.params]);
+  if (key === engineKey) return;
+  engineKey = key;
+  $("#engine-form").replaceChildren(...c.engines.map(e => h("label", { class: e.available ? "" : "na" },
+    h("input", { type: "radio", name: "engine", value: e.id, checked: e.id === c.engine,
+      disabled: !e.available || !!c.switching }),
+    h("span", {}, e.title, e.available ? "" : h("span", { class: "muted small" }, " — " + e.why)))));
+  $("#model-params").replaceChildren(...c.params.map(p => h("label", { class: "mt", title: p.help },
+    p.title + " ", p.type === "choice"
+      ? h("select", { name: p.key, onchange: e => saveParam(p, e.target.value) },
+          ...p.choices.map(v => h("option", { value: v, selected: v === p.value },
+            v === p.default ? T("{v} (по умолчанию)", { v }) : String(v))))
+      : h("input", { name: p.key, value: p.value, onchange: e => saveParam(p, e.target.value) }))),
+    ...c.params.filter(p => p.help).map(p => h("p", { class: "muted small" }, p.help)));
+  $("#engine-state").className = "small muted";
+  $("#engine-state").textContent = c.switching ? T("Смена модели: {engine}…",
+    { engine: (c.engines.find(e => e.id === c.switching) || {}).title || c.switching }) : "";
+}
+async function saveParam(p, v) {
+  if ((await api("/api/settings", { [p.key]: p.type === "choice" && typeof p.choices[0] === "number" ? +v : v })).ok)
+    toast(T("Сохранено"));
+}
+$("#engine-form").onchange = async e => {
+  const engine = (S.cosy.engines.find(x => x.id === e.target.value) || {}).title;
+  if (await ask(T("Сменить модель синтеза на {engine}? Сервер синтеза перезапустится, озвучка подождёт в очереди.",
+    { engine }), T("Сменить"))) api("/api/engine", { engine: e.target.value });
+  else { engineKey = ""; renderEngine(); }
+};
 
 // CUDA (install.py, cuda_state): есть драйвер NVIDIA, а ggml-cuda.dll рядом с сервером нет — предложить скачать
 let cudaKey = "";
@@ -1178,6 +1228,7 @@ function renderBench(rt) {
   const b = S.bench, running = b.state === "running";
   const rows = [...b.results].sort((x, y) => x.rtf - y.rtf);
   const quant = m => (m.match(/_(Q\w+|F16|BF16)\.gguf$/i) || [, m])[1];
+  const steps = S.cosy.params.find(p => p.param === "nfe_steps");   // у ESpeech замер зависит от числа шагов
   $("#bench-table").replaceChildren(rows.length ? h("div", { class: "table-wrap" }, h("table", { class: "bench" },
     h("thead", {}, h("tr", {}, h("th", {}, T("Устройство")), h("th", {}, T("Модель")),
       h("th", { class: "num", title: T("Во сколько раз синтез быстрее звучания фразы") }, T("Скорость")),
@@ -1185,10 +1236,12 @@ function renderBench(rt) {
         T("Первый звук")))),
     h("tbody", {}, ...rows.map(r => {
       const [verdict, cls] = benchVerdict(r.rtf);
-      return h("tr", { class: r.backend === rt.backend && r.model === rt.model ? "on" : "",
-        title: T("{date}, фраза {audio} с, кусок {chunk} токенов", { date: new Date(r.ts * 1000).toLocaleString(LOCALE),
-          audio: fmtNum(r.audio), chunk: r.chunk }) },
-        h("td", {}, r.backend), h("td", {}, quant(r.model)),
+      const date = new Date(r.ts * 1000).toLocaleString(LOCALE);
+      const on = r.backend === rt.backend && r.model === rt.model && (r.steps == null || steps && r.steps === steps.value);
+      return h("tr", { class: on ? "on" : "",
+        title: r.steps != null ? T("{date}, фраза {audio} с, шагов {steps}", { date, audio: fmtNum(r.audio), steps: r.steps })
+          : T("{date}, фраза {audio} с, кусок {chunk} токенов", { date, audio: fmtNum(r.audio), chunk: r.chunk }) },
+        h("td", {}, r.backend), h("td", {}, quant(r.model) + (r.steps != null ? T(", {n} шагов", { n: r.steps }) : "")),
         h("td", { class: "num " + cls, title: verdict }, fmtSpeed(r.rtf)),
         h("td", { class: "num" }, r.first == null ? "—" : T("{n} с", { n: fmtNum(r.first) })));
     }))))
@@ -1245,10 +1298,11 @@ function renderSettings() {
   }
   const c = S.config;
   $("#server-info").replaceChildren(
-    h("div", {}, "cosyvoice: ", h("code", {}, S.cosy.url), runtimeInfo(S.cosy.runtime)),
+    h("div", {}, S.cosy.title + ": ", h("code", {}, S.cosy.url), runtimeInfo(S.cosy.runtime)),
     h("div", {}, T(c.password ? "Интерфейс: {addr}, пароль задан" : "Интерфейс: {addr}, пароль не задан (доступ только с этого ПК)",
       { addr: `${c.bind}:${c.port}` })));
   $("#logout-link").hidden = !c.password;
+  $("#cosy-settings").hidden = S.cosy.engine !== "cosyvoice";   // chunk_tokens и max_token_text_ratio — CosyVoice
 }
 $("#settings").onchange = async e => {
   const el = e.target;
@@ -1542,5 +1596,5 @@ $("#prof-sample").placeholder = T("проверить фразу");   // у по
 
 // --- старт ---
 // Первый запуск: без модели — сразу на вкладку «Сервер»
-const firstTab = () => S.setup && !S.setup.models.length ? "server" : (S.twitch.mode === "chat" ? S.twitch.chat.state : S.twitch.state) === "ok" ? "queue" : "twitch";
+const firstTab = () => S.setup && S.cosy.engine === "cosyvoice" && !S.setup.models.length ? "server" : (S.twitch.mode === "chat" ? S.twitch.chat.state : S.twitch.state) === "ok" ? "queue" : "twitch";
 reload().then(() => { showTab(location.hash.slice(1) || firstTab()); connect(); });

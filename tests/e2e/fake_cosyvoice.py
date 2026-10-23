@@ -1,4 +1,7 @@
-"""Поддельный cosyvoice-server для e2e-тестов stream-tts: те же адреса API, вместо речи — синус.
+"""Поддельный сервер синтеза для e2e-тестов stream-tts: те же адреса API, вместо речи — синус. По умолчанию —
+cosyvoice-server; FakeCosy(engine="espeech") — espeech-server (espeech/server.py): /status с engine, capabilities и
+params (схема nfe_steps), POST /accent, поток кусками по SPEECH_PIECE с, chunk_tokens не нужен, nfe_steps
+проверяется по схеме (400, как у настоящего).
 
 У каждого голоса своя частота и громкость (voices, сначала VOICES): по частоте тест узнаёт, каким голосом прозвучала
 фраза, а разная громкость проверяет выравнивание до −16 LUFS. Длина звука — как у речи, 12 символов в секунду
@@ -65,9 +68,16 @@ def dominant_hz(x):
     return float(np.fft.rfftfreq(len(x), 1 / SR)[np.argmax(spec)])
 
 
+ESPEECH_PARAMS = {"nfe_steps": {"type": "choice", "choices": [16, 32, 12], "default": 16, "title": "Шагов синтеза",
+                                 "help": "16 — быстро и почти как 32; 32 — максимальное качество, вдвое медленнее; "
+                                         "12 — быстрее, звучание заметно другое"}}
+SPEECH_PIECE = 1.0   # с звука в куске потока espeech
+
+
 class FakeCosy:
-    def __init__(self, frontend=False):
-        self.voices = dict(VOICES)
+    def __init__(self, frontend=False, engine="cosyvoice", voices=None):
+        self.engine = engine
+        self.voices = dict(voices or VOICES)
         self.frontend = dict(FRONTEND) if frontend else None
         self.frontend_loaded = False
         self.tts = []
@@ -119,6 +129,8 @@ class FakeCosy:
         app.router.add_delete("/speaker/{name}", self.speaker_delete)
         app.router.add_post("/tts", self.synth)
         app.router.add_post("/tts/stop", self.stop)
+        if self.engine == "espeech":
+            app.router.add_post("/accent", self.accent)
         self.runner = web.AppRunner(app, access_log=None)
         await self.runner.setup()
         site = web.TCPSite(self.runner, "127.0.0.1", 0)
@@ -135,7 +147,20 @@ class FakeCosy:
     async def status(self, request):
         if self.down:
             return web.Response(status=500, text="down")
-        return web.json_response(dict(model_loaded=True, model="fake", frontend_available=self.frontend_loaded))
+        d = dict(model_loaded=True, model="fake", frontend_available=self.frontend_loaded)
+        if self.engine == "espeech":
+            d.update(engine="espeech", api_version=1, params=ESPEECH_PARAMS,
+                     capabilities=dict(stream=True, accent=True, extract=True, train=False, voice_formats=["espeech"]))
+        return web.json_response(d)
+
+    async def accent(self, request):
+        """Как у espeech-server: цифры словами (только 2 — для теста), «+» перед первой гласной каждого слова."""
+        text = str((await request.json()).get("text", ""))
+        self.calls.append(dict(call="accent", text=text, ts=time.time()))
+        norm = text.replace("2", "два")
+        acc = " ".join(next((w[:i] + "+" + w[i:] for i, ch in enumerate(w) if ch.lower() in "аеёиоуыэюя"), w)
+                       for w in norm.split())
+        return web.json_response(dict(normalized=norm, accented=acc))
 
     # --- ONNX-фронтенд и голоса из образца ---
     async def frontend_paths(self, request):
@@ -229,6 +254,9 @@ class FakeCosy:
         self.max_active = max(self.max_active, self.active)
         try:
             text, voice = body.get("text", ""), body.get("voice", "")
+            steps = ESPEECH_PARAMS["nfe_steps"]["choices"]
+            if self.engine == "espeech" and body.get("nfe_steps") not in (None, *steps):
+                return web.Response(status=400, text="nfe_steps: 16 / 32 / 12")
             if voice not in self.voices:
                 return web.Response(status=404, text=f"unknown voice {voice}")
             if self.fail and self.fail in text:
@@ -244,7 +272,7 @@ class FakeCosy:
             resp = web.StreamResponse(headers={"Content-Type": "audio/wav"})
             await resp.prepare(request)
             await resp.write(stream_header())
-            step = int(int(body.get("chunk_tokens") or 28) / TOKENS_PER_SEC * SR)
+            step = int(SPEECH_PIECE * SR) if self.engine == "espeech" else                 int(int(body.get("chunk_tokens") or 28) / TOKENS_PER_SEC * SR)
             for i in range(0, len(x), step):
                 if self._stop:
                     rec["stopped"] = True

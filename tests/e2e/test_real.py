@@ -101,12 +101,12 @@ class Real:
                     and s["demos"]["todo"] == 0 and not s["demos"]["current"])
         wait_for(done, timeout, f"простоя stream-tts\n{self.server.tail()}", step=0.5)
 
-    def speak(self, text, report, label):
+    def speak(self, text, report, label, voice="dota2-pudge"):
         """Фраза через очередь и оверлей: (звук, событие). Замеры — в отчёт."""
         ov = Overlay(self.loop, self.server.base).connect()
         try:
             t0 = time.monotonic()
-            rid = self.api.test(text, login="realtester", voice="dota2-pudge")
+            rid = self.api.test(text, login="realtester", voice=voice)
             it = ov.played(rid, timeout=300)
             e = self.server.event(rid, 30)
         finally:

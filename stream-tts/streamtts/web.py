@@ -3,8 +3,7 @@ import asyncio, contextlib, hashlib, hmac, json, logging, os, re, secrets, tempf
 
 from aiohttp import web
 
-from . import config, editor, i18n, install, separate, stats, updates
-from .engines import cosyvoice
+from . import config, editor, filters, i18n, install, separate, stats, updates
 from .engines.client import LIVE
 from .i18n import tr
 from .engine import SERVICE_COMMANDS
@@ -152,9 +151,12 @@ def state(ctx, full=True):
     out = dict(
         engine=ctx.engine.snapshot(),
         twitch=ctx.twitch.public(),
+        # сервер синтеза выбранной модели (ключ cosy — с тех пор, когда модель была одна)
         cosy=dict(ok=ctx.tts.ok, error=ctx.tts.error, url=ctx.tts.url,
                   busy=ctx.tts.lane.holder[1] if ctx.tts.lane.holder else "", waiting=ctx.tts.lane.queued(),
-                  runtime=ctx.runtime.public() if ctx.runtime else None),
+                  runtime=ctx.runtime.public() if ctx.runtime else None,
+                  engine=ctx.tts.id, title=ctx.tts.title, engines=ctx.tts.engines(), switching=ctx.tts.switching,
+                  capabilities=ctx.tts.capabilities, params=model_params(ctx)),
         load=ctx.load.public(history=full),
         models=models(ctx),
         demos=dict(ctx.voices.progress),
@@ -175,13 +177,19 @@ def state(ctx, full=True):
     return out
 
 
+def model_params(ctx):
+    """Настройки модели по схеме params из /status сервера (подписи — на языке интерфейса)."""
+    return [dict(p, title=tr(p.get("title", p["param"])), help=tr(p["help"]) if p.get("help") else "")
+            for p in ctx.tts.schema()]
+
+
 def models(ctx):
     """Модели в памяти (вкладка «Статистика»): синтез и ONNX-фронтенд — на cosyvoice-server, htdemucs — в stream-tts.
     Модель синтеза выгружается только у встроенного сервера: внешний после POST /model/unload без перезапуска
     контейнера голоса не вернёт (путь к модели и голоса знает только его entrypoint.sh)."""
     rt = ctx.runtime.public() if ctx.runtime else None
     up = ctx.tts.ok is True
-    out = [dict(id="tts", name=(rt and rt["model"]) or ctx.tts.info.get("model") or "CosyVoice3",
+    out = [dict(id="tts", name=(rt and rt["model"]) or ctx.tts.info.get("model") or ctx.tts.title,
                 what=tr("синтез речи"), where=(rt and rt["backend"]) or tr("внешний сервер"), loaded=up,
                 unload=bool(rt) and not rt["unloaded"] and rt["state"] == "running",
                 load=bool(rt and rt["unloaded"]))]
@@ -264,7 +272,14 @@ def fail(msg, status=400):
 
 async def post_settings(request, ctx, data):
     s = ctx.settings
+    params = {p["key"] for p in ctx.tts.schema()}
     for k, v in list(data.items()):
+        if k in params:   # настройка модели: значение из вариантов схемы, передаётся в каждом запросе
+            try:
+                s.data[k] = ctx.tts.check_param(k, v)
+            except (TypeError, ValueError):
+                return fail(tr("недопустимое значение {key}: {value}", key=k, value=v))
+            continue
         if k not in SETTINGS_KEYS or k in ("enabled", "sources"):
             continue
         if k in ("queue_limit", "max_chars"):
@@ -340,7 +355,7 @@ async def post_voice(request, ctx, data):
 
 
 async def post_demos_rebuild(request, ctx, data):
-    ctx.voices.index.clear()
+    ctx.voices.forget()
     ctx.voices.wake.set()
     return ok()
 
@@ -456,19 +471,60 @@ async def post_model_cancel(request, ctx, data):
 
 
 async def post_model_use(request, ctx, data):
-    _install(ctx).use_model(str(data["name"]))
-    await ctx.runtime.restart()
+    inst = _install(ctx)
+    inst.use_model(str(data["name"]))
+    if ctx.runtime.launcher is inst.cosy:   # выбрана ESpeech — квант CosyVoice пригодится при возврате к ней
+        await ctx.runtime.restart()
     return ok()
 
 
 async def post_backend(request, ctx, data):
+    """Устройство синтеза выбранной модели (у каждой своя настройка: Launcher.DEVICE_KEY)."""
     _install(ctx)
-    backend = str(data.get("backend", "auto"))
-    if backend not in cosyvoice.DEVICES:
-        return fail(tr("ожидалось auto, cuda, vulkan или cpu"))
-    ctx.settings.update(backend=backend)
+    backend, launcher = str(data.get("backend", "auto")), ctx.runtime.launcher
+    devices = launcher.public()["devices"]
+    if backend not in devices:
+        return fail(tr("ожидалось {values}", values=", ".join(devices)))
+    ctx.settings.update(**{launcher.DEVICE_KEY: backend})
     await ctx.runtime.restart()
     return ok()
+
+
+# --- модель синтеза (engines/): одна единовременно, смена — перезапуск встроенного сервера ---
+async def post_engine(request, ctx, data):
+    engine = str(data.get("engine", ""))
+    if engine not in ctx.tts.available:
+        return fail(tr("модель {engine} недоступна", engine=engine))
+    if ctx.bench and ctx.bench.task and not ctx.bench.task.done():
+        return fail(tr("идёт проверка скорости"))
+
+    async def switch():
+        try:
+            await ctx.tts.use(engine, ctx.voices.refresh)
+        except Exception as e:
+            log.warning("смена модели: %s", e)
+        ctx.voices.changed()
+        ctx.engine.dirty.set()
+    asyncio.create_task(switch())
+    return ok()
+
+
+async def post_accent(request, ctx, data):
+    """«Как прочитает»: текст после фильтров озвучки, нормализованный и с ударениями (POST /accent сервера)."""
+    if not ctx.tts.capabilities.get("accent"):
+        return fail(tr("модель {engine} не показывает ударения", engine=ctx.tts.title))
+    text = ctx.engine.clean(str(data.get("text", "")))
+    if not text:
+        return fail(tr("нечего озвучивать: после фильтров текста не осталось"))
+    # мимо очереди: espeech-server размечает текст в потоке запроса, параллельно синтезу
+    norm, acc = [], []
+    for part in text.split(filters.BEEP):
+        if filters.has_words(part):
+            r = await ctx.tts.accent(part.strip())
+            norm.append(r["normalized"])
+            acc.append(r["accented"])
+    beep = " " + tr("[писк]") + " "
+    return ok(text=text.replace(filters.BEEP, beep.strip()), normalized=beep.join(norm), accented=beep.join(acc))
 
 
 async def post_bench(request, ctx, data):
@@ -504,8 +560,7 @@ async def api_voiceset_import(request):
         return fail(str(e))
     finally:
         os.remove(tmp)
-    for v in result["added"]:  # голос мог смениться: пример пересинтезировать
-        ctx.voices.index.pop(v, None)
+    ctx.voices.forget(result["added"])  # голос мог смениться: пример пересинтезировать
     ctx.voices.wake.set()
     ctx.engine.dirty.set()
     return ok(**result)
@@ -687,6 +742,8 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/model/cancel": post_model_cancel,
     "/api/model/use": post_model_use,
     "/api/backend": post_backend,
+    "/api/engine": post_engine,
+    "/api/accent": post_accent,
     "/api/bench": post_bench,
     "/api/voicesets/delete": post_voiceset_delete,
     "/api/draft": post_draft,

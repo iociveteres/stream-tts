@@ -135,6 +135,12 @@ class Managed:
         await self._kill()
         self._wake.set()
 
+    async def use(self, launcher):
+        """Другой движок (смена модели): тот же порт, перезапуск с его аргументами."""
+        self.launcher = launcher
+        self.restarts, self.unloaded, self.error = 0, False, ""
+        await self.restart()
+
     async def unload(self):
         """Модель выгружена: сервер остановлен, пока не вызван load()."""
         self.unloaded = True

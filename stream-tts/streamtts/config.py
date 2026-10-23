@@ -8,10 +8,26 @@ LISTEN_HOST = env("STREAM_TTS_LISTEN_HOST", BIND)
 LISTEN_PORT = int(env("STREAM_TTS_LISTEN_PORT", str(PORT)))
 PASSWORD = env("STREAM_TTS_PASSWORD")
 
-# Задан COSYVOICE_URL — внешний сервер (Docker, другая машина). Нет — stream-tts сам запускает cosyvoice-server
-# из рантайма (runtime.py), а если его нет — по-старому http://cosyvoice:8080.
+# Задан COSYVOICE_URL или TTS_SERVERS — внешние серверы (Docker, другая машина). Нет — stream-tts сам запускает
+# сервер выбранной модели (runtime.py, engines/), а если ни одного нет — по-старому http://cosyvoice:8080.
 COSYVOICE_URL = env("COSYVOICE_URL").rstrip("/")
 COSYVOICE_API_KEY = env("COSYVOICE_API_KEY")
+
+
+def _servers():
+    """TTS_SERVERS=cosyvoice=http://…,espeech=http://… — внешние серверы движков (выбор модели — в админке);
+    COSYVOICE_URL — то же, что cosyvoice=… (как до второй модели)."""
+    out = {}
+    for part in env("TTS_SERVERS").split(","):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k.strip().lower()] = v.strip().rstrip("/")
+    if COSYVOICE_URL:
+        out.setdefault("cosyvoice", COSYVOICE_URL)
+    return out
+
+
+TTS_SERVERS = _servers()
 TWITCH_CLIENT_ID = env("TWITCH_CLIENT_ID")
 
 LOCAL_BINDS = {"127.0.0.1", "localhost", "::1"}
