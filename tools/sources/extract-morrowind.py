@@ -3,11 +3,15 @@
 Использование (venv проекта: numpy, scipy, onnxruntime, faster-whisper, torch, transformers):
     .venv/Scripts/python.exe tools/sources/extract-morrowind.py "<Morrowind>/Data Files" [--out voice-clips/morrowind]
         [--voices mw-dunmer-m,mw-dagoth-ur] [--max-min 10] [--min-min 6] [--max-cer 0.15] [--min-sim 0.5]
-        [--seed 1] [--root <корень с models/>]
+        [--seed 1] [--root <корень с models/>] [--lang ru|en]
 
 Откуда что. Озвучка — Sound/Vo/<раса>/<m|f>/*.mp3 (в BSA голосов нет), Дагот Ур — Sound/Vo/Misc (Dagoth Ur *,
 dagoth_*, Hit_DU*). Текст — субтитры игры: записи INFO в *.esm/*.esp (подзапись SNAM — звук, NAME — текст) и команды
 `Say "файл" "текст"` в скриптах (там путь с .wav, игра играет .mp3). Кодировка русских ESM — cp1251.
+--lang en — английская версия (GotY): ESM в cp1252, распознавание по-английски, голоса с суффиксом -en
+(mw-nord-m-en) в том же наборе, кеш <out>/asr-en.json. Текст реплик — английский как есть: tools/espeech/train.py
+прогоняет текст без «+» через нормализатор, а тот переводит латиницу в кириллицу, — такие реплики учатся отдельным
+скриптом с текстом как есть.
 
 Отбор:
 - раса — только небоевые реплики (приветствия, болтовня, услуги, вор); боевые (Atk, CrAtk, Hit, Fle) — лишь если
@@ -53,6 +57,12 @@ SPARE = 90  # с годной речи сверх --max-min: образец и �
 NAMES = ("Неревар Дагот Ур Морроувинд Вварденфелл Вивек Альмалексия Сота Сил Азура Балмора Сейда Нин Вивек Эбенгард "
          "Морнхолд Солстейм Хаджит Каджит Данмер Альтмер Босмер Норд Имперец Редгард Бретонец Аргонианин н'вах с'вит "
          "Телванни Хлаалу Редоран Акулахан Ординатор Храм Шестой Дом")
+NAMES_EN = ("Nerevar Dagoth Ur Morrowind Vvardenfell Vivec Almalexia Sotha Sil Azura Balmora Seyda Neen Ebonheart "
+            "Mournhold Solstheim Khajiit Dunmer Altmer Bosmer Nord Imperial Redguard Breton Argonian n'wah s'wit "
+            "Telvanni Hlaalu Redoran Akulakhan Ordinator Tribunal Sixth House Skaal Outlander")
+# Английская версия: ESM в cp1252, голоса — с суффиксом -en в том же наборе, свой кеш распознавания
+LANGS = {"ru": dict(enc="cp1251", names=NAMES, suffix="", title="", cache="asr.json"),
+         "en": dict(enc="cp1252", names=NAMES_EN, suffix="-en", title=" (англ.)", cache="asr-en.json")}
 
 
 def load(name, rel):
@@ -90,7 +100,7 @@ def norm_path(s):
 SAY = re.compile(r'say\s*,?\s*"([^"]+)"\s*,?\s*"([^"]*)"', re.I)
 
 
-def game_texts(data_dir):
+def game_texts(data_dir, enc="cp1251"):
     """→ {путь от Sound/Vo в нижнем регистре: [тексты]} из INFO (SNAM/NAME) и Say в скриптах всех *.esm/*.esp."""
     out = {}
     for pl in sorted(x for x in os.listdir(data_dir) if x.lower().endswith((".esm", ".esp"))):
@@ -99,15 +109,15 @@ def game_texts(data_dir):
                 snd = text = None
                 for st, sd in subs(rec):
                     if st == b"SNAM":
-                        snd = sd.split(b"\0")[0].decode("cp1251", "replace")
+                        snd = sd.split(b"\0")[0].decode(enc, "replace")
                     elif st == b"NAME":
-                        text = sd.split(b"\0")[0].decode("cp1251", "replace")
+                        text = sd.split(b"\0")[0].decode(enc, "replace")
                 if snd and text:
                     out.setdefault(norm_path(snd), []).append(text)
             if tag in (b"SCPT", b"INFO"):
                 for st, sd in subs(rec):
                     if st in (b"SCTX", b"BNAM"):
-                        for m in SAY.finditer(sd.decode("cp1251", "replace")):
+                        for m in SAY.finditer(sd.decode(enc, "replace")):
                             out.setdefault(norm_path(m.group(1)), []).append(m.group(2))
     return {k: list(dict.fromkeys(v)) for k, v in out.items()}
 
@@ -205,8 +215,8 @@ def cer(ref, hyp):
 
 
 class ASR:
-    def __init__(self, cache_path):
-        self.path = cache_path
+    def __init__(self, cache_path, lang="ru", names=NAMES):
+        self.path, self.lang, self.names = cache_path, lang, names
         self.cache = json.load(open(cache_path, encoding="utf-8")) if os.path.exists(cache_path) else {}
         self.model = None
         self.dirty = 0
@@ -227,8 +237,8 @@ class ASR:
                 self.model = WhisperModel("large-v3", device="cpu", compute_type="int8")
         # temperature 0 и предел токенов: на мычании и стонах whisper зацикливается («Хммм…» на 400 токенов) и
         # перезапускается с другой температурой — 5 с на реплику вместо 1
-        segs, _ = self.model.transcribe(x16, language="ru", beam_size=5, temperature=0.0, without_timestamps=True,
-                                        condition_on_previous_text=False, hotwords=NAMES,
+        segs, _ = self.model.transcribe(x16, language=self.lang, beam_size=5, temperature=0.0,
+                                        without_timestamps=True, condition_on_previous_text=False, hotwords=self.names,
                                         max_new_tokens=int(len(x16) / 16000 * 12) + 10)
         text = " ".join(s.text.strip() for s in segs).strip()
         self.cache[key] = text
@@ -247,19 +257,19 @@ class ASR:
 
 # ---------- голоса ----------
 
-def voices(vo):
-    """→ {имя: (название, [пути от Vo])}."""
+def voices(vo, suffix="", tail=""):
+    """→ {имя: (название, [пути от Vo])}; suffix — к имени (-en), tail — к названию."""
     out = {}
     for code, (race, title) in RACES.items():
         for sex, word in (("m", "мужчина"), ("f", "женщина")):
             d = os.path.join(vo, code, sex)
             if os.path.isdir(d):
                 files = sorted(f"{code}/{sex}/{n.lower()}" for n in os.listdir(d) if n.lower().endswith(".mp3"))
-                out[f"mw-{race}-{sex}"] = (f"{title}, {word}", files)
+                out[f"mw-{race}-{sex}{suffix}"] = (f"{title}, {word}{tail}", files)
     misc = os.path.join(vo, "misc")
     if os.path.isdir(misc):
         files = sorted(f"misc/{n.lower()}" for n in os.listdir(misc) if DAGOTH.match(f"misc/{n.lower()}"))
-        out["mw-dagoth-ur"] = ("Дагот Ур", files)
+        out["mw-dagoth-ur" + suffix] = ("Дагот Ур" + tail, files)
     return out
 
 
@@ -294,22 +304,24 @@ def main():
     ap.add_argument("--min-sim", type=float, default=0.5)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--root", default=ROOT)
+    ap.add_argument("--lang", default="ru", choices=sorted(LANGS))
     a = ap.parse_args()
+    L = LANGS[a.lang]
 
     vo = os.path.join(a.data, "sound", "vo")
     if not os.path.isdir(vo):
         vo = os.path.join(a.data, "Sound", "Vo")
     os.makedirs(a.out, exist_ok=True)
     print("тексты из ESM/ESP…")
-    texts = game_texts(a.data)
-    allv = voices(vo)
+    texts = game_texts(a.data, L["enc"])
+    allv = voices(vo, L["suffix"], L["title"])
     names = a.voices.split(",") if a.voices else list(allv)
 
     cam = load("campplus", "tools/voices/campplus.py")
     cam.ROOT = a.root  # модель CAM++ — в <root>/models/frontend-onnx
     emb = cam.Embedder(cache=None)
     emo = load("emotions", "tools/voices/emotions.py").Emotions(cache=None)
-    asr = ASR(os.path.join(a.out, "asr.json"))
+    asr = ASR(os.path.join(a.out, L["cache"]), a.lang, L["names"])
     mpath = os.path.join(a.out, "manifest.json")
     manifest = json.load(open(mpath, encoding="utf-8")) if os.path.exists(mpath) else {}
 
