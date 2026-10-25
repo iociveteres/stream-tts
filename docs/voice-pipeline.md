@@ -91,6 +91,7 @@
 |---|---|
 | `fetch-wiki-lines.py <api.php> <страница> <папка>` | реплики со страницы MediaWiki с текстом в `lines.json`. Для CDN fandom нужен Referer, скрипт его ставит. Portal Wiki быстро отвечает 429, её проще читать из браузера |
 | `extract-stalker.py <resources\|localization> <регэксп> <папка>` | распаковка `.db` ЧН/ЗП (таблица файлов LZHUF, по исходникам OpenXRay). Голоса NPC — `localization/base_sounds.db`, `characters_voice/human_0{1,2,3}/<группировка>/` |
+| `extract-morrowind.py "<Morrowind>/Data Files"` | голоса рас (`mw-<раса>-<m\|f>`) и Дагот Ура: тексты из субтитров ESM (INFO и `Say` в скриптах), сверка с faster-whisper и CAM++, до 10 мин реплик на голос — вход `tools/espeech/train.py` (`voice-clips/morrowind/<голос>/lora/`) и спокойный образец ~6 с (`ref.wav` + `.txt`) |
 | `transcribe-lines.py <аудио> --out <папка> [--demucs] [--lang ja] [--start/--end]` | нарезка длинной записи на фразы с расшифровкой; `--demucs` сначала отделяет голос от музыки |
 | `villager-ref.py <выход.wav>` | образец из нечленораздельных звуков (житель Minecraft, [voices.md](voices.md)) |
 
