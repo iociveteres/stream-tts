@@ -47,6 +47,7 @@
 ├── tools/                 # подбор образцов голосов (docs/voice-pipeline.md), запуск из корня проекта
 │   ├── voices/            # общее: страница выбора, синтез и оценки, модель эмоций и её сверка на слух, CAM++
 │   ├── wc3/               # реплики Warcraft III: нарезка кандидатов, проверка текстов (docs/voices-wc3.md)
+│   │                      # (lora-clips.py — реплики и образец 6–7 с для LoRA ESpeech)
 │   ├── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
 │   │                      # (extract-morrowind.py — реплики Morrowind с субтитрами для LoRA ESpeech)
 │   └── espeech/           # ESpeech: prepare.py (папка модели models/espeech из файлов Hugging Face),
@@ -71,7 +72,7 @@
 ├── voices/                # сохранённые голоса .gguf и .espeech (volume)
 ├── voice-refs/            # итоговые образцы голосов (.wav + .txt) по наборам: wc3, games, streamers
 ├── voice-clips/           # варианты образцов, их синтез, оценки и выбор по наборам
-│                          # (morrowind/<голос>/lora/ — реплики для обучения LoRA ESpeech)
+│                          # (morrowind/<голос>/lora/, wc3-lora/<голос>/lora/ — реплики для обучения LoRA ESpeech)
 ├── voice-origs/           # сырые звуковые паки
 ├── samples/               # тестовые аудио
 ├── runtime/               # нативный cosyvoice-server с DLL и ffmpeg для режима managed из исходников (Windows)
