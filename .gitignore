@@ -4,6 +4,8 @@
 /samples/
 /voice-origs/
 /voice-refs/
+# коллекции голосов для импорта (tools/voices/pack-sets.py)
+/voice-sets/
 /runtime/
 /packaging/windows/build/
 /packaging/windows/dist/

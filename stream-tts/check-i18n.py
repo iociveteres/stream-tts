@@ -42,7 +42,7 @@ def python_keys():
         elif name == "twitch.py":
             keys.update(re.findall(r'^\s+"[^"]+": "([^"]+)",$', src.split("HELIX_HINTS")[1].split("}")[0], re.M))
         elif name == "voices.py":
-            keys.update(re.findall(r'"\w+": "([^"]+)"', src.split("GROUPS = ")[1].split("\n")[0]))
+            keys.update(re.findall(r'"[\w-]+": "([^"]+)"', src.split("GROUPS = ")[1].split("}")[0]))
         elif name == "install.py":
             keys.update(re.findall(r'SAMPLES = \(\("[\w-]+", "([^"]+)"\),\)', src))
             for n in ast.walk(ast.parse(src)):  # названия и описания пакетов (PACKAGES), переводятся при показе

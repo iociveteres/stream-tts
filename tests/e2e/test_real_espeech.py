@@ -2,7 +2,7 @@
 
 stream-tts в режиме managed запускает espeech-server интерпретатором espeech/.venv (ESPEECH_SERVER) на свободном
 порту, со своими данными: модель — жёсткие ссылки (или копии) на models/espeech во временной папке, голос wc3-jaina
-собирает tools/espeech/make-voice.py из voice-refs/wc3/wc3-jaina.wav. Модель выбрана заранее (settings.json).
+собирает tools/espeech/make-voice.py из voice-refs/cosyvoice/wc3/wc3-jaina.wav. Модель выбрана заранее (settings.json).
 Если есть и cosyvoice-server с Q5_K_M (как в test_real.py), тот же процесс проверяет смену модели: голос dota2-pudge
 есть только у CosyVoice, wc3-jaina — только у ESpeech. Серверы на видеокарте по одному (смена — перезапуск); Docker-
 версию не трогает, при нехватке видеопамяти тесты пропускаются.
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.real
 ESPEECH_PY = os.path.join(ROOT, "espeech", ".venv", "Scripts", "python.exe") if os.name == "nt" else \
     os.path.join(ROOT, "espeech", ".venv", "bin", "python")
 ESPEECH_MODELS = os.path.join(ROOT, "models", "espeech")
-REF = os.path.join(ROOT, "voice-refs", "wc3", "wc3-jaina")
+REF = os.path.join(ROOT, "voice-refs", "cosyvoice", "wc3", "wc3-jaina")
 JAINA = "wc3-jaina"
 # Фраза для ESpeech: «синтеза речи» из SHORT голос Джайны иногда смазывает так, что faster-whisper узнаёт меньше 60 %
 # слов (57 % в одном прогоне из пяти)
@@ -45,7 +45,7 @@ def state(real):
 @pytest.fixture(scope="module")
 def esp(loop, tmp_path_factory):
     for path, what in ((ESPEECH_PY, "espeech/.venv"), (os.path.join(ESPEECH_MODELS, "espeech_fp16.safetensors"),
-                       "models/espeech (tools/espeech/prepare.py)"), (REF + ".wav", "образца voice-refs/wc3/wc3-jaina"),
+                       "models/espeech (tools/espeech/prepare.py)"), (REF + ".wav", "образца voice-refs/cosyvoice/wc3/wc3-jaina"),
                        (ASR_PY, "корневого .venv с faster-whisper")):
         if not os.path.exists(path):
             pytest.skip(f"нет {what}: {path}")

@@ -18,6 +18,7 @@ REVALIDATE = ("/static/", "/voices/demos/")
 UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream"),
            "/api/draft/upload": ("application/octet-stream",)}
 MAX_UPLOAD = 512 << 20
+MAX_SET_UPLOAD = 2 << 30   # коллекция ESpeech: ~10 МБ на голос (адаптер LoRA), WC3 — ~680 МБ
 
 
 def _secret():
@@ -585,7 +586,7 @@ async def post_bench(request, ctx, data):
 
 
 async def post_voiceset_delete(request, ctx, data):
-    await _install(ctx).delete_set(str(data["name"]))
+    await _install(ctx).delete_set(str(data["name"]), data.get("model") or None)
     return ok()
 
 
@@ -603,8 +604,8 @@ async def api_voiceset_import(request):
         with os.fdopen(fd, "wb") as f:
             async for chunk in request.content.iter_chunked(1 << 20):
                 size += len(chunk)
-                if size > MAX_UPLOAD:
-                    return fail(tr("архив больше 512 МБ"))
+                if size > MAX_SET_UPLOAD:
+                    return fail(tr("архив больше 2 ГБ"))
                 f.write(chunk)
         result = await inst.import_set(tmp, filename)
     except ValueError as e:

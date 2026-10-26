@@ -1,7 +1,7 @@
 """Реплики голосов Morrowind (рас и Дагот Ура) с текстом из ESM: данные для LoRA ESpeech и образец ~6 с.
 
 Использование (venv проекта: numpy, scipy, onnxruntime, faster-whisper, torch, transformers):
-    .venv/Scripts/python.exe tools/sources/extract-morrowind.py "<Morrowind>/Data Files" [--out voice-clips/morrowind]
+    .venv/Scripts/python.exe tools/sources/extract-morrowind.py "<Morrowind>/Data Files" [--out voice-clips/espeech/morrowind]
         [--voices mw-dunmer-m,mw-dagoth-ur] [--max-min 10] [--min-min 6] [--max-cer 0.15] [--min-sim 0.5]
         [--seed 1] [--root <корень с models/>] [--lang ru|en]
 
@@ -296,7 +296,7 @@ def pieces(rel, x, game):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("data")
-    ap.add_argument("--out", default=os.path.join(ROOT, "voice-clips", "morrowind"))
+    ap.add_argument("--out", default=os.path.join(ROOT, "voice-clips", "espeech", "morrowind"))
     ap.add_argument("--voices")
     ap.add_argument("--max-min", type=float, default=10.0)
     ap.add_argument("--min-min", type=float, default=6.0)

@@ -1,8 +1,19 @@
 # Готовые голоса
 
-Голоса лежат в `voices/*.gguf` и подключаются при старте cosyvoice-server. Их образцы — в `voice-refs/<набор>/`
-(`manifest.json` хранит исходные файлы, текст и выбранный вариант). Как голоса подбираются и как добавить новый —
-[voice-pipeline.md](voice-pipeline.md).
+Голоса CosyVoice лежат в `voices/*.gguf` и подключаются при старте cosyvoice-server, их образцы — в
+`voice-refs/cosyvoice/<набор>/` (`manifest.json` хранит исходные файлы, текст и выбранный вариант). Голоса ESpeech
+(`.espeech`: образец и адаптер LoRA) собираются в `voice-clips/espeech/<набор>/<голос>/`. Как голоса подбираются и
+как добавить новый — [voice-pipeline.md](voice-pipeline.md).
+
+Набор — источник голосов (игра или группа). Для импорта в stream-tts каждый набор собран отдельно для каждой модели:
+`voice-sets/<модель>/<набор>.zip` (`tools/voices/pack-sets.py`, [voice-pipeline.md](voice-pipeline.md), «Шаг 7»).
+
+| Набор | Раздел на странице | CosyVoice | ESpeech |
+|---|---|---|---|
+| `wc3` | Warcraft III | 64 | 64 |
+| `morrowind` | Morrowind | — | 23 |
+| `dota2`, `portal`, `stalker`, `minecraft`, `neco-arc`, `altushka` | по игре | 1–3 | — |
+| `streamers` | Стримеры | 2 | — |
 
 Голоса реальных людей (***, ***, ***) — только для шуток на стриме: не выдавайте синтез за их
 настоящие слова.
@@ -13,18 +24,32 @@
 персонажей есть второй, злой голос `<голос>-angry` (например, `wc3-arthas-angry`).
 Полный список и откуда взяты реплики — [voices-wc3.md](voices-wc3.md).
 
-## Игры (`games`)
+ESpeech: те же 64 голоса с адаптерами LoRA ([voices-wc3.md](voices-wc3.md), «LoRA ESpeech»). В коллекцию по выбору
+на слух (`voice-clips/espeech/wc3/picks.json`) идут: Гаритос и злой Гаритос — с прежним адаптером исследования
+(`-old3000`), Тралл — с образцом `c04` («Возможно. Но мой народ, Кэрн…»); Иллидан RoC — с новым образцом («И ты
+хочешь, чтобы я украл его…») и адаптером без хвостов эха.
 
-| Голос | Кто | Откуда образец |
-|---|---|---|
-| `dota2-pudge` | Пудж (Dota 2) | 3 длинные реплики русской озвучки с вики Dota 2 (`fetch-wiki-lines.py`) |
-| `portal-glados` | GLaDOS (Portal 2) | 2 реплики русской озвучки с Portal Wiki |
-| `stalker-bandit` | Бандит (S.T.A.L.K.E.R.: Call of Pripyat) | анекдот про кровососа из файлов игры, `human_03` (`extract-stalker.py`; вариант H3) |
-| `***` | Пророк ***, внутренний голос («Альтушка для скуфа») | летсплей без комментариев: demucs + отбор по голосу |
-| `neco-arc` | Neco Arc | пример с docs.jeetbot.cc (4,5 с; это уже синтез JeetBot, оригинала с русской речью нет) |
-| `neco-arc-angry` | злая Neco Arc | пример JeetBot |
-| `neco-arc-ja` | Neco Arc, японский оригинал | реплики из Melty Blood; по-русски говорит с японским акцентом |
-| `villager` | житель Minecraft | пример JeetBot (текст «Сталин»: так в примере) |
+## Morrowind (`morrowind`, только ESpeech)
+
+23 голоса `mw-*` из русской озвучки Morrowind: мужчина и женщина каждой из 10 рас и Дагот Ур — адаптеры LoRA на
+5–9 мин реплик (3000 шагов, у Дагот Ура 2000) с образцом 10–15 букв/с; английская версия (GotY) — `mw-dagoth-ur-en`
+и `mw-nord-m-en`, в коллекции с адаптером на 500 шагов (`picks.json`: `<голос>-500.espeech`), образец английский, а
+говорят они по-русски. Реплики — `tools/sources/extract-morrowind.py` ([voice-pipeline.md](voice-pipeline.md)).
+
+## Игры
+
+До 26.10.2026 эти голоса были одним набором `games`; теперь набор — игра.
+
+| Набор | Голос | Кто | Откуда образец |
+|---|---|---|---|
+| `dota2` | `dota2-pudge` | Пудж (Dota 2) | 3 длинные реплики русской озвучки с вики Dota 2 (`fetch-wiki-lines.py`) |
+| `portal` | `portal-glados` | GLaDOS (Portal 2) | 2 реплики русской озвучки с Portal Wiki |
+| `stalker` | `stalker-bandit` | Бандит (S.T.A.L.K.E.R.: Call of Pripyat) | анекдот про кровососа из файлов игры, `human_03` (`extract-stalker.py`; вариант H3) |
+| `altushka` | `***` | Пророк ***, внутренний голос («Альтушка для скуфа») | летсплей без комментариев: demucs + отбор по голосу |
+| `neco-arc` | `neco-arc` | Neco Arc | пример с docs.jeetbot.cc (4,5 с; это уже синтез JeetBot, оригинала с русской речью нет) |
+| `neco-arc` | `neco-arc-angry` | злая Neco Arc | пример JeetBot |
+| `neco-arc` | `neco-arc-ja` | Neco Arc, японский оригинал | реплики из Melty Blood; по-русски говорит с японским акцентом |
+| `minecraft` | `villager` | житель Minecraft | пример JeetBot (текст «Сталин»: так в примере) |
 
 Голоса из примеров JeetBot раньше назывались `jeetbot-neco-arc`, `jeetbot-neco-arc-angry` и `jeetbot-villager`, а
 японский оригинал — `neco-arc`.
@@ -71,7 +96,7 @@ CosyVoice на таком образце бормочет звуками жит�
 Смешанный образец (звуки + речь) неустойчив. Когда звуки стоят перед речью, синтез то говорит, то бормочет, а когда
 после — не говорит совсем. Отвергнуты на слух: эффект поверх обычного синтеза (`effects/villager-fx.py --mode
 hum|half|mumble`, хмыки в паузах и замена слов звуками) и образец из звуков с паузами 0,25 с.
-Голос с эффектом — это тот же образец плюс `post` в `voice-refs/games/manifest.json`: при озвучке на стриме эффект
+Голос с эффектом — это тот же образец плюс `post` в `voice-refs/cosyvoice/minecraft/manifest.json`: при озвучке на стриме эффект
 применяется к синтезу.
 
 ## Кот OIIA (отвергнут)

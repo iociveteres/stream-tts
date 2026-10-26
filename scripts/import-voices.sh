@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."  # пути ниже — от корня проекта
 
-DIR="${1:?Укажите папку с образцами, например voice-refs/wc3}"
+DIR="${1:?Укажите папку с образцами, например voice-refs/cosyvoice/wc3}"
 shift
 FORCE=0
 if [ "${1:-}" = "--force" ]; then FORCE=1; shift; fi

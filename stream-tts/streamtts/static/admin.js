@@ -716,13 +716,15 @@ function renderServer() {
   $("#backend-lock").textContent = T("Устройство задано переменной {var}.", { var: rt.device_env });
   renderCuda(st, d);
   // Наборы голосов
+  // Набор — по записи на модель: коллекция «модель + источник» ставится и удаляется отдельно (install.py)
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
-    h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted small" },
-      T(" — голосов: {n}: {voices}", { n: s.voices.length,
+    h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted" }, " · " + s.title),
+      h("span", { class: "muted small" }, T(" — голосов: {n}: {voices}", { n: s.voices.length,
         voices: s.voices.slice(0, 8).join(", ") + (s.voices.length > 8 ? "…" : "") }))),
     h("button", { class: "icon danger", title: T("Удалить набор"), onclick: () =>
-      ask(T("Удалить набор «{name}» (голосов: {n})?", { name: s.name, n: s.voices.length }), T("Удалить"), true)
-        .then(yes => yes && api("/api/voicesets/delete", { name: s.name }))
+      ask(T("Удалить набор «{name}» (голосов: {n})?", { name: `${s.name} · ${s.title}`, n: s.voices.length }),
+        T("Удалить"), true)
+        .then(yes => yes && api("/api/voicesets/delete", { name: s.name, model: s.model }))
     }, "✕"))) : [h("li", { class: "muted" }, T("Наборов нет."))]));
   renderBench(rt);
   // Состояние

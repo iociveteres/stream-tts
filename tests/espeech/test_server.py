@@ -1,5 +1,5 @@
 """espeech-server с настоящей моделью: отдельный процесс на свободном порту со своей папкой голосов.
-Пропускается без models/espeech (tools/espeech/prepare.py) или образца voice-refs/wc3/wc3-jaina.wav (+ .txt).
+Пропускается без models/espeech (tools/espeech/prepare.py) или образца voice-refs/cosyvoice/wc3/wc3-jaina.wav (+ .txt).
 Запуск: espeech/.venv/Scripts/python -m pytest tests/espeech (~1 мин; видеокарта, если есть, иначе CPU — дольше).
 
 Голос создаётся через API (POST /speaker?type=extract → /speaker/save), из него — голоса с адаптером LoRA: нулевой
@@ -12,7 +12,7 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 MODELS = os.path.join(ROOT, "models", "espeech")
-REF = os.path.join(ROOT, "voice-refs", "wc3", "wc3-jaina")
+REF = os.path.join(ROOT, "voice-refs", "cosyvoice", "wc3", "wc3-jaina")
 LONG = ("Спасибо за подписку, друг! Сегодня мы пройдём кампанию нежити до конца. Если повезёт, то и бонусные "
         "миссии успеем. Пять! Четыре! Три! Два! Один! Пуск!")
 

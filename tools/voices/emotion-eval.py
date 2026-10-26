@@ -36,11 +36,11 @@ review = pick.review
 DATA = os.path.join(ROOT, "voice-clips", "emotion-eval.json")
 MODELS_CACHE = os.path.join(ROOT, "voice-clips", "emotion-models.json")
 SOURCES = {  # группа -> глобы от корня; внутри группы сначала случайный голос (папка), потом фраза
-    "wc3": None,  # реплики голосов из voice-clips/wc3/pools.json (их пишет cut-clips.py)
+    "wc3": None,  # реплики голосов из voice-clips/cosyvoice/wc3/pools.json (их пишет cut-clips.py)
     "stalker": ["voice-origs/stalker-cop/sounds/characters_voice/**/*.ogg"],
     "games": ["voice-origs/dota2-pudge/*_ru.mp3", "voice-origs/portal-glados/*_ru.wav"],
     "streamers": ["voice-origs/***-*/*.wav", "voice-origs/***-altushka/*.wav"],
-    "synth": ["voice-clips/*/ab/*.wav", "voice-clips/wc3/b0*/ab/*.wav"],
+    "synth": ["voice-clips/cosyvoice/*/ab/*.wav", "voice-clips/cosyvoice/wc3/b0*/ab/*.wav"],
 }
 SKIP = ("/music/",)          # у STALKER рядом с речью лежат губная гармошка и гитара
 DUR = (0.7, 15.0)            # короче — не успеть понять подачу, длиннее — подача внутри успевает смениться
@@ -73,7 +73,7 @@ def load():
 def candidates():
     """{группа: {голос: [путь…]}} — все фразы источников."""
     out = {}
-    pools = pick.load(os.path.join(ROOT, "voice-clips", "wc3", "pools.json"), {})
+    pools = pick.load(os.path.join(ROOT, "voice-clips", "cosyvoice", "wc3", "pools.json"), {})
     out["wc3"] = {v: list(p) for v, p in pools.items() if p}
     for group, pats in SOURCES.items():
         if pats is None:

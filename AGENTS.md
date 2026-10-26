@@ -16,24 +16,31 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent) для stream-tts, HTTP API как у cosyvoice-server ([docs/espeech.md](docs/espeech.md)); вторая модель stream-tts (`streamtts/engines/espeech`) | да, кроме `.venv` |
 | `stream-tts/streamtts/` | stream-tts на :8090: озвучка наград Twitch, админка, оверлей OBS (спецификация [docs/stream-tts.md](docs/stream-tts.md), развёртывание `stream-tts-deploy.md`, Windows `stream-tts-windows.md`) | да |
 | `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml` | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
-| `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
-| `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: общий (`pick.py`, `synth.py`, оценки), реплики WC3, прочие источники ([docs/voice-pipeline.md](docs/voice-pipeline.md), [docs/voices-wc3.md](docs/voices-wc3.md)) | да |
+| `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/cosyvoice/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
+| `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: общий (`pick.py`, `synth.py`, оценки, коллекции для импорта `pack-sets.py`), реплики WC3, прочие источники ([docs/voice-pipeline.md](docs/voice-pipeline.md), [docs/voices-wc3.md](docs/voices-wc3.md)) | да |
 | `tools/espeech/` | папка модели ESpeech (`prepare.py`) и голоса `.espeech` (`make-voice.py`) | да |
 | `effects/` | эффекты поверх синтеза (`post`) | да |
 | `tests/e2e/` | e2e-тесты stream-tts на поддельном cosyvoice-server (раздел «Тесты» в `docs/development.md`) | да |
 | `tests/espeech/` | тесты espeech-server: нарезка без модели и сервер с настоящей моделью | да |
-| `voice-clips/<набор>/` | варианты образцов, их синтез, оценки и выбор | нет (тексты реплик из игр) |
-| `voice-refs/<набор>/` | итоговые образцы и `manifest.json` | нет |
+| `voice-clips/<модель>/<набор>/` | исходные данные голосов: `cosyvoice/` — варианты образцов, синтез, оценки и выбор; `espeech/` — реплики для LoRA, адаптеры и голоса `.espeech` по голосам | нет (тексты реплик из игр) |
+| `voice-refs/cosyvoice/<набор>/` | итоговые образцы CosyVoice и `manifest.json` | нет |
+| `voice-sets/<модель>/<набор>.zip` | коллекции для импорта в stream-tts, по одной на «модель + набор» (`tools/voices/pack-sets.py`) | нет |
 | `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `runtime/`, `.env` | данные, секреты, нативный cosyvoice-server для Windows | нет |
 
-Наборы голосов: `wc3` (`wc3-*`), `games`, `streamers`; каталог — [docs/voices.md](docs/voices.md).
+Данные голосов — `<модель>/<набор>/<голос>`: модель — `cosyvoice` или `espeech` (id из `streamtts/engines/`), набор —
+источник: `wc3` (`wc3-*`), `morrowind` (`mw-*`, только ESpeech), игры по одной (`dota2`, `portal`, `stalker`,
+`minecraft`, `neco-arc`, `altushka`), `streamers`; каталог — [docs/voices.md](docs/voices.md).
 
 ## Связи, которые легко порвать
 
 - Скрипты `tools/` считают корень как `ROOT = dirname(dirname(HERE))` и грузят соседние модули по пути
   (`spec_from_file_location`): перед переносом или переименованием — `grep spec_from_file_location`.
-- Имя набора — имя папки и в `voice-clips/`, и в `voice-refs/`; по нему stream-tts группирует страницу голосов
-  (`GROUPS` в `streamtts/voices.py`).
+- Имя набора — имя папки источника в `voice-clips/<модель>/`, `voice-refs/cosyvoice/`, `voice-sets/<модель>/<набор>.zip`
+  и установленного набора `voices/<набор>/`; по нему stream-tts группирует страницу голосов (`GROUPS` в
+  `streamtts/voices.py`). Голоса обеих моделей одного набора stream-tts держит в одной папке `voices/<набор>/`, а
+  коллекцию из zip ставит и удаляет по модели (`install.py`). Инструменты знают свою модель (`pick.py` —
+  `voice-clips/cosyvoice`, `lora-clips.py` — `voice-clips/espeech/wc3`); кеши `voice-clips/*.json` общие, их ключи —
+  пути от корня: после переноса папок их надо переписать.
 - `post` в `alts.json` и `manifest.json` — `[скрипт, аргументы…]`, путь от корня проекта. stream-tts ищет скрипт в
   `STREAM_TTS_PROJECT` (в контейнере `/project`), грузит через importlib и вызывает `apply(звук, аргументы)`;
   командная строка эффекта нужна `synth.py`.
@@ -114,7 +121,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   собирает установщик и публикует релиз с `latest.json`, по которому программа ищет обновления (`REPO` в
   `updates.py` должен совпадать с репозиторием, иначе CI падает на шаге «Версия»).
 - В `voice-clips/` ручная работа пользователя (`ratings.txt`, `text-fixes.json`, `phrase-tags.json`, `picks.json`,
-  `alts.json`), в git её нет: без нужды не перезаписывать, перед массовой правкой — копия в scratchpad.
+  `alts.json`, `emotion-eval.json`), в git её нет: без нужды не перезаписывать, перед массовой правкой — копия в scratchpad.
 - Переименование голоса: зарегистрировать новое имя, старое выгрузить (`DELETE /speaker/<имя>`) и удалить
   `voices/<имя>.gguf`, иначе вернётся после перезапуска. Настройки и выбор зрителей (`users.voice`) в stream-tts
   остаются на старом имени — такие зрители получат голос по хешу ника.

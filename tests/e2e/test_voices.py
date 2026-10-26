@@ -49,9 +49,9 @@ def project(tts):
         shutil.rmtree(os.path.join(root, d), ignore_errors=True)
 
 
-def manifest(root, set_name, data):
-    os.makedirs(os.path.join(root, "voice-refs", set_name), exist_ok=True)
-    with open(os.path.join(root, "voice-refs", set_name, "manifest.json"), "w", encoding="utf-8") as f:
+def manifest(root, set_name, data, model="cosyvoice"):
+    os.makedirs(os.path.join(root, "voice-refs", model, set_name), exist_ok=True)
+    with open(os.path.join(root, "voice-refs", model, set_name, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
 
 
@@ -228,12 +228,16 @@ def test_preview_priority(tts):
 
 # --- страница голосов: группы по наборам ---
 def test_voice_groups(tts, project):
-    """manifest.json в voice-refs/<набор>/ проекта: разделы «Warcraft III», «Игры», остальные — «Другие»."""
+    """manifest.json в voice-refs/<модель>/<набор>/ проекта: разделы по наборам (источникам) в порядке GROUPS из
+    папок обеих моделей, голоса без набора — «Другие»."""
     assert sections(tts.api.get("/voices/").text) == [("Другие", ["alpha", "bravo", "charlie"])]
-    manifest(project, "games", {"bravo": {}})
+    manifest(project, "dota2", {"bravo": {}})
     manifest(project, "wc3", {"charlie": {}})
     assert sections(tts.api.get("/voices/").text) == [
-        ("Warcraft III", ["charlie"]), ("Игры", ["bravo"]), ("Другие", ["alpha"])]
+        ("Warcraft III", ["charlie"]), ("Dota 2", ["bravo"]), ("Другие", ["alpha"])]
+    manifest(project, "morrowind", {"alpha": {}}, model="espeech")
+    assert sections(tts.api.get("/voices/").text) == [
+        ("Warcraft III", ["charlie"]), ("Morrowind", ["alpha"]), ("Dota 2", ["bravo"])]
 
 
 # --- эффекты post ---

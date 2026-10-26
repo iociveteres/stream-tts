@@ -15,7 +15,7 @@
     --title "…"           название голоса на странице (для нового голоса)
 
 Без --pick берутся самые длинные по тексту реплики, разные по смыслу, пока образец не наберёт
-длину. Результат — вариант voice-clips/<набор>/<голос>/<id>.wav + .txt в alts.json набора
+длину. Результат — вариант voice-clips/cosyvoice/<набор>/<голос>/<id>.wav + .txt в alts.json набора
 (склейка как в tools/voices/pick.py --add). Дальше synth.py и страница pick.py: docs/voice-pipeline.md.
 """
 import argparse

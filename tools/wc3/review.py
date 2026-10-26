@@ -1,12 +1,12 @@
 """Локальный интерфейс отслушивания партии: слушать, оценивать и править текст в одном месте.
 
 usage: python tools/wc3/review.py [партия] [--port 8765]
-  Без партии берётся последняя из voice-clips/wc3/. Открыть http://localhost:8765.
+  Без партии берётся последняя из voice-clips/cosyvoice/wc3/. Открыть http://localhost:8765.
 
-Оценки сразу пишутся в <партия>/ratings.txt, правки текста — в voice-clips/wc3/text-fixes.json
+Оценки сразу пишутся в <партия>/ratings.txt, правки текста — в voice-clips/cosyvoice/wc3/text-fixes.json
 (как проверенные на слух) и во все клипы партии, где встречается эта реплика: их .txt,
 clips.json и ratings.txt. Эмоции и «не брать» ставятся фразам и хранятся в общем
-voice-clips/wc3/phrase-tags.json; эмоция клипа в ratings.txt — сводка меток его фраз.
+voice-clips/cosyvoice/wc3/phrase-tags.json; эмоция клипа в ratings.txt — сводка меток его фраз.
 Только стандартная библиотека Python.
 """
 import importlib.util, json, mimetypes, os, re, sys, threading

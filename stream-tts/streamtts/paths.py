@@ -44,7 +44,7 @@ DATA = env("STREAM_TTS_DATA", os.path.join(_BASE, "stream-tts-data") if FROM_SOU
            else os.path.join(_BASE, "data") if PORTABLE else _BASE)
 MODELS = env("STREAM_TTS_MODELS", os.path.join(_BASE, "models"))
 VOICES = env("STREAM_TTS_VOICES", os.path.join(_BASE, "voices"))
-# Корень проекта: voice-refs/*/manifest.json и скрипты эффектов (post) ищутся от него
+# Корень проекта: voice-refs/<модель>/<набор>/manifest.json и скрипты эффектов (post) ищутся от него
 PROJECT = env("STREAM_TTS_PROJECT", _REPO if FROM_SOURCE else DATA)
 RUNTIME = env("STREAM_TTS_RUNTIME", os.path.join(APP, "runtime"))
 

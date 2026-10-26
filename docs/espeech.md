@@ -168,7 +168,9 @@ torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимост
 safetensors с тензором `ref` (образец int16 24 кГц, 6–7 с), необязательными `lora.*` и метаданными `text` (ровно то,
 что звучит, с ударениями), `tempo` (кадров на байт по полному исходному образцу), `title`, `variant`, `lora_rank`,
 `lora_alpha`. Сборка — `tools/espeech/make-voice.py`: один голос (`--wav`, `--text`, кусок `--start/--end`,
-`--full-wav/--full-text` для темпа, `--lora`) или набор по полю `espeech` в `voice-refs/<набор>/manifest.json`.
+`--full-wav/--full-text` для темпа, `--lora`) или набор по полю `espeech` в `voice-refs/cosyvoice/<набор>/manifest.json`. Голоса с адаптером LoRA собираются в
+`voice-clips/espeech/<набор>/<голос>/`, коллекция для импорта в stream-tts — `voice-sets/espeech/<набор>.zip`
+(`tools/voices/pack-sets.py`, [voice-pipeline.md](voice-pipeline.md), «Шаг 7»).
 
 **LoRA** (`samples/espeech-lora-pipe`): 132 слоя (to_q/k/v, to_out и оба слоя FFN в 22 блоках) обёрнуты при загрузке,
 буферы адаптера fp16 выделены заранее (12 МБ видеопамяти); ветка — `y += (x·A)·(scale·B)` на месте одним `addmm_`:
@@ -178,7 +180,7 @@ LoRA — ветка выключена, цена нулевая. Модель б
 
 **Тесты** — `tests/espeech/` в `espeech/.venv` (pytest): `test_text.py` — нарезка, длительность, нормализатор (без
 модели, секунды); `test_server.py` — сервер с настоящей моделью отдельным процессом (~1,5 мин; пропускается без
-`models/espeech` или `voice-refs/wc3/wc3-jaina.wav`): статус, ударения, целиком и поток, LoRA (нулевой адаптер —
+`models/espeech` или `voice-refs/cosyvoice/wc3/wc3-jaina.wav`): статус, ударения, целиком и поток, LoRA (нулевой адаптер —
 звук бит в бит как без него), ошибки, шаги, остановка, выгрузка голоса, память, сохранение по относительному пути, словарь ударений.
 
 ```bash

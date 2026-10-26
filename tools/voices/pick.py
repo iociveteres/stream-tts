@@ -1,4 +1,4 @@
-"""Подбор голосов: варианты образцов, их синтез и выбор на слух — для всех наборов сразу.
+"""Подбор голосов CosyVoice: варианты образцов, их синтез и выбор на слух — для всех наборов сразу.
 
 usage: python tools/voices/pick.py [--port 8766]                     страница: http://localhost:8766
        python tools/voices/pick.py --add <набор> <голос> <id> <аудио...> --text "…" [--label "…"]
@@ -6,9 +6,9 @@ usage: python tools/voices/pick.py [--port 8766]                     стран�
                                    [--post "<скрипт> <аргументы…>"]  с эффектом поверх синтеза
        python tools/voices/pick.py --add-batch <набор> <партия>      кандидаты cut-clips.py как варианты
        python tools/voices/pick.py --list [набор ...]                решения текстом, спорные помечены «?»
-       python tools/voices/pick.py --install [набор ...]             поставить выбранное в voice-refs/<набор>
+       python tools/voices/pick.py --install [набор ...]             поставить выбранное в voice-refs/cosyvoice/<набор>
 
-Процесс целиком описан в docs/voice-pipeline.md. Данные набора лежат в voice-clips/<набор>/:
+Процесс целиком описан в docs/voice-pipeline.md. Данные набора (источника) лежат в voice-clips/cosyvoice/<набор>/:
   set.json    {title, phrases}: название и тестовые фразы синтеза
   alts.json   {голос: {title, ref, phrase, note, pool, alts: {id: {label, source, file, ab, install, post, kind}}}}
               ref — эталон для сравнения (пример JeetBot), phrase — его текст, он идёт первой тестовой фразой;
@@ -27,7 +27,7 @@ usage: python tools/voices/pick.py [--port 8766]                     стран�
   - стоящий сейчас образец не хуже лучшего нового (разница меньше NOISE) — остаётся;
   - новый лучше на NOISE и больше, cer ≤ CER_MAX, psim ≥ PSIM_MIN, текст не помечен «сверить» — заменяет;
   - иначе голос спорный и ждёт выбора на слух.
---install копирует выбранное в voice-refs/<набор>/<имя>.wav/.txt (заменённое — в voice-refs/<набор>/replaced/<дата>/),
+--install копирует выбранное в voice-refs/cosyvoice/<набор>/<имя>.wav/.txt (заменённое — в .../replaced/<дата>/),
 обновляет manifest.json и печатает команду scripts/import-voices.sh для изменённых голосов.
 Только стандартная библиотека Python.
 """
@@ -41,9 +41,10 @@ spec = importlib.util.spec_from_file_location("review", os.path.join(ROOT, "tool
 review = importlib.util.module_from_spec(spec)  # http-обработчик с выдачей файлов и защитой путей
 spec.loader.exec_module(review)
 
-CLIPS = os.path.join(ROOT, "voice-clips")
-REFS = os.path.join(ROOT, "voice-refs")
-EMOTIONS = os.path.join(CLIPS, "emotions.json")
+# Данные — <модель>/<источник>/: наборы этого инструмента — модели CosyVoice; кеш эмоций общий, в корне voice-clips/
+CLIPS = os.path.join(ROOT, "voice-clips", "cosyvoice")
+REFS = os.path.join(ROOT, "voice-refs", "cosyvoice")
+EMOTIONS = os.path.join(ROOT, "voice-clips", "emotions.json")
 GAP = 0.25          # пауза между склеенными кусками, как в cut-clips.py
 LISTEN = 3          # тестовых фраз на странице (и по умолчанию в synth.py)
 NOISE = 0.02        # разница sim в пределах шума (несколько фраз, один seed)
@@ -279,7 +280,7 @@ def add(set_name, voice, aid, sources, text, label=None, install=None, title=Non
     """Склеивает аудио в вариант <голос>/<id> набора (24 кГц моно, тишина по краям обрезана)."""
     s = Set(set_name)
     if not os.path.isfile(os.path.join(s.dir, "set.json")):
-        sys.exit(f"Нет набора {set_name}: создайте voice-clips/{set_name}/set.json ({{\"title\": …, \"phrases\": […]}})")
+        sys.exit(f"Нет набора {set_name}: создайте voice-clips/cosyvoice/{set_name}/set.json ({{\"title\": …, \"phrases\": […]}})")
     meta = dict(label=label or aid, source=[rel(p) for p in sources])
     wav, txt = s.sample(voice, aid, meta)
     os.makedirs(os.path.dirname(wav), exist_ok=True)
@@ -404,7 +405,7 @@ def install(names):
                 print(f"{target} ← {voice}.{aid} ({how})")
         save(s.manifest_path, man)
         if changed:
-            print(f"Дальше: scripts/import-voices.sh voice-refs/{name} --force {' '.join(changed)}")
+            print(f"Дальше: scripts/import-voices.sh voice-refs/cosyvoice/{name} --force {' '.join(changed)}")
         else:
             print(f"{name}: менять нечего")
 

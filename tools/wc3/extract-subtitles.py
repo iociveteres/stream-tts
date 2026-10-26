@@ -2,7 +2,7 @@
 
 usage: python tools/wc3/extract-subtitles.py <папка с картами> [out.json]
   Карты (*.w3m, *.w3x) извлекаются из CASC так же, как звуки: маска war3.w3mod:campaign*.
-  По умолчанию результат пишется в voice-clips/wc3/subtitles.json, его читает cut-clips.py.
+  По умолчанию результат пишется в voice-clips/cosyvoice/wc3/subtitles.json, его читает cut-clips.py.
 
 Строки лежат в самой карте: war3map.wts (английский, с комментарием-путём к звуку у каждой
 реплики) и _Locales\\ruRU.w3mod\\war3map.wts (те же номера STRING, русский текст).
@@ -82,7 +82,7 @@ def parse_wts(data):
 
 def main():
     maps_dir = sys.argv[1]
-    dst = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "voice-clips", "wc3", "subtitles.json")
+    dst = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "voice-clips", "cosyvoice", "wc3", "subtitles.json")
     subs = {}
     for path in sorted(glob.glob(os.path.join(maps_dir, "**", "*.w3[mx]"), recursive=True)):
         mpq = MPQ(path)

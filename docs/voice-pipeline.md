@@ -1,7 +1,7 @@
 # Подбор голосов
 
-Как из записи персонажа получается голос в `voices/`. Процесс один для всех наборов: Warcraft III, другие игры,
-стримеры. Различаются только инструменты, которыми достаются реплики из источника. Каталог готовых голосов —
+Как из записи персонажа получается голос CosyVoice в `voices/` и коллекция для импорта в stream-tts. Процесс один
+для всех наборов: Warcraft III, другие игры, стримеры. Различаются только инструменты, которыми достаются реплики из источника. Каталог готовых голосов —
 [voices.md](voices.md), особенности WC3 — [voices-wc3.md](voices-wc3.md).
 
 Голос в cosyvoice — это образец: 10–20 секунд записи (`.wav`) и её точная расшифровка (`.txt`). В zero-shot модель
@@ -11,8 +11,8 @@
 ## Коротко
 
 ```
-источник ──► реплики ──► варианты образца ──► синтез и оценки ──► выбор на слух ──► voice-refs/ ──► voices/*.gguf
-            (+ голос,      (несколько на        tools/voices/      tools/voices/       pick.py         import-voices.sh
+источник ──► реплики ──► варианты образца ──► синтез и оценки ──► выбор на слух ──► voice-refs/ ──► voices/*.gguf ──► voice-sets/
+            (+ голос,      (несколько на        tools/voices/      tools/voices/       pick.py         import-voices.sh   pack-sets.py
              подача)        голос)              synth.py           pick.py             --install
 ```
 
@@ -21,38 +21,58 @@
 2. **Отбор.** Чужие голоса отсекаются по эмбеддингам CAM++ (`score-speaker.py`), подача размечается моделью эмоций
    (`emotions.py`).
 3. **Варианты.** Из реплик склеиваются несколько вариантов образца одного голоса: разные сцены, разная подача,
-   разные записи. Они регистрируются в `voice-clips/<набор>/alts.json`.
+   разные записи. Они регистрируются в `voice-clips/cosyvoice/<набор>/alts.json`.
 4. **Синтез.** `synth.py` озвучивает каждым вариантом одни и те же тестовые фразы с одним `seed` и считает оценки.
 5. **Выбор.** На странице `pick.py` для каждого голоса рядом стоят все варианты: сам образец и синтез тестовых фраз,
    у мемных голосов ещё эталон (пример JeetBot). Где автоматика уверена, она выбирает сама, остальное — на слух.
-6. **Установка.** `pick.py --install` кладёт выбранное в `voice-refs/<набор>/`, `scripts/import-voices.sh`
+6. **Установка.** `pick.py --install` кладёт выбранное в `voice-refs/cosyvoice/<набор>/`, `scripts/import-voices.sh`
    собирает из него `voices/<имя>.gguf`. stream-tts подхватывает новый голос сам.
+7. **Коллекция.** `tools/voices/pack-sets.py` собирает `voice-sets/cosyvoice/<набор>.zip` — набор целиком для
+   импорта в другую установку stream-tts (админка, «Наборы голосов»).
 
 ## Наборы и данные
+
+Данные голосов лежат по схеме `<модель>/<набор>/<голос>`: модель (`cosyvoice`, `espeech` — id из
+`streamtts/engines/`), набор — источник (игра или группа), внутри — голоса. Набор = коллекция для импорта: один zip
+на пару «модель + набор» (`voice-sets/<модель>/<набор>.zip`), в stream-tts — папка `voices/<набор>/`, где голоса
+обеих моделей лежат рядом, а коллекция ставится и удаляется по модели. Имя набора — группа на странице голосов
+(`GROUPS` в `streamtts/voices.py`).
 
 | Набор | Что | Источник реплик |
 |---|---|---|
 | `wc3` | 64 голоса Warcraft III (`wc3-*`, из них 6 `-angry`) | файлы игры, `tools/wc3/` |
-| `games` | голоса из других игр: Пудж, GLaDOS, бандит, житель Minecraft, Neco Arc, *** | вики, файлы игр, летсплеи, примеры JeetBot |
+| `dota2` | Пудж | вики Dota 2 |
+| `portal` | GLaDOS | Portal Wiki |
+| `stalker` | бандит | файлы игры |
+| `minecraft` | житель | примеры JeetBot, звуки игры |
+| `neco-arc` | Neco Arc (пример JeetBot, злая, японский оригинал) | примеры JeetBot, Melty Blood |
+| `altushka` | *** («Альтушка для скуфа») | летсплей |
 | `streamers` | стримеры: ***, *** | видео с YouTube |
 
-Новый набор — это папка `voice-clips/<набор>/` с `set.json`: `{"title": "…", "phrases": ["…", …]}`.
+Это наборы CosyVoice (`voice-clips/cosyvoice/`). Голоса ESpeech с адаптером LoRA (`voice-clips/espeech/`): `wc3` —
+[voices-wc3.md](voices-wc3.md), «LoRA ESpeech»; `morrowind` (`mw-*`) — `tools/sources/extract-morrowind.py`, ниже.
+Игры до 26.10.2026 были одним набором `games`.
+
+Новый набор CosyVoice — это папка `voice-clips/cosyvoice/<набор>/` с `set.json`: `{"title": "…", "phrases": ["…", …]}`.
 
 В git из этого ничего не попадает: в `voice-clips/` тексты реплик из игр и записей стримеров (права на них у
 правообладателей) и ручная разметка, она хранится только локально.
 
 | Путь | Что |
 |---|---|
-| `voice-clips/<набор>/set.json` | название набора и тестовые фразы синтеза |
-| `voice-clips/<набор>/alts.json` | голоса и их варианты (формат ниже) |
-| `voice-clips/<набор>/picks.json` | выбор на слух и заметки: `{голос: {pick: [id…] или ["keep"], note}}` |
-| `voice-clips/<набор>/<голос>/<id>.wav`, `.txt` | вариант образца |
-| `voice-clips/<набор>/ab/<голос>.<id>.<n>.wav` | синтез n-й тестовой фразы |
-| `voice-clips/<набор>/ab/scores.json` | оценки synth.py |
-| `voice-clips/wc3/<партия>/` | кандидаты одной нарезки `cut-clips.py` (их файлы варианты WC3 и используют) |
-| `voice-clips/wc3/pools.json` | реплики «голоса в целом» для оценки `sim` |
-| `voice-clips/emotions.json`, `embeddings.json` | кеши модели эмоций и CAM++ |
-| `voice-refs/<набор>/<имя>.wav`, `.txt`, `manifest.json` | установленные образцы; `replaced/<дата>/` — заменённые |
+| `voice-clips/cosyvoice/<набор>/set.json` | название набора и тестовые фразы синтеза |
+| `voice-clips/cosyvoice/<набор>/alts.json` | голоса и их варианты (формат ниже) |
+| `voice-clips/cosyvoice/<набор>/picks.json` | выбор на слух и заметки: `{голос: {pick: [id…] или ["keep"], note}}` |
+| `voice-clips/cosyvoice/<набор>/<голос>/<id>.wav`, `.txt` | вариант образца |
+| `voice-clips/cosyvoice/<набор>/ab/<голос>.<id>.<n>.wav` | синтез n-й тестовой фразы |
+| `voice-clips/cosyvoice/<набор>/ab/scores.json` | оценки synth.py |
+| `voice-clips/cosyvoice/wc3/<партия>/` | кандидаты одной нарезки `cut-clips.py` (их файлы варианты WC3 и используют) |
+| `voice-clips/cosyvoice/wc3/pools.json` | реплики «голоса в целом» для оценки `sim` |
+| `voice-clips/espeech/<набор>/<голос>/` | LoRA ESpeech: `lora/` (реплики), адаптеры, `<голос>.espeech`; `manifest.json` набора |
+| `voice-clips/espeech/<набор>/picks.json` | выбор на слух для коллекции: `{голос: файл от папки голоса или null}` |
+| `voice-clips/emotions.json`, `embeddings.json` | общие кеши модели эмоций и CAM++ (ключ — путь от корня) |
+| `voice-refs/cosyvoice/<набор>/<имя>.wav`, `.txt`, `manifest.json` | установленные образцы; `replaced/<дата>/` — заменённые |
+| `voice-sets/<модель>/<набор>.zip` | коллекции для импорта (`pack-sets.py`) |
 
 `alts.json`:
 
@@ -243,17 +263,33 @@ python tools/voices/pick.py --list     # решения текстом, спор
 
 ```bash
 python tools/voices/pick.py --install [набор ...]
-scripts/import-voices.sh voice-refs/wc3 --force wc3-thrall wc3-thrall-angry   # команду с именами печатает --install
+scripts/import-voices.sh voice-refs/cosyvoice/wc3 --force wc3-thrall wc3-thrall-angry   # команду с именами печатает --install
 ```
 
-`--install` копирует выбранное (на слух, иначе решение автоматики) в `voice-refs/<набор>/<имя>.wav` и `.txt`,
-заменённые образцы откладывает в `voice-refs/<набор>/replaced/<дата>/`, а в `manifest.json` пишет источник, текст,
+`--install` копирует выбранное (на слух, иначе решение автоматики) в `voice-refs/cosyvoice/<набор>/<имя>.wav` и
+`.txt`, заменённые образцы откладывает в `voice-refs/cosyvoice/<набор>/replaced/<дата>/`, а в `manifest.json` пишет источник, текст,
 вариант (`candidate`, например `wc3/wc3-thrall.b03.A01`), как выбран и `post`. `import-voices.sh --force` сначала
 выгружает голос из памяти сервера (иначе тот отвечает 409 на повторное имя), затем регистрирует его заново и
 сохраняет в `voices/<имя>.gguf`. Без имён он пересобирает все голоса папки.
 
 stream-tts видит новый голос при следующем опросе сервера, сам синтезирует его пример и калибрует громкость.
 Если голос переименован, старое имя нужно выгрузить (`DELETE /speaker/<имя>`) и убрать `voices/<имя>.gguf`.
+
+## Шаг 7. Коллекции для импорта
+
+```bash
+python tools/voices/pack-sets.py [--list] [<модель>/<набор> …]   # из worktree: --root "<основная копия>"
+```
+
+Пишет `voice-sets/<модель>/<набор>.zip` — по одному на пару «модель + набор»: папка `<набор>/` с файлами голосов и
+`manifest.json` (только `title` и `post`). CosyVoice берёт голоса из `voice-refs/cosyvoice/<набор>/manifest.json` и
+файлы `voices/<голос>.gguf`; ESpeech — из `voice-clips/espeech/<набор>/manifest.json` и `<голос>/<голос>.espeech`,
+а другой файл (прежний адаптер, другой образец) или `null` (не ставить) задаёт `picks.json` набора. Название голоса
+ESpeech берётся у CosyVoice того же набора, если там такой голос есть: манифест у набора в stream-tts общий.
+
+Zip ставится в админке stream-tts («Сервер» → «Наборы голосов»): голоса этой модели в `voices/<набор>/` заменяются
+целиком, голоса другой модели остаются; удаление в списке наборов — тоже по модели. Предел загрузки — 2 ГБ
+(коллекция ESpeech `wc3` — ~680 МБ: адаптер весит ~10 МБ на голос).
 
 ## Подводные камни
 

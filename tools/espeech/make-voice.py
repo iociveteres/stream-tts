@@ -10,8 +10,8 @@ RUAccent (полный режим, как на синтезе), если в те
                 [--full-wav <полная запись> --full-text "<её текст>"] [--lora <адаптер.safetensors>]
                 [--title …] [--variant …]
   Без --full-wav темп — по самому куску.
-Набор (поле `espeech` в voice-refs/<набор>/manifest.json):
-  make-voice.py --manifest voice-refs/<набор>/manifest.json [--out voices/<набор>] [голос …]
+Набор (поле `espeech` в voice-refs/<модель>/<набор>/manifest.json):
+  make-voice.py --manifest voice-refs/cosyvoice/<набор>/manifest.json [--out voices/<набор>] [голос …]
   "espeech": {"start": 4.6, "end": 11.53, "text": "…", "clip": "<файл в папке набора, по умолчанию <голос>.wav>",
               "lora": "<путь от корня проекта>", "tempo": <кадров на байт; по умолчанию — по всему <голос>.wav и
               тексту записи>}; голоса без поля пропускаются.

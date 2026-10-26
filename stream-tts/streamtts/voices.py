@@ -11,8 +11,13 @@ log = logging.getLogger("voices")
 
 DEMO_SEED = 7
 DRAFT_PREFIX = "_draft-"   # служебные голоса черновика (editor.py): в список голосов не попадают
-# Группы на странице для зрителей — наборы voice-refs/<набор>/ (docs/voice-pipeline.md)
-GROUPS = {"wc3": "Warcraft III", "games": "Игры", "streamers": "Стримеры"}
+# Группы на странице для зрителей — наборы (источники) voice-refs/<модель>/<набор>/ и <голоса>/<набор>/, в этом
+# порядке (docs/voice-pipeline.md); games — прежний набор игр до разбиения по играм (может стоять у зрителей программы)
+GROUPS = {
+    "wc3": "Warcraft III", "morrowind": "Morrowind", "dota2": "Dota 2", "portal": "Portal 2",
+    "stalker": "S.T.A.L.K.E.R.", "minecraft": "Minecraft", "neco-arc": "Neco Arc", "altushka": "Альтушка для скуфа",
+    "games": "Игры", "streamers": "Стримеры",
+}
 
 
 class Preempted(Exception):
@@ -88,10 +93,10 @@ class Voices:
 
     # --- эффекты ---
     def _read_manifests(self):
-        """voice-refs/*/manifest.json проекта, <голоса>/<набор>/manifest.json установленных наборов и
+        """voice-refs/<модель>/<набор>/manifest.json проекта, <голоса>/<набор>/manifest.json установленных наборов и
         <данные>/sets/<набор>/manifest.json голосов из записи на внешнем сервере (editor.py)
         (перечитываются при изменении файлов): post и набор голоса."""
-        files = (glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "manifest.json"))
+        files = (glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "*", "manifest.json"))
                  + glob.glob(os.path.join(paths.VOICES, "*", "manifest.json"))
                  + glob.glob(os.path.join(config.DATA, "sets", "*", "manifest.json")))
         stamp = sum(os.path.getmtime(f) for f in files)

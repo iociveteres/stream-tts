@@ -14,17 +14,19 @@ CUDA (ggml-cuda.dll и рантайм CUDA 13) в установщик не вх
 папку сервера при остановленном сервере, версия пишется в cuda-version.txt (по ней установщик при обновлении
 решает, качать ли CUDA заново), потом сервер перезапускается и заново ищет устройства.
 
-Набор голосов — zip с *.gguf и manifest.json (ключи — имена голосов: title, post…) в корне или в одной папке.
-Имя набора — эта папка или имя zip; оно же группа на странице голосов (voices.GROUPS). Набор ставится в
-paths.VOICES/<набор>/ целиком, старая версия заменяется. Голос с именем, которое уже есть в другом наборе,
-пропускается. Пока файлы меняются, cosyvoice-server остановлен (на Windows он держит открытые .gguf), потом
+Набор голосов — zip с голосами (*.gguf CosyVoice, *.espeech ESpeech) и manifest.json (ключи — имена голосов:
+title, post…) в корне или в одной папке. Имя набора — эта папка или имя zip; оно же группа на странице голосов
+(voices.GROUPS). Набор ставится в paths.VOICES/<набор>/; голоса тех моделей, что есть в zip, заменяются целиком,
+голоса другой модели в той же папке остаются (коллекция «модель + источник»: voice-sets/<модель>/<источник>.zip).
+Голос, который у этой модели уже есть в другом наборе или без набора, пропускается. Удаляется набор тоже по модели.
+Пока файлы меняются, сервер синтеза остановлен (на Windows cosyvoice-server держит открытые .gguf), потом
 запускается с новым списком голосов."""
 import asyncio, contextlib, hashlib, json, logging, os, re, shutil, time, zipfile
 
 import aiohttp
 
 from . import paths
-from .engines import cosyvoice
+from .engines import ENGINES, cosyvoice
 from .i18n import tr
 
 log = logging.getLogger("install")
@@ -82,10 +84,12 @@ RETRIES = 5
 
 SET_NAME = re.compile(r"[^a-z0-9_-]+")
 VOICE_NAME = re.compile(r"^[\w.-]{1,64}$")
-MAX_GGUF = 64 << 20        # голос ~120 КБ; больше — точно не голос
-# Файлы голосов всех моделей (.gguf CosyVoice, .espeech ESpeech): набор может нести голоса для обеих. Из zip пока
-# ставятся только .gguf (поставка наборов ESpeech — этап 4)
-VOICE_EXTS = (cosyvoice.VOICE_EXT, ".espeech")
+MAX_VOICE = 64 << 20       # голос CosyVoice ~200 КБ, ESpeech с адаптером ~10 МБ; больше — точно не голос
+# Модель по расширению файла голоса. Папка набора (источника) держит голоса обеих моделей: голос с тем же именем у
+# другой модели — в том же наборе (editor.py). Коллекция в zip — голоса одной модели одного источника
+# (voice-sets/<модель>/<источник>.zip, tools/voices/pack-sets.py): её установка и удаление не трогают файлы другой.
+EXT_MODEL = {E.VOICE_EXT: i for i, E in ENGINES.items()}
+VOICE_EXTS = tuple(EXT_MODEL)
 MAX_ZIP_FILES = 2000
 
 
@@ -346,13 +350,13 @@ class Installer:
         log.info("набор %s: голосов %d, пропущено %d", result["name"], len(result["added"]), len(result["skipped"]))
         return result
 
-    async def delete_set(self, name):
-        target = os.path.join(paths.VOICES, name)
-        if name not in [s["name"] for s in list_sets()]:
+    async def delete_set(self, name, model=None):
+        """Голоса модели model из набора name; без model — весь набор (все модели)."""
+        if not any(s["name"] == name and model in (None, s["model"]) for s in list_sets()):
             raise ValueError(tr("нет такого набора"))
         async with self.runtime.paused():
-            await asyncio.to_thread(shutil.rmtree, target)
-        log.info("набор %s удалён", name)
+            await asyncio.to_thread(_delete_set, name, model)
+        log.info("набор %s%s удалён", name, f" ({model})" if model else "")
 
 
 def _extract_cuda(archives, dest):
@@ -417,8 +421,19 @@ def _sha256(path):
     return h.hexdigest()
 
 
+def _voice_files(d):
+    """{модель: {голос: файл}} в папке d (без подпапок)."""
+    out = {}
+    with contextlib.suppress(OSError):
+        for f in os.listdir(d):
+            name, ext = os.path.splitext(f)
+            if ext in EXT_MODEL and os.path.isfile(os.path.join(d, f)):
+                out.setdefault(EXT_MODEL[ext], {})[name] = f
+    return out
+
+
 def list_sets():
-    """Установленные наборы: подпапки paths.VOICES с голосами."""
+    """Установленные наборы: подпапки paths.VOICES с голосами, по записи на модель (порядок ENGINES)."""
     out = []
     try:
         names = sorted(os.listdir(paths.VOICES))
@@ -428,26 +443,34 @@ def list_sets():
         d = os.path.join(paths.VOICES, n)
         if n.startswith(".") or not os.path.isdir(d):
             continue
-        voices = sorted({os.path.splitext(f)[0] for f in os.listdir(d) if f.endswith(VOICE_EXTS)})
-        if voices:
-            out.append(dict(name=n, voices=voices, manifest=os.path.isfile(os.path.join(d, "manifest.json"))))
+        files = _voice_files(d)
+        for model in (m for m in ENGINES if m in files):
+            out.append(dict(name=n, model=model, title=ENGINES[model].TITLE, voices=sorted(files[model]),
+                            manifest=os.path.isfile(os.path.join(d, "manifest.json"))))
     return out
 
 
-def _existing_voices(skip_set):
-    """Голос -> где лежит (набор или корень), кроме заменяемого набора."""
-    out = {}
-    for f in os.listdir(paths.VOICES) if os.path.isdir(paths.VOICES) else []:
-        if f.endswith(VOICE_EXTS):
-            out[os.path.splitext(f)[0]] = tr("голоса без набора")
+def _existing_voices(skip_set, model):
+    """Голос модели -> где лежит (набор или корень), кроме заменяемого набора."""
+    out = dict.fromkeys(_voice_files(paths.VOICES).get(model, {}), tr("голоса без набора"))
     for s in list_sets():
-        if s["name"] != skip_set:
+        if s["name"] != skip_set and s["model"] == model:
             out.update(dict.fromkeys(s["voices"], tr("набор {name}", name=s["name"])))
     return out
 
 
+def _check_voice(z, i, ext):
+    """Файл похож на голос своей модели: GGUF — по сигнатуре, .espeech (safetensors) — по заголовку JSON."""
+    with z.open(i) as f:
+        head = f.read(9)
+    if ext == cosyvoice.VOICE_EXT:
+        return head[:4] == b"GGUF"
+    n = int.from_bytes(head[:8], "little")
+    return len(head) == 9 and 0 < n < i.file_size and head[8:9] == b"{"
+
+
 def _check_zip(path, filename):
-    """Что ставить из zip: имя набора, голоса (имя -> запись в zip), manifest. Ошибка — ValueError."""
+    """Что ставить из zip: имя набора, голоса ({модель: {имя: запись в zip}}), manifest. Ошибка — ValueError."""
     try:
         z = zipfile.ZipFile(path)
     except zipfile.BadZipFile:
@@ -464,24 +487,24 @@ def _check_zip(path, filename):
         for i in entries:
             rel = i.filename.split("/", 1)[1] if single else i.filename
             base = rel.rsplit("/", 1)[-1]
+            voice, ext = os.path.splitext(base)
+            ext = ext.lower()
             if "/" in rel:  # только верхний уровень набора
                 ignored.append(i.filename)
             elif base == "manifest.json":
                 manifest = i.filename
-            elif base.lower().endswith(".gguf"):
-                voice = base[:-5]
+            elif ext in EXT_MODEL:
                 if not VOICE_NAME.match(voice):
                     raise ValueError(tr("недопустимое имя голоса: {voice}", voice=voice))
-                if i.file_size > MAX_GGUF:
+                if i.file_size > MAX_VOICE:
                     raise ValueError(tr("{file}: слишком большой для голоса", file=base))
-                with z.open(i) as f:
-                    if f.read(4) != b"GGUF":
-                        raise ValueError(tr("{file}: не GGUF", file=base))
-                voices[voice] = i.filename
+                if not _check_voice(z, i, ext):
+                    raise ValueError(tr("{file}: не голос {model}", file=base, model=ENGINES[EXT_MODEL[ext]].TITLE))
+                voices.setdefault(EXT_MODEL[ext], {})[voice] = i.filename
             else:
                 ignored.append(i.filename)
         if not voices:
-            raise ValueError(tr("в архиве нет голосов *.gguf"))
+            raise ValueError(tr("в архиве нет голосов (*.gguf, *.espeech)"))
         meta = {}
         if manifest:
             try:
@@ -493,29 +516,66 @@ def _check_zip(path, filename):
     return dict(name=name, voices=voices, manifest=meta, ignored=ignored)
 
 
+def _prune_manifest(d, add=None):
+    """manifest.json набора: записи новых голосов поверх старых, без голосов, у которых не осталось файлов."""
+    path = os.path.join(d, "manifest.json")
+    have = {v for vs in _voice_files(d).values() for v in vs}
+    try:
+        with open(path, encoding="utf-8") as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        meta = {}
+    meta = {k: v for k, v in (meta if isinstance(meta, dict) else {}).items() if k in have}
+    meta.update({k: v for k, v in (add or {}).items() if k in have})
+    if meta:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=1)
+    else:
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(path)
+
+
 def _install_set(path, info):
     name = info["name"]
-    taken = _existing_voices(skip_set=name)
-    added, skipped = [], [tr("{voice} (уже есть: {where})", voice=v, where=taken[v]) for v in sorted(info["voices"]) if v in taken]
+    target = os.path.join(paths.VOICES, name)
+    added, skipped = [], []
     os.makedirs(paths.VOICES, exist_ok=True)
     tmp = os.path.join(paths.VOICES, f".{name}.tmp")
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
-    with zipfile.ZipFile(path) as z:
-        for voice, entry in sorted(info["voices"].items()):
-            if voice in taken:
-                continue
-            with z.open(entry) as src, open(os.path.join(tmp, voice + ".gguf"), "wb") as dst:
-                shutil.copyfileobj(src, dst)
-            added.append(voice)
-    if not added:
-        shutil.rmtree(tmp)
-        raise ValueError(tr("все голоса набора уже установлены в других наборах: {voices}", voices=", ".join(skipped)))
-    if info["manifest"]:
-        with open(os.path.join(tmp, "manifest.json"), "w", encoding="utf-8") as f:
-            json.dump({k: v for k, v in info["manifest"].items() if k in added}, f, ensure_ascii=False, indent=1)
+    try:
+        with zipfile.ZipFile(path) as z:   # сначала всё во временную папку: битый zip не трогает набор
+            for model, voices in sorted(info["voices"].items()):
+                taken = _existing_voices(name, model)
+                ext = ENGINES[model].VOICE_EXT
+                for voice, entry in sorted(voices.items()):
+                    if voice in taken:
+                        skipped.append(tr("{voice} (уже есть: {where})", voice=voice + ext, where=taken[voice]))
+                        continue
+                    with z.open(entry) as src, open(os.path.join(tmp, voice + ext), "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    added.append(voice)
+        if not added:
+            raise ValueError(tr("все голоса набора уже установлены в других наборах: {voices}", voices=", ".join(skipped)))
+        # голоса моделей из zip заменяются целиком, голоса другой модели остаются
+        os.makedirs(target, exist_ok=True)
+        old = _voice_files(target)
+        for model in info["voices"]:
+            for f in old.get(model, {}).values():
+                os.remove(os.path.join(target, f))
+        for f in os.listdir(tmp):
+            os.replace(os.path.join(tmp, f), os.path.join(target, f))
+        _prune_manifest(target, {k: v for k, v in info["manifest"].items() if k in added})
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return dict(name=name, models=sorted(info["voices"]), added=added, skipped=skipped, ignored=info["ignored"])
+
+
+def _delete_set(name, model=None):
     target = os.path.join(paths.VOICES, name)
-    if os.path.isdir(target):
+    if model:
+        for f in _voice_files(target).get(model, {}).values():
+            os.remove(os.path.join(target, f))
+        _prune_manifest(target)
+    if model is None or not _voice_files(target):
         shutil.rmtree(target)
-    os.replace(tmp, target)
-    return dict(name=name, added=added, skipped=skipped, ignored=info["ignored"])

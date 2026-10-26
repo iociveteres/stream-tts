@@ -2,14 +2,14 @@
 
 usage: .venv/Scripts/python.exe tools/wc3/cut-clips.py <batch> [voice_id ...] [--kinds SDUCA]
        .venv/Scripts/python.exe tools/wc3/cut-clips.py --pools [voice_id ...]
-  <batch>     имя партии, например b03: результат в voice-clips/wc3/<batch>/
+  <batch>     имя партии, например b03: результат в voice-clips/cosyvoice/wc3/<batch>/
   voice_id    только эти голоса (по умолчанию все из HEROES и UNITS)
   --kinds     какие виды кандидатов резать (по умолчанию все), например CA — только варианты по подаче
   --pools     только обновить pools.json (реплики для sim в tools/voices/synth.py), без нарезки
 Дальше: python tools/voices/pick.py --add-batch wc3 <batch>, процесс целиком — docs/voice-pipeline.md.
 
 Виды кандидатов (обычные — по итогам A/B пилота b01):
-  S00      текущий образец из voice-refs/wc3, для сравнения
+  S00      текущий образец из voice-refs/cosyvoice/wc3, для сравнения
   D01 D02  герои: реплики из диалогов кампаний, 10-15 с, из соседних строк одной миссии
            (одна сцена, одна подача), две разные миссии. Ответы героя как юнита звучат
            хуже диалогов, а клипы 20-30 с выигрыша не дают.
@@ -20,7 +20,7 @@ usage: .venv/Scripts/python.exe tools/wc3/cut-clips.py <batch> [voice_id ...] [-
            у юнита — самые спокойные или самые напористые ответы. Берутся, только если энергия
            отличается от D/U хотя бы на MOOD_DIFF, A — ещё и с энергией от MOOD_LOUD («напор»).
 
-Текст реплики, по убыванию доверия (всё в voice-clips/wc3/):
+Текст реплики, по убыванию доверия (всё в voice-clips/cosyvoice/wc3/):
   text-fixes.json        проверенные на слух правки {путь к исходнику: текст}
   subtitles.json         субтитры из карт кампаний (extract-subtitles.py), только диалоги
   text-fixes-draft.json  черновые правки ASR, не проверенные на слух
@@ -40,8 +40,8 @@ import datetime, difflib, glob, importlib.util, json, os, random, re, shutil, si
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
 ORIGS = os.path.join(ROOT, "voice-origs", "Warcraft III (RU)")
-REFS = os.path.join(ROOT, "voice-refs", "wc3")
-CLIPS = os.path.join(ROOT, "voice-clips", "wc3")
+REFS = os.path.join(ROOT, "voice-refs", "cosyvoice", "wc3")
+CLIPS = os.path.join(ROOT, "voice-clips", "cosyvoice", "wc3")
 
 DIALOGUE = (10.0, 15.0)  # длина клипа из диалогов, с
 UNIT = (15.0, 25.0)      # длина клипа из ответов юнита, с
@@ -553,7 +553,7 @@ def main():
             ref = os.path.join(REFS, vid)
             if "S" in kinds and os.path.exists(ref + ".wav"):
                 cid = f"{vid}.S00"
-                rel = f"voice-refs/wc3/{vid}.wav"
+                rel = f"voice-refs/cosyvoice/wc3/{vid}.wav"
                 text = pieces.fixes.get(rel) or open(ref + ".txt", encoding="utf-8").read().strip()
                 parts = [dict(rel=rel, text=text, src="fix" if rel in pieces.fixes else "ref", alt=None)]
                 shutil.copy(ref + ".wav", os.path.join(vdir, cid + ".wav"))

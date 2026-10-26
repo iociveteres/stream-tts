@@ -237,8 +237,8 @@ docker compose up -d --build   # после git pull: пересобрать и 
 - голоса, созданные через WebUI или API без **Save speaker**, живут только в памяти и пропадут после перезапуска.
 
 Если формат голосов сменится в новой версии cosyvoice.cpp, их можно пересобрать из исходных образцов.
-Для этого перенесите `voice-refs/` и выполните `scripts/import-voices.sh voice-refs/<набор>` для каждого набора
-(`wc3`, `games`, `streamers`). Здесь фронтенд уже нужен: файлы в `models/frontend-onnx/`, а загружает его в
+Для этого перенесите `voice-refs/` и выполните `scripts/import-voices.sh voice-refs/cosyvoice/<набор>` для каждого
+набора (папки в `voice-refs/cosyvoice/`: `wc3`, `streamers`, игры). Здесь фронтенд уже нужен: файлы в `models/frontend-onnx/`, а загружает его в
 сервер сам скрипт.
 
 ## Производительность
@@ -275,8 +275,8 @@ docker compose up -d --build   # после git pull: пересобрать и 
 
 Код проекта (скрипты, инструменты, stream-tts, сборка, документация) — MIT, см. [LICENSE](LICENSE). Она не
 распространяется на чужое, что лежит рядом:
-- образцы, голоса и их подбор (`voice-refs/`, `voice-origs/`, `voices/`, `voice-clips/` с расшифровками реплик из
-  игр и записей стримеров) в git не входят, у каждого свои права.
+- образцы, голоса и их подбор (`voice-refs/`, `voice-origs/`, `voices/`, `voice-sets/`, `voice-clips/` с
+  расшифровками реплик из игр и записей стримеров) в git не входят, у каждого свои права.
 
 Сторонние компоненты:
 - примеры звука `stream-tts/streamtts/static/quants/*.mp3`: синтез голосом из датасета ru_RU-denis

@@ -1,9 +1,9 @@
 """Реплики голосов Warcraft III для LoRA ESpeech и образец 6–7 с: вход tools/espeech/train.py.
 
-usage: .venv/Scripts/python.exe tools/wc3/lora-clips.py [голос …] [--out voice-clips/wc3-lora] [--root <корень>]
+usage: .venv/Scripts/python.exe tools/wc3/lora-clips.py [голос …] [--out voice-clips/espeech/wc3] [--root <корень>]
                                                          [--ref <голос>=<rel>[,<rel>…]] [--rate <от>,<до>]
                                                          [--candidates N]
-  голос   wc3-* из HEROES и UNITS cut-clips.py или вариант из voice-refs/wc3/manifest.json (wc3-thrall-angry);
+  голос   wc3-* из HEROES и UNITS cut-clips.py или вариант из voice-refs/cosyvoice/wc3/manifest.json (wc3-thrall-angry);
           вариант собирается вместе со своим персонажем. По умолчанию — все голоса манифеста.
   --root  корень проекта с voice-origs/, voice-clips/, voice-refs/ (по умолчанию этот; из worktree — основная копия).
   --ref   образец вручную: реплики (пути от «voice-origs/Warcraft III (RU)/») подряд с паузой 0,25 с.
@@ -20,7 +20,7 @@ text-fixes-draft.json → ASR (кеш asr.json; нет в кеше — расп�
 звук позже конца последнего слова по faster-whisper (word_timestamps, кеш <out>/words.json); и для обучения, и для
 образца.
 
-Варианты одного персонажа (<голос>-angry и т. п. в voice-refs/wc3/manifest.json) делят один адаптер, у них свой
+Варианты одного персонажа (<голос>-angry и т. п. в voice-refs/cosyvoice/wc3/manifest.json) делят один адаптер, у них свой
 только образец. Образец — 5,5–7,5 с (если таких нет — 4,5–9 с) одной репликой или 2–4 соседними (одна сцена диалога
 или один тип ответа юнита), темп 10–15 русских букв в секунду (медленный образец даёт лишние слова в конце,
 docs/espeech.md), текст сверен с ASR (разница букв ≤ 10 %). Основному голосу — спокойный (энергия
@@ -98,13 +98,13 @@ def main():
     a = ap.parse_args()
     rate_lo, rate_hi = map(float, a.rate.split(",")) if a.rate else REF_RATE
     root = os.path.abspath(a.root)
-    out = os.path.abspath(a.out or os.path.join(root, "voice-clips", "wc3-lora"))
+    out = os.path.abspath(a.out or os.path.join(root, "voice-clips", "espeech", "wc3"))
 
     cc = load("cut_clips", os.path.join(HERE, "cut-clips.py"))
     cc.ROOT = root
     cc.ORIGS = os.path.join(root, "voice-origs", "Warcraft III (RU)")
-    cc.REFS = os.path.join(root, "voice-refs", "wc3")
-    cc.CLIPS = os.path.join(root, "voice-clips", "wc3")
+    cc.REFS = os.path.join(root, "voice-refs", "cosyvoice", "wc3")
+    cc.CLIPS = os.path.join(root, "voice-clips", "cosyvoice", "wc3")
     em = load("emotions", os.path.join(ROOT, "tools", "voices", "emotions.py"))
     em.ROOT = root  # ключи кеша — пути от корня
     emo = em.Emotions(cache=os.path.join(root, "voice-clips", "emotions.json"))
