@@ -20,7 +20,7 @@
 ; переносится через {app}\.cuda-keep. Удаление спрашивает, удалить ли также модели, голоса и настройки.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.1.1"
 #endif
 #ifndef Cuda0Url
   #error Нужны /D из downloads.json: собирайте через build-exe.py --setup
