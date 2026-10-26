@@ -191,7 +191,7 @@ class Engine:
             self.adapters.use(None)
         audio = first = 0.0
         for i, c in enumerate(pieces):
-            acc = self.accent(c)
+            acc = P.gen_text(self.accent(c))
             mel = self.tts.sample(v.cond, v.ref_len, v.text + acc, P.frames(acc, v.rate), steps, seed, self.stop)
             w = P.trim(self.tts.decode(mel, v.rms))
             if i:

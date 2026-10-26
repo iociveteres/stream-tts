@@ -24,6 +24,7 @@ log = logging.getLogger("voices")
 FORMAT, VERSION = "espeech-voice", "1"
 EXT = ".espeech"
 MAX_REF_SEC = 12.0   # f5-tts обрезает образец длиннее 12 с
+REF_PAD = 0.05       # с тишины после образца на синтезе (Voice)
 
 
 def ref_text(text):
@@ -89,8 +90,11 @@ class Voice:
         self.path = path                       # None — голос из образца в памяти (POST /speaker), ещё не сохранён
         self.ref = None if path else ref
         self.text = ref_text(md["text"])
-        self.cond, self.rms = tts.cond(ref)
-        self.ref_len = len(ref) // M.HOP
+        # Тишина после образца, как в f5-tts (preprocess_ref_audio_text): первый кадр синтеза — последний кадр мела
+        # образца, и у образца, оборванного на звуке, каждый кусок начинался со щелчка 30–80 мс (голоса WC3).
+        cond = np.r_[np.asarray(ref, np.float32), np.zeros(int(REF_PAD * M.SR), np.float32)]
+        self.cond, self.rms = tts.cond(cond)
+        self.ref_len = len(cond) // M.HOP
         self.rate = float(md.get("tempo") or tempo_of(len(ref), md["text"]))   # кадров на байт
         self.ref_sec = len(ref) / M.SR
         self.title = md.get("title", "")

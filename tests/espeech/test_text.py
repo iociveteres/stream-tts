@@ -47,6 +47,32 @@ def test_frames_short_minimum_and_punct():
     assert P.frames(long, rate) == int(base + 0.15 * M.FPS + 0.3 * M.FPS)
 
 
+def test_gen_text_space_after_final_sign():
+    # как chunk_text f5-tts: после однобайтного знака — пробел (иначе модель глотает конечную согласную)
+    assert P.gen_text("Спас+ибо за подп+иску, др+уг!") == "Спас+ибо за подп+иску, др+уг! "
+    assert P.gen_text("Пр+ивет") == "Пр+ивет"
+    assert P.gen_text("") == ""
+
+
+def test_voice_ref_padded_with_silence():
+    """Образец, оборванный на звуке, давал щелчок в начале каждого куска: мел образца получает 50 мс тишины
+    (как в f5-tts), а темп и длина образца считаются без неё."""
+    import numpy as np
+    from espeech import voices as V
+
+    class FakeTTS:
+        def cond(self, wav):
+            self.wav = wav
+            return None, 0.1
+
+    tts, ref = FakeTTS(), np.full(M.SR * 6, 0.5, np.float32)
+    v = V.Voice("x", tts, ref, dict(text="Д+а."), path="x.espeech")
+    pad = int(V.REF_PAD * M.SR)
+    assert len(tts.wav) == len(ref) + pad and not tts.wav[-pad:].any() and tts.wav[0] == 0.5
+    assert v.ref_len == (len(ref) + pad) // M.HOP
+    assert v.ref_sec == 6.0 and v.rate == V.tempo_of(len(ref), "Д+а.")
+
+
 def test_trim_cuts_silence():
     import numpy as np
     y = np.concatenate([np.zeros(M.SR // 2), 0.3 * np.sin(np.arange(M.SR) / 10), np.zeros(M.SR // 2)])
