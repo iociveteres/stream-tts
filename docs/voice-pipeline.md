@@ -50,7 +50,9 @@
 | `streamers` | стримеры: ***, *** | видео с YouTube |
 
 Это наборы CosyVoice (`voice-clips/cosyvoice/`). Голоса ESpeech с адаптером LoRA (`voice-clips/espeech/`): `wc3` —
-[voices-wc3.md](voices-wc3.md), «LoRA ESpeech»; `morrowind` (`mw-*`) — `tools/sources/extract-morrowind.py`, ниже.
+[voices-wc3.md](voices-wc3.md), «LoRA ESpeech»; `morrowind` (`mw-*`) — `tools/sources/extract-morrowind.py`, ниже;
+игры и стримеры (`dota2`, `stalker`, `portal`, `neco-arc`, `altushka`, `streamers`) — `tools/sources/lora-lines.py`
+([voices.md](voices.md), «Мемные голоса ESpeech»).
 Игры до 26.10.2026 были одним набором `games`.
 
 Новый набор CosyVoice — это папка `voice-clips/cosyvoice/<набор>/` с `set.json`: `{"title": "…", "phrases": ["…", …]}`.
@@ -105,13 +107,15 @@
 **Warcraft III** — [voices-wc3.md](voices-wc3.md): `cut-clips.py` режет кандидатов прямо из файлов игры, тексты
 сверяются с субтитрами кампаний и правятся на слух в `review.py`.
 
-**Остальное** — `tools/sources/`, venv проекта (Whisper, demucs, yt-dlp, Python 3.11, torch cu124):
+**Остальное** — `tools/sources/`, venv проекта (Whisper, demucs, yt-dlp, pykakasi — японский для `lora-lines.py`, Python 3.11, torch cu124):
 
 | Скрипт | Что делает |
 |---|---|
 | `fetch-wiki-lines.py <api.php> <страница> <папка>` | реплики со страницы MediaWiki с текстом в `lines.json`. Для CDN fandom нужен Referer, скрипт его ставит. Portal Wiki быстро отвечает 429, её проще читать из браузера |
 | `extract-stalker.py <resources\|localization> <регэксп> <папка>` | распаковка `.db` ЧН/ЗП (таблица файлов LZHUF, по исходникам OpenXRay). Голоса NPC — `localization/base_sounds.db`, `characters_voice/human_0{1,2,3}/<группировка>/` |
 | `extract-morrowind.py "<Morrowind>/Data Files"` | голоса рас (`mw-<раса>-<m\|f>`) и Дагот Ура: тексты из субтитров ESM (INFO и `Say` в скриптах), сверка с faster-whisper и CAM++, до 10 мин реплик на голос — вход `tools/espeech/train.py` (`voice-clips/morrowind/<голос>/lora/`) и спокойный образец ~6 с (`ref.wav` + `.txt`); `--lang en` — английская версия (GotY): голоса `mw-…-en`, текст латиницей как есть (через `train.py` его не учить: нормализатор переведёт латиницу в кириллицу) |
+| `fetch-portal2.py "<Portal 2>" <папка> [--speaker glados]` | реплики Portal 2 по-русски: текст — субтитры установленной игры (`portal2/resource/subtitles_russian.txt`), звук — файлы Portal Wiki прямо с CDN (путь по md5 имени, как в MediaWiki), мимо API с его 429; `lines.json` как у `fetch-wiki-lines.py` |
+| `lora-lines.py [голос …] [--root <основная копия>]` | реплики мемных голосов для LoRA ESpeech (`voice-clips/espeech/<набор>/<голос>/lora/`, образец ~6 с, `manifest.json` набора): источники и вид текста — в `VOICES` скрипта (текст вики/игры сверяется с faster-whisper, расшифровка записи распознаётся ещё раз по реплике, без текста — распознавание), голос — CAM++; японский (Neco Arc) — кириллицей по Поливанову ([voices.md](voices.md), «Мемные голоса ESpeech») |
 | `transcribe-lines.py <аудио> --out <папка> [--demucs] [--lang ja] [--start/--end]` | нарезка длинной записи на фразы с расшифровкой; `--demucs` сначала отделяет голос от музыки |
 | `villager-ref.py <выход.wav>` | образец из нечленораздельных звуков (житель Minecraft, [voices.md](voices.md)) |
 

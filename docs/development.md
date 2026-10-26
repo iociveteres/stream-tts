@@ -58,7 +58,9 @@
 │   ├── wc3/               # реплики Warcraft III: нарезка кандидатов, проверка текстов (docs/voices-wc3.md)
 │   │                      # (lora-clips.py — реплики и образец 6–7 с для LoRA ESpeech)
 │   ├── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
-│   │                      # (extract-morrowind.py — реплики Morrowind с субтитрами для LoRA ESpeech)
+│   │                      # (extract-morrowind.py — реплики Morrowind с субтитрами для LoRA ESpeech;
+│   │                      # lora-lines.py — то же для мемных голосов из lines.json и папок игр;
+│   │                      # fetch-portal2.py — реплики Portal 2: субтитры игры + звук с CDN Portal Wiki)
 │   └── espeech/           # ESpeech: prepare.py (папка модели models/espeech из кеша Hugging Face — через
 │                          # espeech/prepare.py),
 │                          # make-voice.py (голос .espeech из образца или по manifest.json набора),
