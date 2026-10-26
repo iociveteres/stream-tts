@@ -214,8 +214,9 @@ espeech/.venv/Scripts/python.exe tools/espeech/train.py voice-clips/wc3-lora/wc3
   (выше). Звука вне слов в синтезе было 0,3–0,8 с на фразу, стало 0–0,1 с (`huntress/`: `old` — прежний адаптер,
   `new` — новый, `before-test` — прежний `test.wav`).
 - **Гаритос**: прежний адаптер исследования (`samples/espeech-lora/lora/wc3-garithos-3000.safetensors`) на слух чуть
-  лучше нового — он предложен основным и для `wc3-garithos`, и для `wc3-garithos-angry`: голоса
-  `wc3-garithos-old3000.espeech` и `wc3-garithos-angry-old3000.espeech` (образцы новые, темп тот же; `garithos/`).
+  лучше нового — по решению пользователя он основной и для `wc3-garithos`, и для `wc3-garithos-angry`: ставить
+  `wc3-garithos-old3000.espeech` и `wc3-garithos-angry-old3000.espeech` под именами без `-old3000` (образцы новые,
+  темп тот же; `garithos/`).
 - **Тралл говорит быстро** с образцом 11,2 букв/с («Любая из этих пещер…»). Спокойных кусков 9–10 букв/с у него
   почти нет; кандидаты (`--rate 9,11 --candidates 8`) — `wc3-thrall/ref-cand/`, голоса с прежним адаптером —
   `ref-cand/NN.espeech`, записи — `thrall-ref/` (в имени — темп образца). Темп синтеза: прежний образец — 11,9 букв/с,
