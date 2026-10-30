@@ -73,6 +73,22 @@ def test_collections_per_model(voices, tmp_path):
     assert not wc3.exists()
 
 
+def test_shared_manifest_entry(voices, tmp_path):
+    """Запись манифеста голоса с файлами обеих моделей сливается по полям: коллекция ESpeech без post не стирает
+    эффект голоса CosyVoice. Голос одной модели получает запись новой версии целиком (post можно убрать)."""
+    put(make_zip(tmp_path, "wc3.zip", {"wc3/alpha.gguf": GGUF, "wc3/bravo.gguf": GGUF, "wc3/manifest.json": {
+        "alpha": {"title": "Альфа", "post": ["effects/x.py"]}, "bravo": {"title": "Браво", "post": ["effects/x.py"]}}}))
+    put(make_zip(tmp_path, "wc3e.zip", {"wc3/alpha.espeech": ESPEECH,
+                                        "wc3/manifest.json": {"alpha": {"title": "Альфа (E)"}}}))
+    wc3 = voices / "wc3"
+    assert manifest(wc3)["alpha"] == {"title": "Альфа (E)", "post": ["effects/x.py"]}
+    put(make_zip(tmp_path, "wc3v2.zip", {"wc3/bravo.gguf": GGUF, "wc3/manifest.json": {"bravo": {"title": "Браво"}}}))
+    assert manifest(wc3)["bravo"] == {"title": "Браво"}
+    # голос с файлами обеих моделей в одном zip — один установленный голос
+    r = put(make_zip(tmp_path, "mix.zip", {"mix/b.gguf": GGUF, "mix/b.espeech": ESPEECH}))
+    assert r["added"] == ["b"] and listing(voices / "mix") == ["b.espeech", "b.gguf"]
+
+
 def test_taken_voice_per_model(voices, tmp_path):
     """Голос, который у этой модели уже есть без набора, пропускается; у другой модели то же имя ставится."""
     (voices / "alpha.gguf").write_bytes(GGUF)

@@ -516,8 +516,11 @@ def _check_zip(path, filename):
     return dict(name=name, voices=voices, manifest=meta, ignored=ignored)
 
 
-def _prune_manifest(d, add=None):
-    """manifest.json набора: записи новых голосов поверх старых, без голосов, у которых не осталось файлов."""
+def _prune_manifest(d, add=None, keep=()):
+    """manifest.json набора: записи новых голосов поверх старых, без голосов, у которых не осталось файлов.
+    Запись голоса из keep (у него есть файл другой модели) сливается по полям: манифест общий для обеих моделей, и
+    коллекция ESpeech без post иначе стирала бы эффект голоса CosyVoice. Остальные записи заменяются целиком —
+    новая версия коллекции может убрать поле."""
     path = os.path.join(d, "manifest.json")
     have = {v for vs in _voice_files(d).values() for v in vs}
     try:
@@ -526,7 +529,10 @@ def _prune_manifest(d, add=None):
     except (OSError, ValueError):
         meta = {}
     meta = {k: v for k, v in (meta if isinstance(meta, dict) else {}).items() if k in have}
-    meta.update({k: v for k, v in (add or {}).items() if k in have})
+    for k, v in (add or {}).items():
+        if k in have:
+            old = meta.get(k)
+            meta[k] = {**old, **v} if k in keep and isinstance(old, dict) and isinstance(v, dict) else v
     if meta:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=1)
@@ -554,7 +560,8 @@ def _install_set(path, info):
                         continue
                     with z.open(entry) as src, open(os.path.join(tmp, voice + ext), "wb") as dst:
                         shutil.copyfileobj(src, dst)
-                    added.append(voice)
+                    if voice not in added:   # голос с файлами обеих моделей в одном zip — один голос
+                        added.append(voice)
         if not added:
             raise ValueError(tr("все голоса набора уже установлены в других наборах: {voices}", voices=", ".join(skipped)))
         # голоса моделей из zip заменяются целиком, голоса другой модели остаются
@@ -565,7 +572,8 @@ def _install_set(path, info):
                 os.remove(os.path.join(target, f))
         for f in os.listdir(tmp):
             os.replace(os.path.join(tmp, f), os.path.join(target, f))
-        _prune_manifest(target, {k: v for k, v in info["manifest"].items() if k in added})
+        others = {v for m, vs in _voice_files(target).items() if m not in info["voices"] for v in vs}
+        _prune_manifest(target, {k: v for k, v in info["manifest"].items() if k in added}, keep=others)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return dict(name=name, models=sorted(info["voices"]), added=added, skipped=skipped, ignored=info["ignored"])
