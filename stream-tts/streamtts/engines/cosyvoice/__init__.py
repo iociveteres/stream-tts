@@ -9,13 +9,13 @@ TITLE = "CosyVoice3"
 VOICE_EXT = ".gguf"   # голос: voices/<имя>.gguf или voices/<набор>/<имя>.gguf
 
 # --- загрузки (install.py) ---
-# Модель — с Hugging Face, квант на выбор (scripts/download-model.sh); размеры и sha256 для установщика — в
-# downloads.json (model.quants)
+# Модель — с Hugging Face, квант на выбор (scripts/download-model.sh); ревизия, размеры и sha256 — в
+# downloads.json (model)
 REPO = "Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF"
 # Видеопамять cosyvoice-server на CUDA, МБ — обычно и на самых длинных образцах (замеры на RTX 3060 Ti, 2026-10-17;
 # на Vulkan пик примерно на 0,5 ГБ больше). На 54 фразах (6 голосов × 3 seed) разборчивость по Whisper и
 # сходство CAM++ у всех трёх в пределах шума. Ниже Q5 не проверяли, F16 не лучше Q8_0 и вдвое больше.
-# Примеры звука — static/quants/<голос>-<квант>.mp3 (одна фраза, seed 42), те же файлы берёт установщик. Голос
+# Примеры звука — static/quants/<голос>-<квант>.mp3 (одна фраза, seed 42) — для выбора на вкладке «Сервер». Голос
 # ohf-denis — из датасета ru_RU-denis (OHF-Voice/voice-datasets, CC0), чтобы примеры можно было распространять;
 # как он собран — docs/stream-tts-deploy.md, «Первый запуск».
 QUANTS = {

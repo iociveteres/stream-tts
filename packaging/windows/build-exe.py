@@ -1,7 +1,7 @@
 """Сборка StreamTTS.exe: Nuitka standalone (папка с exe), по желанию с рантаймом рядом и установщиком.
 
 usage: packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py [--runtime core|all] [--setup]
-           [--no-build] [--jobs N] [--cuda-url URL]
+           [--no-build] [--jobs N]
 
 Запускать python из сборочного venv (packaging/windows/requirements.txt): Nuitka компилирует тем интерпретатором,
 которым запущена, и берёт пакеты из него. Компилятор — MSVC (Visual Studio или Build Tools с C++): MinGW Nuitka для
@@ -13,10 +13,9 @@ all — с CUDA (нужен build-runtime.py --cuda). Так собранную 
 (StreamTTS.iss) берёт рантайм сам, из build/runtime/core.
 --setup собирает установщик dist/StreamTTS-Setup-<версия>.exe (версия — __version__ в streamtts/__init__.py; Inno
 Setup 6.5+: ISCC из переменной ISCC, портативной установки в packaging/windows/.inno, PATH или стандартных папок
-установки), --no-build — только установщик из уже собранного dist/StreamTTS. Адреса, размеры и sha256 того, что
-установщик качает сам (архивы CUDA из релиза llama.cpp и модель), берутся из streamtts/downloads.json и передаются в ISCC через /D;
---cuda-url URL подменяет папку, откуда установщик качает архивы CUDA (по умолчанию — релиз llama.cpp): проверка без
-GitHub, с локального `python -m http.server` в build/cache.
+установки), --no-build — только установщик из уже собранного dist/StreamTTS. Установщик ничего не качает (модель и
+CUDA программа качает сама на вкладке «Сервер»); из streamtts/downloads.json он через /D получает версию и файлы CUDA
+(чтобы сохранить при обновлении CUDA, скачанную в программе) и размеры для сводки перед установкой.
 """
 import argparse, importlib.metadata as md, json, os, re, shutil, subprocess, sys
 
@@ -114,25 +113,15 @@ def copy_licenses():
     print(f"Лицензии: {lic} ({', '.join(sorted(os.listdir(lic)))})")
 
 
-def iscc_defines(cuda_url=None):
-    """/D для StreamTTS.iss: версия, размеры программы и закреплённые загрузки из downloads.json."""
+def iscc_defines():
+    """/D для StreamTTS.iss из downloads.json: версия и файлы CUDA, размеры загрузок для сводки (в МБ)."""
     with open(os.path.join(SRC, "streamtts", "downloads.json"), encoding="utf-8") as f:
         dl = json.load(f)
-    cuda, model = dl["cuda"], dl["model"]
-    # MainSize — программа и рантайм без CUDA, для сводки перед установкой (ISPP: /D задаёт строки, числа считаем тут)
-    main = sum(os.path.getsize(os.path.join(r, f)) for top in (APP, os.path.join(HERE, "build", "runtime", "core"))
-               for r, _, fs in os.walk(top) if not os.path.relpath(r, APP).split(os.sep)[0] == "runtime" for f in fs)
-    if len(cuda["archives"]) != 2:
-        sys.exit("StreamTTS.iss ждёт два архива CUDA (llama.cpp и cudart): поправьте Cuda0/Cuda1 в нём")
-    size = sum(a["size"] for a in cuda["archives"])
-    d = dict(AppVersion=VERSION, MainSize=main, CudaVersion=cuda["version"], CudaUnpacked=cuda["unpacked"],
-             CudaSize=size, CudaSizeMB=round(size / 2**20), CudaFiles=",".join(cuda["files"]), ModelUrl=model["url"])
-    for i, a in enumerate(cuda["archives"]):
-        name = a["url"].rsplit("/", 1)[-1]
-        d.update({f"Cuda{i}Url": f"{cuda_url.rstrip('/')}/{name}" if cuda_url else a["url"], f"Cuda{i}Name": name,
-                  f"Cuda{i}Size": a["size"], f"Cuda{i}Unpacked": a["unpacked"], f"Cuda{i}Sha256": a["sha256"]})
-    for i, (q, m) in enumerate(model["quants"].items()):  # порядок — как в QUANTS install.py и на странице модели
-        d.update({f"Model{i}": q, f"Model{i}Size": m["size"], f"Model{i}Sha256": m["sha256"]})
+    cuda, sizes = dl["cuda"], [m["size"] for m in dl["model"]["quants"].values()]
+    mb = lambda n: round(n / 2**20)
+    d = dict(AppVersion=VERSION, CudaVersion=cuda["version"], CudaFiles=",".join(cuda["files"]),
+             CudaMB=mb(sum(a["size"] for a in cuda["archives"])), CudaUnpackedMB=mb(cuda["unpacked"]),
+             ModelMinMB=mb(min(sizes)), ModelMaxMB=mb(max(sizes)))
     return [f"/D{k}={v}" for k, v in d.items()]
 
 
@@ -153,7 +142,6 @@ def main():
     ap.add_argument("--setup", action="store_true", help="собрать установщик (Inno Setup)")
     ap.add_argument("--no-build", action="store_true", help="не пересобирать exe")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 4)
-    ap.add_argument("--cuda-url", help="другая папка с архивами CUDA для установщика (проверка без GitHub)")
     a = ap.parse_args()
 
     if not a.no_build:
@@ -182,7 +170,7 @@ def main():
     print(f"Собрано: {APP} ({size / 2**20:.0f} МБ)")
 
     if a.setup:
-        subprocess.run([iscc(), *iscc_defines(a.cuda_url), os.path.join(HERE, "StreamTTS.iss")], check=True)
+        subprocess.run([iscc(), *iscc_defines(), os.path.join(HERE, "StreamTTS.iss")], check=True)
 
 
 if __name__ == "__main__":

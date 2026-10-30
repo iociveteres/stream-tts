@@ -38,11 +38,11 @@
 │                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
 │                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp, кванты
 │                          # модели, рантайм и модель ESpeech), static/ (static/en.json — английский словарь, static/i18n.js — перевод
-│                          # страниц, static/quants/ — примеры звука квантов для админки и установщика)
+│                          # страниц, static/quants/ — примеры звука квантов для вкладки «Сервер»)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
 │                          # espeech-server и DLL-заглушки), pin-espeech.py (загрузки ESpeech в downloads.json и
-│                          # stubs/*.def — экспорт заглушек), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup:
-│                          # загрузка CUDA и модели),
+│                          # stubs/*.def — экспорт заглушек), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
+│                          # ничего не качает: модель и CUDA — в админке),
 │                          # release.py (latest.json релиза), THIRD-PARTY*.txt (сторонние лицензии);
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
 ├── scripts/

@@ -1,18 +1,21 @@
-"""Первый запуск через админку (режим managed): загрузка модели и установка наборов голосов.
+"""Загрузки через админку (режим managed): модель, CUDA, ESpeech, дополнительные пакеты; установка наборов голосов.
+Установщик программы для Windows ничего не качает: модель, CUDA и ESpeech — кнопки на вкладке «Сервер» (при первом
+запуске без модели админка открывается на ней), пакеты — в настройках.
 
-Модель качается как в scripts/download-model.sh: Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF с Hugging Face, квант на
-выбор (по умолчанию Q8_0), по желанию ONNX-фронтенд int8 (нужен только для извлечения голоса из аудио, для озвучки
-не нужен; он же — дополнительный пакет из PACKAGES, качается и удаляется из настроек админки). Другие пакеты
+Модель качается как в scripts/download-model.sh: Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF с Hugging Face (ревизия
+закреплена в downloads.json, model.url), квант на выбор (по умолчанию Q8_0), по желанию ONNX-фронтенд int8 (нужен
+только для извлечения голоса из аудио, для озвучки не нужен; он же — дополнительный пакет из PACKAGES, качается и
+удаляется из настроек админки). Другие пакеты
 (htdemucs для очистки образца от музыки, separate.py) — из своих репозиториев Hugging Face. Файл пишется в <имя>.part
 с докачкой (Range) и повторами, сверяется с sha256 из x-linked-etag и только потом переименовывается. Папка
 моделей — paths.MODELS.
 
-CUDA (ggml-cuda.dll и рантайм CUDA 13) в установщик не входит: это два архива из релиза llama.cpp той же сборки,
-что и ядро GGML (адреса, размеры и sha256 — в downloads.json, cuda.archives; там же закреплены кванты модели для
-установщика). Если в системе есть драйвер NVIDIA (nvcuda.dll), а ggml-cuda.dll рядом с cosyvoice-server нет,
-вкладка «Сервер» предлагает скачать их: из архивов берутся только нужные файлы (cuda.files), они распаковываются в
-папку сервера при остановленном сервере, версия пишется в cuda-version.txt (по ней установщик при обновлении
-решает, качать ли CUDA заново), потом сервер перезапускается и заново ищет устройства.
+CUDA (ggml-cuda.dll и рантайм CUDA 13) — два архива из релиза llama.cpp той же сборки, что и ядро GGML (адреса,
+размеры и sha256 — в downloads.json, cuda.archives; там же размеры квантов модели). Если в системе есть драйвер
+NVIDIA (nvcuda.dll), а ggml-cuda.dll рядом с cosyvoice-server нет, вкладка «Сервер» предлагает скачать их: из
+архивов берутся только нужные файлы (cuda.files), они распаковываются в папку сервера при остановленном сервере,
+версия пишется в cuda-version.txt (по ней установщик при обновлении решает, сохранить ли CUDA или удалить вместе со
+старым рантаймом), потом сервер перезапускается и заново ищет устройства.
 
 ESpeech (рантайм с torch и модель) программа для Windows качает по кнопке на вкладке «Сервер» —
 engines/espeech/download.py; CUDA, если её нет, качается вместе с ним (torch берёт cuBLAS оттуда).
@@ -35,7 +38,7 @@ from .i18n import tr
 
 log = logging.getLogger("install")
 
-# Закреплённые загрузки (их же берёт установщик, build-exe.py передаёт их в StreamTTS.iss)
+# Закреплённые загрузки (версию и файлы CUDA, размеры для сводки build-exe.py передаёт ещё и в StreamTTS.iss)
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads.json"), encoding="utf-8") as _f:
     DOWNLOADS = json.load(_f)
 CUDA = DOWNLOADS["cuda"]
@@ -52,16 +55,14 @@ def cuda_archives():
     return out
 CUDA_VERSION_FILE = "cuda-version.txt"
 
-# Модель CosyVoice: репозиторий, кванты и видеопамять — в описании движка (engines/cosyvoice), размеры — из
-# downloads.json
+# Модель CosyVoice: репозиторий, кванты и видеопамять — в описании движка (engines/cosyvoice), размеры и адрес с
+# закреплённой ревизией — из downloads.json (sha256 сверяется по x-linked-etag и совпадает с закреплённым)
 REPO = cosyvoice.REPO
-BASE = f"https://huggingface.co/{REPO}/resolve/main"
+BASE = DOWNLOADS["model"]["url"].rstrip("/")
 QUANTS = {q: dict(d, size=DOWNLOADS["model"]["quants"][q]["size"]) for q, d in cosyvoice.QUANTS.items()}
 DEFAULT_QUANT = cosyvoice.DEFAULT_QUANT
-SAMPLES = (("ohf-denis", "Пример"),)  # голос в установщике — SampleVoice в StreamTTS.iss
+SAMPLES = (("ohf-denis", "Пример"),)
 SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет. Вперёд!"
-# Квант, выбранный в установщике (StreamTTS.iss): при первом запуске без модели он качается сам
-SETUP_CHOICE = os.path.join(paths.APP, "setup-model.txt")
 FRONTEND = cosyvoice.FRONTEND
 # Необязательные пакеты: качаются из админки (настройки и редактор голоса). files — пути в репозитории source на
 # Hugging Face, локально — paths.MODELS/<into>/<путь>. size — байт. alt — те же файлы в полной точности
@@ -292,28 +293,6 @@ class Installer:
                 with contextlib.suppress(FileNotFoundError):
                     os.remove(os.path.join(paths.MODELS, *rel.split("/")))
         log.info("пакет %s удалён", pid)
-
-    def first_run(self):
-        """Квант, выбранный в установщике. Установщик его скачал — он и используется (один раз на выбор: потом
-        решает вкладка «Сервер»); модели нет совсем (загрузку в установщике пропустили или она не удалась) — качаем
-        сами, тоже один раз (отмена не перезапускает)."""
-        try:
-            with open(SETUP_CHOICE, encoding="utf-8-sig") as f:
-                quant = f.read().strip()
-        except OSError:
-            return
-        if quant not in QUANTS:
-            return
-        if model_name(quant) in installed_models():
-            if self.s.get("setup_model") != quant:
-                log.info("модель %s скачана установщиком", quant)
-                self.s.update(model=model_name(quant), setup_model=quant)
-            return
-        if installed_models() or self.s.get("setup_download"):
-            return
-        log.info("модель %s выбрана в установщике, качаю", quant)
-        self.s.update(setup_download=quant)
-        self.start_download(quant, False)
 
     def cancel(self):
         if self.task and not self.task.done():

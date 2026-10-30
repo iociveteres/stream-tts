@@ -231,6 +231,7 @@
  "скачивается": "downloading",
  "Скачать": "Download",
  "Модель не установлена: послушайте примеры и скачайте вариант.": "No model installed: listen to the samples and download a variant.",
+ "Для видеокарты NVIDIA скачайте ещё CUDA — в блоке «Устройство синтеза».": "For an NVIDIA graphics card, also download CUDA in the «Synthesis device» section.",
  "осталось {time}": "{time} left",
  "подготовка": "preparing",
  "{file}: {done} из {total}": "{file}: {done} of {total}",

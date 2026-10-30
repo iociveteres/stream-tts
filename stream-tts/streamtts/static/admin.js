@@ -684,8 +684,10 @@ function renderServer() {
   const known = st.quants.map(q => q.file);
   const other = st.models.filter(m => !known.includes(m)).map(m => h("li", { class: m === st.model ? "on" : "" },
     h("span", { class: "grow" }, m), use(m)));
+  // Установщик ничего не качает: при первом запуске здесь и модель, и подсказка про CUDA (renderCuda)
   const empty = st.models.length ? [] : [h("li", { class: "muted" },
-    T("Модель не установлена: послушайте примеры и скачайте вариант."))];
+    T("Модель не установлена: послушайте примеры и скачайте вариант.") + (st.cuda.offer
+      ? T(" Для видеокарты NVIDIA скачайте ещё CUDA — в блоке «Устройство синтеза».") : ""))];
   $("#models").replaceChildren(...empty, ...catalog, ...other);
   // Загрузка
   $("#model-cancel").hidden = !running;

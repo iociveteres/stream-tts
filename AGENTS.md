@@ -115,10 +115,10 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - Nuitka: собранную программу `paths.py` узнаёт по `__compiled__` (`sys.frozen` не задаётся); данные пакета и
   `effects/` лежат рядом с exe. Импорты эффектов Nuitka не видит: новые зависимости — в `--include-module` в
   `build-exe.py`.
-- CUDA в установщик не входит: установщик и вкладка «Сервер» качают два архива из релиза llama.cpp той же сборки,
-  что ядро GGML (`cuda.archives` в `downloads.json`; `ggml-cuda.dll` должен совпадать с `ggml-base.dll`). Новая
-  сборка llama.cpp — `LLAMA`/`ASSETS` в `build-runtime.py` и `cuda` в `downloads.json` вместе. Строка в `[Code]`
-  `StreamTTS.iss` не должна начинаться с `[` (Inno примет её за заголовок секции).
+- Установщик ничего не качает: модель, CUDA и ESpeech — кнопки на вкладке «Сервер». CUDA — два архива из релиза
+  llama.cpp той же сборки, что ядро GGML (`cuda.archives` в `downloads.json`; `ggml-cuda.dll` должен совпадать с
+  `ggml-base.dll`). Новая сборка llama.cpp — `LLAMA`/`ASSETS` в `build-runtime.py` и `cuda` в `downloads.json`
+  вместе. Строка в `[Code]` `StreamTTS.iss` не должна начинаться с `[` (Inno примет её за заголовок секции).
 - Версия программы — только `__version__` в `streamtts/__init__.py`. Релиз — аннотированный тег `v<версия>`: CI
   собирает установщик и публикует релиз с `latest.json`, по которому программа ищет обновления (`REPO` в
   `updates.py` должен совпадать с репозиторием, иначе CI падает на шаге «Версия»).

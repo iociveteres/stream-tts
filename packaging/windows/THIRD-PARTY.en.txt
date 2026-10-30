@@ -31,8 +31,8 @@ FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), BtbN lgpl-shared build —
   Source code: https://github.com/FFmpeg/FFmpeg (branch release/8.1)
   Build: https://github.com/BtbN/FFmpeg-Builds
 NVIDIA CUDA Runtime and cuBLAS (cudart64_13.dll, cublas64_13.dll,
-  cublasLt64_13.dll; CUDA component, downloaded by the installer or on the
-  Server tab) — NVIDIA CUDA Toolkit EULA, redistributable files:
+  cublasLt64_13.dll; not part of the installer, downloaded on the Server
+  tab) — NVIDIA CUDA Toolkit EULA, redistributable files:
   https://docs.nvidia.com/cuda/eula/
 Microsoft Visual C++ 14.51 runtime (msvcp140*.dll, vcruntime140*.dll,
   concrt140.dll in runtime\ and next to StreamTTS.exe) — Microsoft Visual
@@ -53,7 +53,7 @@ Nuitka (the program's compiler): its runtime in StreamTTS.exe is AGPLv3
   see licenses\nuitka\LICENSE-RUNTIME.txt
 
 The speech model (CosyVoice3 0.5B, Apache-2.0) is not part of the installer:
-the installer (or the program on first launch) downloads it from
+the program downloads it on the Server tab from
 https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
 
 The music removal model (Demucs v4 htdemucs in ONNX) is not part of the
