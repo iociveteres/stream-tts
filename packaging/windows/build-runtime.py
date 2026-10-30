@@ -1,4 +1,5 @@
-"""Рантайм stream-tts для Windows: cosyvoice-server с DLL, ffmpeg и рантаймом VC++; по желанию — файлы CUDA.
+"""Рантайм stream-tts для Windows: cosyvoice-server с DLL, ffmpeg и рантаймом VC++, код espeech-server; по желанию —
+файлы CUDA.
 
 usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--crt DIR] [--cuda] [--flat DIR]
 
@@ -6,12 +7,17 @@ usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--cr
   <out>/core/   cosyvoice-server и cosyvoice-cli, ONNX Runtime, GGML (CPU и Vulkan), ICU, FFmpeg (DLL и ffmpeg.exe),
                 DLL рантайма VC++ (CRT) — всё, что установщик кладёт в {app}\runtime
   <out>/core/licenses/   тексты лицензий: из архивов (LICENSES) и из репозиториев тех же версий (LICENSE_URLS)
+  <out>/core/espeech/    espeech-server без Python и torch: пакет espeech/ (код проекта) и DLL-заглушки stubs/ из
+                packaging/windows/stubs/*.def (их пишет pin-espeech.py; сборка — MSVC, нужен C++ из Visual Studio или
+                Build Tools). Python, пакеты и torch программа качает сама по кнопке на вкладке «Сервер»
+                (engines/espeech/download.py, закреплено в downloads.json, раздел espeech) в папку espeech-runtime.
   --cuda: <out>/cuda/   ggml-cuda.dll и рантайм CUDA 13 (cudart, cuBLAS), ~660 МБ — для build-exe.py --runtime all.
                 В установщик CUDA не входит: установщик и вкладка «Сервер» качают те же два архива llama.cpp сами.
                 Их адреса, размеры и sha256 — в stream-tts/streamtts/downloads.json (cuda.archives), отсюда же их
                 берёт и этот скрипт, так что версия CUDA закреплена в одном месте.
---flat DIR собирает core и файлы CUDA в одну папку: так выглядит runtime/ в корне проекта для запуска stream-tts
-из исходников в режиме managed (docs/stream-tts-deploy.md). По умолчанию out — packaging/windows/build/runtime, загрузки
+--flat DIR собирает core (без espeech/: из исходников espeech-server запускается из espeech/.venv) и файлы CUDA в одну
+папку: так выглядит runtime/ в корне проекта для запуска stream-tts из исходников в режиме managed
+(docs/stream-tts-deploy.md). По умолчанию out — packaging/windows/build/runtime, загрузки
 кешируются в packaging/windows/build/cache. Нужен только Python 3 (стандартная библиотека).
 
 CRT (msvcp140*, vcruntime140*, concrt140) кладётся рядом с cosyvoice-server.exe, чтобы не ставить VC++
@@ -45,9 +51,11 @@ ASSETS = {
                "35a7bd207e5dd6c3d1acbe22ed81ae195f081d3527e58f556b15468400252239"),
 }
 # Закреплённые загрузки программы и установщика: архивы CUDA (llama.cpp) и модели
-DOWNLOADS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "stream-tts", "streamtts", "downloads.json")
+ROOT = os.path.dirname(os.path.dirname(HERE))
+DOWNLOADS = os.path.join(ROOT, "stream-tts", "streamtts", "downloads.json")
 with open(DOWNLOADS, encoding="utf-8") as _f:
-    CUDA = json.load(_f)["cuda"]
+    _DL = json.load(_f)
+CUDA, ESPEECH = _DL["cuda"], _DL["espeech"]["runtime"]
 # Архивы CUDA — по порядку в downloads.json: llama.cpp (ggml-cuda.dll) и cudart; качаются только для --cuda и --flat
 CUDA_ASSETS = ("cuda", "cudart")
 ASSETS.update({name: (a["url"], a["sha256"]) for name, a in zip(CUDA_ASSETS, CUDA["archives"])})
@@ -63,10 +71,11 @@ LAYOUT = [
                 "avfilter-11.dll", "swscale-9.dll", "ffmpeg.exe"], "core"),
     *((name, a["files"], "cuda") for name, a in zip(CUDA_ASSETS, CUDA["archives"])),
 ]
-# DLL рантайма VC++: рантайму нужны MSVCP140, MSVCP140_1, VCRUNTIME140, VCRUNTIME140_1 (dumpbin /dependents), остальные
-# библиотеки C++ из того же набора Microsoft.VC14x.CRT — на случай новых версий cosyvoice и GGML
+# DLL рантайма VC++: рантайму нужны MSVCP140, MSVCP140_1, VCRUNTIME140, VCRUNTIME140_1 (dumpbin /dependents), torch
+# для ESpeech — ещё MSVCP140_ATOMIC_WAIT и VCRUNTIME140_THREADS (импорт torch_cpu.dll; программа копирует CRT к
+# встраиваемому Python), остальные библиотеки C++ из того же набора Microsoft.VC14x.CRT — на случай новых версий
 CRT = ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atomic_wait.dll", "msvcp140_codecvt_ids.dll",
-       "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll")
+       "vcruntime140.dll", "vcruntime140_1.dll", "vcruntime140_threads.dll", "concrt140.dll")
 CRT_MIN = (14, 51)
 # ggml-cuda.dll собран вместе с ggml-base.dll своей сборки llama.cpp, поэтому CUDA берётся из той же сборки, что
 # и ядро, а в её версии (cuda-version.txt) — и CUDA, и сборка
@@ -199,6 +208,58 @@ def find_crt(forced=None):
     return best
 
 
+def vcvars():
+    """vcvars64.bat самой новой Visual Studio с компилятором C++ (vswhere)."""
+    vswhere = os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Microsoft Visual Studio",
+                           "Installer", "vswhere.exe")
+    if os.path.isfile(vswhere):
+        out = subprocess.run([vswhere, "-latest", "-products", "*", "-requires",
+                              "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-find",
+                              r"VC\Auxiliary\Build\vcvars64.bat"], capture_output=True, text=True).stdout.split("\n")
+        if out[0].strip():
+            return out[0].strip()
+    sys.exit("нет MSVC (vcvars64.bat): поставьте Visual Studio или Build Tools с C++ — он нужен для заглушек espeech")
+
+
+def build_stub(deffile, dst, vcvars_bat, tmp):
+    """DLL-заглушка по .def (pin-espeech.py): функции stub_fail и stub_str, данные — нулевые переменные; без CRT."""
+    with open(deffile, encoding="utf-8") as f:
+        ndata = sum(1 for line in f if line.rstrip().endswith(" DATA"))
+    os.makedirs(tmp, exist_ok=True)
+    with open(os.path.join(tmp, "stub.c"), "w", encoding="utf-8") as f:
+        f.write('static const char msg[] = "stub";\n__int64 stub_fail(void) { return 1; }\n'
+                "const char *stub_str(void) { return msg; }\n" +
+                "".join(f"__int64 stub_data{i}[4];\n" for i in range(ndata)))
+    bat = os.path.join(tmp, "build.bat")
+    with open(bat, "w", encoding="utf-8") as f:
+        f.write(f'@call "{vcvars_bat}" >nul\r\ncd /d "{tmp}"\r\ncl /nologo /O1 /GS- /c stub.c || exit /b 1\r\n'
+                f'link /nologo /DLL /NOENTRY /NODEFAULTLIB /DEF:"{deffile}" /OUT:"{dst}" stub.obj || exit /b 1\r\n')
+    p = subprocess.run(["cmd", "/c", bat], capture_output=True, text=True)
+    if p.returncode or not os.path.isfile(dst):
+        sys.exit(f"заглушка {os.path.basename(dst)} не собрана:\n{p.stdout[-3000:]}{p.stderr[-2000:]}")
+    for ext in (".lib", ".exp"):
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(dst[:-4] + ext)
+
+
+def build_espeech(core, cache):
+    """core/espeech/: пакет espeech (только *.py) и DLL-заглушки; cuBLAS-заглушки — в stubs/cublas/ (без CUDA)."""
+    out = os.path.join(core, "espeech")
+    shutil.rmtree(out, ignore_errors=True)
+    shutil.copytree(os.path.join(ROOT, "espeech"), os.path.join(out, "espeech"),
+                    ignore=lambda d, names: [n for n in names if not n.endswith(".py")])
+    shutil.copy(os.path.join(ROOT, "espeech", "THIRD-PARTY.txt"),
+                os.path.join(core, "licenses", "espeech-THIRD-PARTY.txt"))
+    bat, tmp = vcvars(), os.path.join(cache, "stubs-build")
+    for dll in ESPEECH["stubs"] + ESPEECH["cublas"]:
+        d = os.path.join(out, "stubs", *(["cublas"] if dll in ESPEECH["cublas"] else []))
+        os.makedirs(d, exist_ok=True)
+        build_stub(os.path.join(HERE, "stubs", dll[:-4] + ".def"), os.path.join(d, dll), bat, tmp)
+    shutil.rmtree(tmp, ignore_errors=True)
+    n = sum(len(fs) for _, _, fs in os.walk(out))
+    print(f"espeech: {n} файлов (пакет и заглушки {', '.join(ESPEECH['stubs'] + ESPEECH['cublas'])})")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default=os.path.join(BUILD, "runtime"))
@@ -235,6 +296,7 @@ def main():
         shutil.copy(download(url, want, os.path.join(a.cache, "licenses", base), base), lic)
     with contextlib.suppress(FileNotFoundError):
         os.remove(os.path.join(a.out, "vc_redist.x64.exe"))  # от прошлых сборок: рантайм VC++ теперь в core
+    build_espeech(os.path.join(a.out, "core"), a.cache)
 
     def size(d):
         return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(d) for f in fs)
@@ -252,7 +314,9 @@ def main():
     if a.flat:
         os.makedirs(a.flat, exist_ok=True)
         for comp in ("core", "cuda"):
-            shutil.copytree(os.path.join(a.out, comp), a.flat, dirs_exist_ok=True)
+            top = os.path.join(a.out, comp)
+            shutil.copytree(top, a.flat, dirs_exist_ok=True,
+                            ignore=lambda d, names: ["espeech"] if os.path.normcase(d) == os.path.normcase(top) else [])
         with open(os.path.join(a.flat, "cuda-version.txt"), "w", encoding="utf-8") as f:
             f.write(CUDA["version"])
         print(f"Собрано в {a.flat}")

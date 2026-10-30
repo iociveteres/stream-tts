@@ -723,6 +723,16 @@ async def post_cuda_download(request, ctx, data):
     return ok()
 
 
+async def post_espeech_download(request, ctx, data):
+    _install(ctx).start_espeech()
+    return ok()
+
+
+async def post_espeech_delete(request, ctx, data):
+    await _install(ctx).delete_espeech()
+    return ok()
+
+
 # --- модели в памяти (вкладка «Статистика») ---
 async def post_model_unload(request, ctx, data):
     what = str(data["id"])
@@ -818,6 +828,8 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/package/download": post_package_download,
     "/api/package/delete": post_package_delete,
     "/api/cuda/download": post_cuda_download,
+    "/api/espeech/download": post_espeech_download,
+    "/api/espeech/delete": post_espeech_delete,
     "/api/models/unload": post_model_unload,
     "/api/models/load": post_model_load,
     "/api/update/check": post_update_check,

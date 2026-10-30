@@ -658,8 +658,9 @@ function renderServer() {
   $$("#tab-server .managed").forEach(el => el.hidden = !st);
   if (!st) return;
   $("#quants-card").hidden = c.engine !== "cosyvoice";
-  $("#espeech-card").hidden = c.engine !== "espeech";
-  if (rt.models_dir) $("#espeech-dir").textContent = rt.models_dir;
+  // ESpeech: карточка у выбранной модели, а у программы для Windows ещё и пока он не скачан — предложение скачать
+  $("#espeech-card").hidden = c.engine !== "espeech" && !(st.espeech.offer && !st.espeech.installed);
+  $("#espeech-dir").textContent = st.espeech.model_dir || rt.models_dir || "";
   $("#models-dir").textContent = st.models_dir;
   $("#voices-dir").textContent = st.voices_dir;
   const d = st.download, running = d.state === "running";
@@ -694,6 +695,7 @@ function renderServer() {
   $("#dl-text").textContent = {
     running: dlProgress(d),
     done: d.package === "cuda" ? T("Готово: CUDA установлена, сервер перезапускается.")
+      : d.package === "espeech" ? T("Готово: ESpeech скачан.")
       : d.package ? ((pkg(d.package) || {}).restart ? T("Готово: пакет скачан, сервер перезапускается.")
         : T("Готово: пакет скачан."))
       : T("Готово: {quant} скачана, сервер перезапускается.", { quant: d.quant }),
@@ -715,6 +717,7 @@ function renderServer() {
   $("#backend-lock").hidden = !rt.locked.backend;
   $("#backend-lock").textContent = T("Устройство задано переменной {var}.", { var: rt.device_env });
   renderCuda(st, d);
+  renderEspeech(st, d);
   // Наборы голосов
   // Набор — по записи на модель: коллекция «модель + источник» ставится и удаляется отдельно (install.py)
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
@@ -825,6 +828,47 @@ function renderCuda(st, d) {
     h("div", { class: "small muted" }, T("Видеокарта NVIDIA есть, а CUDA не установлена. С CUDA синтез на ней обычно " +
       "быстрее и требует меньше видеопамяти, чем через Vulkan. Файлы лягут в {dir}, сервер синтеза перезапустится.",
       { dir: c.dir })),
+    status), action));
+}
+
+// ESpeech у программы для Windows (engines/espeech/download.py): рантайм с PyTorch и модель качаются по кнопке
+let espeechKey = "";
+function renderEspeech(st, d) {
+  const e = st.espeech, mine = d.package === "espeech", running = d.state === "running";
+  const key = JSON.stringify([e, mine && d, running]);
+  if (key === espeechKey) return;
+  espeechKey = key;
+  $("#espeech-prepare").hidden = e.offer;
+  if (!e.offer) { $("#espeech").replaceChildren(); return; }
+  let action;
+  if (mine && running) action = h("button", { onclick: () => api("/api/model/cancel") }, T("Отменить"));
+  else if (e.installed) action = h("button", { class: "icon danger", title: T("Удалить ESpeech"), onclick: async () => {
+      if (await ask(T("Удалить ESpeech (рантайм и модель, {size})? Голоса .espeech останутся, скачать его можно " +
+          "будет снова.", { size: fmtMB(e.disk) }), T("Удалить"), true)) api("/api/espeech/delete"); } }, "✕");
+  else action = h("button", { class: "primary", disabled: running, onclick: () => api("/api/espeech/download") },
+    e.runtime === "outdated" && e.model ? T("Обновить") : T("Скачать"));
+  const status = mine && ["running", "error", "cancelled"].includes(d.state) ? h("div", { class: "small " + ({ error: "bad" }[d.state] || "") },
+      { running: dlProgress(d), error: T("Ошибка: {e}. «Скачать» продолжит с того же места.", { e: d.error }),
+        cancelled: T("Загрузка отменена: «Скачать» продолжит с того же места.") }[d.state])
+    : mine && d.state === "done" && e.installed ? h("div", { class: "small good" }, T("Готово: ESpeech скачан."))
+    : null;
+  const size = e.installed ? T("на диске {disk}", { disk: fmtMB(e.disk) })
+    : T("скачать {size}, на диске {disk}", { size: fmtMB(e.size), disk: fmtMB(e.disk) });
+  const what = e.installed ? null : h("div", { class: "small muted" }, e.runtime === "outdated" && e.model
+    ? T("Вышла новая сборка рантайма ESpeech (Python и PyTorch): скачайте её, модель останется.")
+    : T("Скачаются Python с PyTorch и модель с Hugging Face (веса ESpeech, вокодер Vocos, ударения RUAccent)") +
+      (e.cuda ? T(", а ещё CUDA для видеокарты NVIDIA") : "") + T(". Модель соберётся на этом компьютере, это " +
+      "займёт несколько минут."));
+  $("#espeech").replaceChildren(h("li", { class: e.installed ? "" : "on" }, h("div", { class: "grow" },
+    h("b", {}, "ESpeech-TTS-1_SFT-256K"), " ", h("span", { class: "muted small" }, size),
+    e.installed ? h("span", { class: "tag" }, T("установлен")) : null,
+    h("div", { class: "small muted" }, T("Русская модель с ударениями: звучит естественнее CosyVoice, но фраза " +
+      "синтезируется целиком, без потока.")),
+    what,
+    !e.gpu ? h("div", { class: "small warn" }, T("Видеокарты NVIDIA нет: ESpeech будет работать на процессоре, " +
+      "а это в десятки раз медленнее, чем звучит речь, — для стрима не годится.")) : null,
+    h("div", { class: "small warn" }, T("Лицензия весов: на Hugging Face указана Apache-2.0, но это, похоже, " +
+      "дообученная F5-TTS, а её веса — CC-BY-NC-4.0 (только некоммерческое использование).")),
     status), action));
 }
 

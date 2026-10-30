@@ -1,5 +1,6 @@
-"""espeech-server без модели: нарезка фразы на куски, длительность, нормализатор, словарь ударений пользователя.
-Запуск: espeech/.venv/Scripts/python -m pytest tests/espeech/test_text.py (секунды)."""
+"""espeech-server без модели: нарезка фразы на куски, длительность, нормализатор, словарь ударений пользователя,
+подсказка в логе о причине недоступной видеокарты. Запуск: espeech/.venv/Scripts/python -m pytest
+tests/espeech/test_text.py (секунды)."""
 import os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -7,6 +8,7 @@ sys.path.insert(0, ROOT)
 
 from espeech import model as M, normalize, pipeline as P  # noqa: E402
 from espeech.accent import UserAccents  # noqa: E402
+from espeech.server import cuda_note  # noqa: E402
 
 BPS = 24.0   # байт на секунду звука — темп медленного голоса (Артес ~22–24)
 

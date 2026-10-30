@@ -49,12 +49,48 @@ llama.cpp) и архивы сразу удаляются; во временно�
 перезапускается и заново ищет устройства (`install.py`, `start_cuda`; `STREAM_TTS_CUDA_URL` — другая папка с теми
 же архивами, для проверки без GitHub).
 
+## ESpeech
+
+Вторая модель ([espeech.md](espeech.md)) в установщик не входит: в `{app}\runtime\espeech\` установщик кладёт только
+код espeech-server и DLL-заглушки, а Python с PyTorch и модель программа качает по кнопке «Скачать» в карточке
+«Модель ESpeech» на вкладке «Сервер» (`engines/espeech/download.py`). Карточка видна, пока ESpeech не скачан, и у
+выбранной модели ESpeech; выбрать её можно и до загрузки — сервер ждёт с причиной «ESpeech не скачан». Всё качается
+из первоисточников, адреса, размеры и sha256 закреплены в разделе `espeech` файла `downloads.json`
+(`packaging/windows/pin-espeech.py`), с докачкой после обрыва или отмены и общим прогрессом:
+
+| Что | Откуда | Скачать | На диске |
+|---|---|---|---|
+| встраиваемый Python 3.11.9 | python.org | 11 МБ | `{app}\espeech-runtime\` |
+| пакеты (numpy, onnxruntime, tokenizers, safetensors, onnx и др.) — распаковкой колёс, без pip | PyPI | 38 МБ | там же |
+| torch 2.14.1+cu132 — только нужные файлы колеса, диапазонами (Range) | download.pytorch.org | 432 МБ из 1,9 ГБ | там же, всего ~1,1 ГБ |
+| ESpeech — EMA-копия весов из чекпойнта, диапазонами; Vocos; RUAccent | Hugging Face, закреплённые ревизии | 1,84 ГБ | `{app}\models\espeech\`, 1,4 ГБ |
+| CUDA, если её нет, а видеокарта NVIDIA есть | релиз llama.cpp (как выше) | 550 МБ | `{app}\runtime` |
+
+Из колеса torch не берутся cuDNN (он выключен: без него синтез на 20 % быстрее), cuSPARSE, cuSOLVER, NVRTC, cuFFT
+(STFT на процессоре) и cuBLAS: `torch_cuda.dll` импортирует их статически, поэтому вместо них — заглушки с теми же
+экспортами (`stubs\`, собирает `build-runtime.py`), а cuBLAS torch берёт настоящий из CUDA cosyvoice-server (без неё —
+заглушки `stubs\cublas\`, и ESpeech работает только на процессоре). Папки DLL передаются серверу в `ESPEECH_DLL_DIRS`
+(`espeech/__init__.py`), путь к пакету `espeech` — в `python311._pth` (встраиваемый Python не читает `PYTHONPATH`).
+Если `nvcuda.dll` в системе есть, а драйвер NVIDIA не работает (torch: «Found no NVIDIA driver»), ESpeech загружается
+на процессоре: при `auto` устройство выбирает torch, а CUDA-модель при сбое повторяется на CPU ([espeech.md](espeech.md)).
+Рядом с `python.exe` кладётся CRT из `{app}\runtime`: torch нужен `vcruntime140_threads.dll`, которого во встраиваемом
+Python нет. После распаковки — байткод (`compileall`, иначе каждый запуск компилирует torch заново) и проверка
+импортом; рантайм собирается в `espeech-runtime.tmp` и переименовывается, версия — хэш закреплённого рантайма в
+`version.txt` (при другой закреплённой версии карточка предлагает «Обновить»). Модель собирает `python -m
+espeech.prepare` в скачанном рантайме (~1,5 мин, из них 80 с — словарь ударений в SQLite), исходники
+(`{app}\models\.espeech-src\`) потом удаляются. На время загрузки нужно ~5 ГБ свободного места (проверяется до
+начала). Кнопка «✕» удаляет рантайм и модель (голоса `.espeech` остаются).
+
+`espeech-runtime` лежит вне `runtime`, потому что установка поверх очищает `runtime` целиком: обновление программы
+ESpeech заново не качает. Удаление программы спрашивает и про него вместе с моделями.
+
 ## Сборка
 
 Закреплённые загрузки — `stream-tts/streamtts/downloads.json`: CUDA (версия, нужные файлы и их размер, архивы
 llama.cpp — адрес, размер, распакованный размер, sha256 и какие файлы из него берутся) и кванты модели (адрес
-Hugging Face на конкретной ревизии, размеры, sha256). Его читают `install.py`, `build-runtime.py` (CUDA для
-`--cuda` и `--flat`) и `build-exe.py` (передаёт значения в `StreamTTS.iss` через `/D`). Переход на другую сборку
+Hugging Face на конкретной ревизии, размеры, sha256), а ещё ESpeech (раздел `espeech`: рантайм и модель, его пишет
+`pin-espeech.py`). Его читают `install.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
+ESpeech) и `build-exe.py` (передаёт значения в `StreamTTS.iss` через `/D`). Переход на другую сборку
 llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая запись `cuda` здесь (`build-runtime.py` не
 соберётся, если CUDA не из сборки ядра). Файлы — в `packaging/windows/`:
 
@@ -64,7 +100,15 @@ llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая
   llama.cpp (`13.4-b11500`): `ggml-cuda.dll` собран вместе с `ggml-base.dll` своей сборки. CRT (`msvcp140*`, `vcruntime140*`, `concrt140`) — самая новая полная копия не ниже 14.51 из
   `Microsoft.VC14*.CRT` установленных Visual Studio (`vswhere`) или из System32, либо из `--crt DIR`; на
   `windows-latest` в GitHub Actions стоит VS 2022 с redist 14.44, а в System32 — 14.51.36247, поэтому CI берёт её
-  оттуда. Нужна только стандартная библиотека Python.
+  оттуда; `vcruntime140_threads.dll` в наборе — для torch ESpeech. В `core/espeech/` — пакет `espeech/` (только
+  `*.py`) и DLL-заглушки из `stubs/*.def`: их собирает MSVC (`vswhere`, нужен C++ из Visual Studio или Build Tools,
+  на `windows-latest` есть), `--flat` их не копирует. Нужна только стандартная библиотека Python.
+- `pin-espeech.py` — закрепить загрузки ESpeech: раздел `espeech` в `downloads.json` (Python, колёса PyPI под
+  cp311 win_amd64, часть колеса torch и чекпойнта ESpeech — хвост zip с центральным каталогом, его sha256, выбор
+  файлов и общий sha256 выбранных, `stream-tts/streamtts/partzip.py`) и `stubs/*.def` (экспорт настоящих DLL из колеса
+  torch и архива cudart). Запускать при смене версий в нём (`PYTHON`, `TORCH`, `PACKAGES`) или источников модели в
+  `espeech/prepare.py`; колесо torch (1,9 ГБ) и чекпойнт (2,7 ГБ) нужны целиком: `--torch-wheel`, `--checkpoint`
+  или загрузка в `build/cache`.
 - `build-exe.py` — `StreamTTS.exe` через Nuitka (standalone, консольное приложение) в `dist/StreamTTS/` (113 МБ, из
   них 38 МБ — onnxruntime для очистки от музыки; его инструменты с onnx, sympy и protobuf не включаются):
   пакет `streamtts` со `static/` и `profanity.txt`, `effects/villager-fx.py`. Нужен сборочный venv

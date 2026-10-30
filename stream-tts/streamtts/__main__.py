@@ -123,7 +123,7 @@ def main():
     ctx.load = stats.Load()
     # Первый запуск через админку (модель, устройство, наборы голосов) — только для встроенного сервера
     ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set,
-                                    launchers.get("cosyvoice")) if ctx.runtime else None
+                                    launchers.get("cosyvoice"), launchers.get("espeech")) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.tts, ctx.voices, ctx.runtime)
     ctx.bench = bench.Bench(ctx.settings, ctx.tts, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
     ctx.updates = updates.Updates(ctx.settings, ctx.engine.dirty.set)

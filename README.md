@@ -224,7 +224,8 @@ docker compose up -d --build   # после git pull: пересобрать и 
 (история за 30 дней), `profanity.txt` (корни мата, правится и из интерфейса), `demos/` (mp3-примеры голосов).
 
 Программа для Windows без Docker и Python (установщик без прав администратора, всё в папке программы; CUDA и модель
-качаются по выбору во время установки): [docs/stream-tts-windows.md](docs/stream-tts-windows.md).
+качаются по выбору во время установки, вторая модель ESpeech — кнопкой на вкладке «Сервер», ~2,3 ГБ):
+[docs/stream-tts-windows.md](docs/stream-tts-windows.md).
 
 ### Перенос голосов между инстансами
 

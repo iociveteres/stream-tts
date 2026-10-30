@@ -326,9 +326,10 @@
       </div>
       <div class="card managed" id="espeech-card" hidden>
         <h2>Модель ESpeech</h2>
-        <p class="muted small">Папка модели: <code id="espeech-dir"></code></p>
-        <p class="muted small" data-t>Её собирает <code>tools/espeech/prepare.py</code> из файлов Hugging Face;
-          загрузка из программы — позже.</p>
+        <ul id="espeech" class="setlist"></ul>
+        <p class="muted small mt">Папка модели: <code id="espeech-dir"></code></p>
+        <p class="muted small" id="espeech-prepare" data-t>Её собирает <code>tools/espeech/prepare.py</code> из файлов
+          Hugging Face.</p>
       </div>
       <div class="card managed">
         <h2>Наборы голосов</h2>

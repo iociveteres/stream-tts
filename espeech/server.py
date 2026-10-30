@@ -25,7 +25,7 @@ API (всё JSON, кроме звука):
 Всё, что трогает модель, идёт в одном рабочем потоке по очереди: синтез строго по одному, а CUDA не заводит ресурсы
 на каждый поток запроса (с синтезом прямо в потоках ThreadingHTTPServer память росла на ~2 МБ за запрос). /status,
 /tts/stop и список голосов отвечают и во время синтеза."""
-import argparse, email.parser, email.policy, gc, json, logging, os, queue, random, struct, threading, time, urllib.parse
+import argparse, ctypes, email.parser, email.policy, gc, json, logging, os, queue, random, struct, threading, time, urllib.parse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -48,6 +48,32 @@ class HTTPError(Exception):
 
 def pcm16(x):
     return (np.clip(x, -1, 1) * 32767).astype("<i2").tobytes()
+
+
+def driver_cuda():
+    """Версия CUDA, которую поддерживает установленный драйвер NVIDIA (cuDriverGetVersion: 12080 = CUDA 12.8),
+    0 — драйвера нет."""
+    try:
+        cu = ctypes.WinDLL("nvcuda.dll") if os.name == "nt" else ctypes.CDLL("libcuda.so.1")
+        v = ctypes.c_int()
+        return v.value if cu.cuDriverGetVersion(ctypes.byref(v)) == 0 else 0
+    except (OSError, AttributeError):
+        return 0
+
+
+def cuda_note(torch_cuda, driver):
+    """Почему torch не видит видеокарту: версия CUDA у драйвера против той, под которую собран torch. Драйвер
+    младшей версии CUDA той же мажорной годится (minor version compatibility), старшей — нет."""
+    if not driver:
+        return "драйвер NVIDIA не найден: видеокарты нет или драйвер не установлен"
+    have = f"драйвер NVIDIA поддерживает CUDA {driver // 1000}.{driver % 1000 // 10}"
+    try:
+        major = int(str(torch_cuda).split(".")[0])
+    except ValueError:
+        major = 0
+    if major and driver // 1000 < major:
+        return f"{have}, а torch собран под CUDA {torch_cuda}: нужен драйвер новее"
+    return f"{have}, torch под CUDA {torch_cuda or '?'}: видеокарта не найдена — проверьте диспетчер устройств"
 
 
 def wav_header(n_bytes=None, sr=24000):
@@ -121,10 +147,21 @@ class Engine:
             dev = self.args.device
             if dev == "auto":
                 dev = "cuda" if torch.cuda.is_available() else "cpu"
+                if dev == "cpu":
+                    log.warning("CUDA недоступна (%s): синтез на процессоре",
+                                cuda_note(torch.version.cuda, driver_cuda()))
             t = time.perf_counter()
             if self.acc is None:
                 self.acc = accent.Accentor(os.path.join(self.args.models, "ruaccent"), user=self.user)
-            tts = M.ESpeech(self.args.models, dev)
+            try:
+                tts = M.ESpeech(self.args.models, dev)
+            except Exception as e:
+                if dev != "cuda":
+                    raise
+                # nvcuda.dll есть, а драйвер не работает (torch: Found no NVIDIA driver) — лучше на процессоре, чем без модели
+                log.warning("CUDA не поднялась (%s: %s): загружаю на процессоре", type(e).__name__, e)
+                dev = "cpu"
+                tts = M.ESpeech(self.args.models, dev)
             self.adapters = lora.Adapters(tts.dit)
             self.voices = voices.Registry(tts, self.args.voices)
             self.tts, self.device = tts, dev

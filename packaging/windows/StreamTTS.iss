@@ -15,9 +15,13 @@
 ; первом запуске (install.py, Installer.first_run). Язык установщика — в {app}\setup-lang.txt: на нём админка
 ; открывается в первый раз (i18n.py). Тексты — в [CustomMessages] на двух языках; сторонние лицензии — страница
 ; «Информация» (THIRD-PARTY*.txt).
+; ESpeech в установщик не входит: {app}\runtime\espeech — только код espeech-server и DLL-заглушки (build-runtime.py), а
+; Python с PyTorch и модель программа качает по кнопке на вкладке «Сервер» в {app}\espeech-runtime и {app}\models\espeech
+; (engines/espeech/download.py).
 ; Установка поверх: {app}\runtime очищается целиком (GGML грузит все ggml-*.dll из папки, старые DLL несовместимы),
-; data, models и voices не трогаются; CUDA той же версии (runtime\cuda-version.txt) не качается заново, а
-; переносится через {app}\.cuda-keep. Удаление спрашивает, удалить ли также модели, голоса и настройки.
+; data, models, voices и espeech-runtime не трогаются; CUDA той же версии (runtime\cuda-version.txt) не качается
+; заново, а переносится через {app}\.cuda-keep. Удаление спрашивает, удалить ли также модели (с espeech-runtime), голоса
+; и настройки.
 
 #ifndef AppVersion
   #define AppVersion "0.1.1"
@@ -768,11 +772,12 @@ var
   I: Integer;
 begin
   Result := '';
-  for I := 0 to 2 do
+  for I := 0 to 3 do
   begin
     case I of
       0: Name := 'models';
-      1: Name := 'voices';
+      1: Name := 'espeech-runtime';
+      2: Name := 'voices';
     else
       Name := 'data';
     end;
@@ -794,6 +799,7 @@ begin
   if (CurUninstallStep = usPostUninstall) and DeleteData then
   begin
     DelTree(ExpandConstant('{app}\models'), True, True, True);
+    DelTree(ExpandConstant('{app}\espeech-runtime'), True, True, True);
     DelTree(ExpandConstant('{app}\voices'), True, True, True);
     DelTree(ExpandConstant('{app}\data'), True, True, True);
     RemoveDir(ExpandConstant('{app}'));

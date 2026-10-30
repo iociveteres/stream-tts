@@ -103,10 +103,19 @@ espeech/.venv/Scripts/python -m espeech --models models/espeech --voices voices 
 `<данные>/espeech/accents.json`.
 
 Конфигурация `espeech` в `.claude/launch.json`. Окружение для разработки — `espeech/requirements.txt` (Python 3.11,
-torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимостей). `--device auto|cuda|cpu` (на CPU — fp32;
-скорость на CPU ещё не исследована), `--steps 16|32|12` — шагов по умолчанию.
+torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимостей); те же версии качает программа для Windows
+(`PACKAGES` и `TORCH` в `packaging/windows/pin-espeech.py`). `ESPEECH_DLL_DIRS` — папки DLL, которые пакет добавляет
+в поиск до импорта torch (у программы — заглушки и cuBLAS, `espeech/__init__.py`). `--device auto|cuda|cpu` (на CPU — fp32;
+скорость на CPU ещё не исследована), `--steps 16|32|12` — шагов по умолчанию. `auto` решает сам сервер
+(`torch.cuda.is_available()`): `nvcuda.dll` в системе бывает и без рабочего драйвера NVIDIA, а torch на такой машине
+падает с «Found no NVIDIA driver». stream-tts при `auto` передаёт `auto` (без CUDA в бэкендах — `cpu`), а если
+модель на CUDA всё же не поднялась, сервер пишет предупреждение и загружается на процессоре.
 
-**Папка модели** `models/espeech/` собирается `tools/espeech/prepare.py` из исходных файлов Hugging Face:
+**Папка модели** `models/espeech/` собирается `espeech/prepare.py` (`python -m espeech.prepare --src <папка>`) из
+исходных файлов Hugging Face на закреплённых ревизиях (`SOURCES`): программа для Windows качает их сама
+([stream-tts-windows.md](stream-tts-windows.md), «ESpeech»), для разработки их берёт из кеша Hugging Face
+`tools/espeech/prepare.py`. Чекпойнт читается без `torch.load` (`load_ema`): только тензоры EMA-копии, поэтому
+годится и урезанный чекпойнт с одной ею (1,35 ГБ из 2,7 ГБ, веса бит в бит те же). Состав папки:
 `espeech_fp16.safetensors` (одна EMA-копия весов в fp16, 675 МБ), `vocos.safetensors`, `vocab.txt`, `ruaccent/`
 (`accents.sqlite` — словарь словоформ, 160 МБ; `onnx/` — модели с весами во внешнем файле для mmap; `nn/` —
 токенизаторы; `dictionary/` — три малых словаря).
@@ -192,7 +201,9 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
 Код DiT, сэмплера и Vocos в `model.py` — по F5-TTS, Vocos и x-transformers (MIT, `espeech/THIRD-PARTY.txt`); RUAccent
 — Apache-2.0, его модели — MIT; torch — BSD. **Веса ESpeech** на Hugging Face помечены Apache-2.0, но `vocab.txt`
 совпадает со словарём базовой F5-TTS (пиньинь и т. п.): похоже на дообучение весов SWivid/F5-TTS, а они CC-BY-NC-4.0
-(из-за датасета Emilia). До поставки в установщике — выяснить у авторов.
+(из-за датасета Emilia). Поэтому программа их не распространяет: установщик веса не содержит, а программа по кнопке
+пользователя качает их с Hugging Face из репозитория авторов, и в карточке загрузки об этом предупреждение. Выяснить
+у авторов всё ещё стоит.
 
 ## План встраивания в stream-tts
 
@@ -214,10 +225,12 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
    сохранение в `<набор>/<имя>.espeech`), интерфейс — `static/editor.js` (записи, волну и тестовые фразы возьмёт
    страница дообучения, этап 5); словарь ударений — у сервера (`/accents`, `capabilities.user_accents`), карточка
    на вкладке «Сервер» и правка щелчком в «Как прочитает» ([stream-tts.md](stream-tts.md)).
-4. Поставка: `build-runtime.py` (встраиваемый Python 3.11, облегчённый torch — только нужные файлы колеса, cuBLAS из
-   архива CUDA llama.cpp, DLL-заглушки, CRT с `vcruntime140_threads.dll`), `downloads.json` (раздел `espeech`),
-   `StreamTTS.iss` (выбор модели: CosyVoice / ESpeech / обе), CI; Docker — отдельный образ и сервис `espeech`
-   (torch в образ stream-tts не класть), `TTS_SERVERS=cosyvoice=…,espeech=…`.
+4. ~~Поставка для Windows~~ — сделано, но не в установщике, а загрузкой по кнопке на вкладке «Сервер»
+   ([stream-tts-windows.md](stream-tts-windows.md), «ESpeech»): установщик кладёт код espeech-server и DLL-заглушки
+   (`build-runtime.py`), программа качает встраиваемый Python 3.11, пакеты, облегчённый torch (только нужные файлы
+   колеса, диапазонами), CUDA для cuBLAS, если её нет, и исходники модели, а папку модели собирает
+   `espeech/prepare.py`; всё закреплено в `downloads.json` (раздел `espeech`, `pin-espeech.py`). Осталось: Docker —
+   отдельный образ и сервис `espeech` (torch в образ stream-tts не класть), `TTS_SERVERS=cosyvoice=…,espeech=…`.
 5. LoRA: обучение в `tools/espeech/`, потом в программе (страница модуля ESpeech, задача в процессе сервера).
 6. Документация: `stream-tts.md`, `stream-tts-windows.md`, `voices.md`.
 

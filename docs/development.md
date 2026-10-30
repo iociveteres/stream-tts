@@ -20,25 +20,29 @@
 │                          # как у cosyvoice-server), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
 │                          # RUAccent и словарь ударений пользователя), normalize.py (текст чата), pipeline.py
 │                          # (нарезка на куски), lora.py (адаптер
-│                          # голоса), voices.py (формат .espeech); requirements.txt — окружение espeech/.venv,
-│                          # THIRD-PARTY.txt — лицензии перенесённого кода
+│                          # голоса), voices.py (формат .espeech), prepare.py (папка модели из файлов Hugging
+│                          # Face; её запускает и программа для Windows); requirements.txt — окружение
+│                          # espeech/.venv, THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер: процесс, перезапуски),
 │                          # engines/ (модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент
 │                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск, клиент модели и
-│                          # особенности редактора голоса в editor.py),
+│                          # особенности редактора голоса в editor.py; espeech/download.py — загрузка рантайма
+│                          # и модели ESpeech программой для Windows), partzip.py (часть zip по HTTP диапазонами),
 │                          # install.py (модель и наборы голосов из админки), editor.py (новый голос из записи;
 │                          # интерфейс — static/editor.js),
 │                          # bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
 │                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
-│                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp и кванты
-│                          # модели), static/ (static/en.json — английский словарь, static/i18n.js — перевод
+│                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp, кванты
+│                          # модели, рантайм и модель ESpeech), static/ (static/en.json — английский словарь, static/i18n.js — перевод
 │                          # страниц, static/quants/ — примеры звука квантов для админки и установщика)
-├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++),
-│                          # build-exe.py (Nuitka), StreamTTS.iss (Inno Setup: загрузка CUDA и модели),
+├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
+│                          # espeech-server и DLL-заглушки), pin-espeech.py (загрузки ESpeech в downloads.json и
+│                          # stubs/*.def — экспорт заглушек), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup:
+│                          # загрузка CUDA и модели),
 │                          # release.py (latest.json релиза), THIRD-PARTY*.txt (сторонние лицензии);
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
 ├── scripts/
@@ -52,7 +56,8 @@
 │   │                      # (lora-clips.py — реплики и образец 6–7 с для LoRA ESpeech)
 │   ├── sources/           # реплики из вики, файлов игр и видео, отбор по голосу, сборка вариантов
 │   │                      # (extract-morrowind.py — реплики Morrowind с субтитрами для LoRA ESpeech)
-│   └── espeech/           # ESpeech: prepare.py (папка модели models/espeech из файлов Hugging Face),
+│   └── espeech/           # ESpeech: prepare.py (папка модели models/espeech из кеша Hugging Face — через
+│                          # espeech/prepare.py),
 │                          # make-voice.py (голос .espeech из образца или по manifest.json набора)
 ├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts
 ├── tests/                 # автотесты (раздел «Тесты»); requirements.txt — pytest для stream-tts/.venv
@@ -60,7 +65,8 @@
 │                          # fake_irc.py (поддельный IRC
 │                          # Twitch), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
-│                          # test_editor_espeech.py), test_real.py и test_real_espeech.py
+│                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py),
+│                          # test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
 │   └── espeech/           # espeech-server в espeech/.venv: test_text.py (нарезка, нормализатор, словарь),
@@ -165,7 +171,11 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 чтобы не мешать Docker-версии (её сервер на 8080 — внешний для конфигурации `stream-tts`). Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
 проверка словаря `python stream-tts/check-i18n.py`. ESpeech со своими данными — `espeech-test` (espeech-server на
 8096, голоса и словарь ударений в `stream-tts-data/espeech-test/`) и `stream-tts-espeech` (stream-tts на 8095 с
-`TTS_SERVERS=espeech=…`): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Программа для Windows —
+`TTS_SERVERS=espeech=…`): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Загрузку ESpeech, как у
+программы для Windows, — `stream-tts-espeech-dl` (порт 8097, всё в `stream-tts-data/espeech-dl/`: `rt/` — копия
+`packaging/windows/build/runtime/core` и `cuda` после `build-runtime.py --cuda`, туда же скачанный рантайм и модель),
+собранный `build-exe.py --runtime all` exe — `streamtts-exe-test` (порт 8098, данные, модели и голоса в
+`stream-tts-data/exe-test/`, ESpeech качается в `dist/StreamTTS/espeech-runtime`). Программа для Windows —
 [stream-tts-windows.md](stream-tts-windows.md).
 
 ## Тесты
@@ -220,7 +230,10 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
 `gain_db`, смена фразы примеров, живая фраза прерывает пример, приоритет «послушать», разделы по наборам (папки
 обеих моделей), эффекты `post` и отказ скриптам не из `effects/`; `test_voicesets.py` — наборы из zip без процесса
 stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpeech в одной папке набора, замена и удаление по модели,
-занятые имена, битые архивы; `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
+занятые имена, битые архивы; `test_espeech_download.py` — загрузка ESpeech без сети (`partzip.py`,
+`engines/espeech/download.py` напрямую, локальный HTTP-сервер с Range): только нужные файлы zip диапазонами, докачка
+после обрыва без повторной загрузки, выбор по списку, подмена хвоста или файла, распаковка колёс, состояние
+рантайма, закреплённое в `downloads.json`; `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
 предел), варианты и их проверки, синтез ячеек (фронтенд, `_draft-*`, перерегистрация, кэш, сравнение), сохранение
 (имя, путь на внешнем сервере, manifest, образец, ошибка сервера), черновик после перезапуска и его удаление, сервер
 без фронтенда, очередь с живой озвучкой, выгрузка фронтенда, «убрать музыку» без пакета; `test_stats.py` —

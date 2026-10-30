@@ -68,6 +68,14 @@ class Tts:
     async def close(self):
         await self.client.close()
 
+    async def status(self):
+        """GET /status. У движка может уточниться то, что до запуска было догадкой: у ESpeech auto решает torch."""
+        ok = await self.client.status()
+        sync = getattr(self.runtime.launcher, "sync", None) if self.runtime else None
+        if sync:
+            sync(self.client.info)
+        return ok
+
     async def use(self, engine, ready=None):
         """Сменить модель. Вызывать задачей: ждёт текущий запрос к серверу и готовности нового сервера; ready() —
         когда он ответил (голоса новой модели), до конца смены."""

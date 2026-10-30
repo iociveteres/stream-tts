@@ -14,6 +14,9 @@ CUDA (ggml-cuda.dll и рантайм CUDA 13) в установщик не вх
 папку сервера при остановленном сервере, версия пишется в cuda-version.txt (по ней установщик при обновлении
 решает, качать ли CUDA заново), потом сервер перезапускается и заново ищет устройства.
 
+ESpeech (рантайм с torch и модель) программа для Windows качает по кнопке на вкладке «Сервер» —
+engines/espeech/download.py; CUDA, если её нет, качается вместе с ним (torch берёт cuBLAS оттуда).
+
 Набор голосов — zip с голосами (*.gguf CosyVoice, *.espeech ESpeech) и manifest.json (ключи — имена голосов:
 title, post…) в корне или в одной папке. Имя набора — эта папка или имя zip; оно же группа на странице голосов
 (voices.GROUPS). Набор ставится в paths.VOICES/<набор>/; голоса тех моделей, что есть в zip, заменяются целиком,
@@ -27,6 +30,7 @@ import aiohttp
 
 from . import paths
 from .engines import ENGINES, cosyvoice
+from .engines.espeech import download as espeech_download
 from .i18n import tr
 
 log = logging.getLogger("install")
@@ -115,9 +119,10 @@ class Cancelled(Exception):
 
 
 class Installer:
-    def __init__(self, settings, runtime, changed, cosy=None):
+    def __init__(self, settings, runtime, changed, cosy=None, espeech=None):
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
         self.cosy = cosy   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
+        self.espeech = espeech   # запуск ESpeech: у программы для Windows рантайм и модель качаются (download.py)
         self.task = None
         self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
         self._last_push = 0.0
@@ -131,7 +136,7 @@ class Installer:
                     models=installed_models(),
                     model=os.path.basename(model) if model else self.s.get("model", ""),
                     models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=list_sets(),
-                    packages=packages(), cuda=self.cuda_state())
+                    packages=packages(), cuda=self.cuda_state(), espeech=self.espeech_state())
 
     # --- CUDA ---
     def cuda_state(self):
@@ -163,21 +168,9 @@ class Installer:
         try:
             timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                self.dl.update(total=sum(a[2] for a in archives),
-                               done=sum(_part_size(os.path.join(d, a[1])) for a in archives))
-                for url, name, size, sha, _ in archives:
-                    dst = os.path.join(d, name)
-                    if not (os.path.isfile(dst) and os.path.getsize(dst) == size):  # скачан в прошлый раз
-                        await self._fetch(session, url, name, dst, size, sha)
-                    else:
-                        self.dl["done"] += size
-            self.dl.update(file=tr("{file}: распаковка", file="CUDA"), speed=0.0)
-            self._push(force=True)
-            async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll
-                await asyncio.to_thread(_extract_cuda, archives, d)
-                self.cosy.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
+                self.dl.update(total=sum(a[2] for a in archives), done=_present(archives, d))
+                await self._get_cuda(session)
             self.dl.update(state="done", file="", speed=0.0)
-            log.info("CUDA %s установлена в %s", CUDA["version"], d)
         except asyncio.CancelledError:
             self.dl.update(state="cancelled", speed=0.0, error="")
             log.info("загрузка CUDA отменена (докачается со следующей попытки)")
@@ -186,6 +179,81 @@ class Installer:
             log.warning("CUDA: %s", self.dl["error"])
         finally:
             self._push(force=True)
+
+    async def _get_cuda(self, session):
+        """Скачать архивы CUDA (докачка) и распаковать нужные файлы в папку cosyvoice-server."""
+        d, archives = self.cosy.dir, cuda_archives()
+        for url, name, size, sha, _ in archives:
+            dst = os.path.join(d, name)
+            if not (os.path.isfile(dst) and os.path.getsize(dst) == size):  # скачан в прошлый раз
+                await self._fetch(session, url, name, dst, size, sha)
+        self.dl.update(file=tr("{file}: распаковка", file="CUDA"), speed=0.0)
+        self._push(force=True)
+        async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll
+            await asyncio.to_thread(_extract_cuda, archives, d)
+            self.cosy.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
+        log.info("CUDA %s установлена в %s", CUDA["version"], d)
+
+    # --- ESpeech (программа для Windows) ---
+    def espeech_state(self):
+        if not self.espeech or not self.espeech.downloaded:
+            return dict(offer=False)
+        return espeech_download.state(self.cuda_state())
+
+    def start_espeech(self):
+        st = self.espeech_state()
+        if not st["offer"]:
+            raise ValueError(tr("ESpeech здесь не скачивается"))
+        if st["installed"]:
+            raise ValueError(tr("ESpeech уже скачан"))
+        if self.task and not self.task.done():
+            raise ValueError(tr("загрузка уже идёт"))
+        espeech_download.check_space(st)
+        self.dl = dict(state="running", quant="", package="espeech", file="", done=0, total=0, speed=0.0, error="")
+        self.task = asyncio.create_task(self._download_espeech(st))
+
+    async def _download_espeech(self, st):
+        try:
+            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                cuda = cuda_archives() if st["cuda"] else []
+                self.dl.update(total=st["size"], done=espeech_download.bytes_present() +
+                               (_present(cuda, self.cosy.dir) if cuda else 0))
+                steps = espeech_download.Steps(self, session)
+                if cuda:   # cuBLAS для torch — из CUDA cosyvoice-server
+                    await self._get_cuda(session)
+                if st["runtime"] != "ok":
+                    await steps.runtime(self._espeech_swap)
+                if not st["model"]:
+                    await steps.model()
+            self.dl.update(state="done", file="", speed=0.0)
+            log.info("ESpeech скачан")
+            if self.runtime.launcher is self.espeech:
+                await self.runtime.restart()
+        except asyncio.CancelledError:
+            self.dl.update(state="cancelled", speed=0.0, error="")
+            log.info("загрузка ESpeech отменена (докачается со следующей попытки)")
+        except Exception as e:
+            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
+            log.warning("ESpeech: %s", self.dl["error"])
+        finally:
+            self._push(force=True)
+
+    async def _espeech_swap(self, tmp):
+        """Собранный рантайм — на место прежнего (сервер ESpeech держит его файлы, если запущен)."""
+        busy = self.runtime.launcher is self.espeech
+        async with self.runtime.paused() if busy else contextlib.nullcontext():
+            await asyncio.to_thread(_replace_dir, tmp, espeech_download.launch.RUNTIME)
+
+    async def delete_espeech(self):
+        if not self.espeech_state()["offer"]:
+            raise ValueError(tr("ESpeech здесь не скачивается"))
+        if self.task and not self.task.done() and self.dl.get("package") == "espeech":
+            raise ValueError(tr("загрузка уже идёт"))
+        busy = self.runtime.launcher is self.espeech
+        async with self.runtime.paused() if busy else contextlib.nullcontext():
+            await asyncio.to_thread(espeech_download.remove)
+        log.info("ESpeech удалён")
 
     def _push(self, force=False):
         now = time.monotonic()
@@ -357,6 +425,19 @@ class Installer:
         async with self.runtime.paused():
             await asyncio.to_thread(_delete_set, name, model)
         log.info("набор %s%s удалён", name, f" ({model})" if model else "")
+
+
+def _present(archives, d):
+    """Сколько из архивов CUDA уже скачано: целиком или .part."""
+    return sum(a[2] if os.path.isfile(os.path.join(d, a[1])) and os.path.getsize(os.path.join(d, a[1])) == a[2]
+               else _part_size(os.path.join(d, a[1])) for a in archives)
+
+
+def _replace_dir(src, dst):
+    shutil.rmtree(dst, ignore_errors=True)
+    if os.path.exists(dst):
+        raise RuntimeError(tr("не удалось удалить {dir}: файлы заняты", dir=dst))
+    os.replace(src, dst)
 
 
 def _extract_cuda(archives, dest):

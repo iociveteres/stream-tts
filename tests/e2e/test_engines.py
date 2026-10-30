@@ -2,11 +2,16 @@
 по схеме params из /status, голоса без файла для текущей модели, свои примеры у каждой модели, «как прочитает».
 
 Два поддельных сервера: cosyvoice (alpha, bravo, charlie) и espeech (alpha, charlie — у bravo нет .espeech)."""
+import sys
+
 import pytest
 
 from conftest import FAST_ENV, Ctx
 from fake_cosyvoice import VOICES, FakeCosy
-from harness import StreamTTS, dominant_hz, wait_for
+from harness import STREAM_TTS, StreamTTS, dominant_hz, wait_for
+
+sys.path.insert(0, STREAM_TTS)
+from streamtts.engines.espeech import launch  # noqa: E402
 
 ESPEECH_VOICES = {k: VOICES[k] for k in ("alpha", "charlie")}
 
@@ -171,6 +176,25 @@ def test_switch_unknown_model(two):
     r = two.api.post("/api/engine", dict(engine="nope"))
     assert not r.json()["ok"]
     assert two.api.state()["cosy"]["engine"] == "cosyvoice"
+
+
+def test_device_choice():
+    """--device сервера ESpeech: auto отдаём torch (nvcuda.dll бывает и без рабочего драйвера — тогда «Found no NVIDIA
+    driver» и пустые голоса), без CUDA в бэкендах — cpu. Устройство из /status уточняет догадку админки."""
+    assert launch.device("auto", True) == "auto"
+    assert launch.device("auto", False) == "cpu"
+    assert launch.device("cuda", True) == "cuda"
+    assert launch.device("cuda", False) == "cpu"
+    assert launch.device("cpu", True) == "cpu"
+
+    L = launch.Launcher("python.exe")
+    L.backend = "CUDA0"
+    L.sync(dict(device="cpu"))     # auto на машине без рабочего CUDA
+    assert L.backend == "CPU"
+    L.sync(dict(device="cuda"))
+    assert L.backend == "CUDA0"
+    L.sync({})                     # сервер ещё не сказал — оставляем как было
+    assert L.backend == "CUDA0"
 
 
 def test_engine_survives_restart(loop, tmp_path):

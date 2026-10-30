@@ -1,7 +1,8 @@
 # espeech-server для разработки: py -3.11 -m venv espeech/.venv, затем
 #   espeech/.venv/Scripts/python -m pip install -r espeech/requirements.txt
-# torch — сборка с CUDA 13.2 с download.pytorch.org (колесо ~2,7 ГБ; рантайм для Windows берёт из него только
-# нужные файлы, docs/espeech.md). Python 3.11: под него проверены облегчённый torch и встраиваемый Python.
+# torch — сборка с CUDA 13.2 с download.pytorch.org (колесо ~1,9 ГБ; программа для Windows берёт из него только
+# нужные файлы, docs/stream-tts-windows.md, «ESpeech»). Python 3.11: под него проверены облегчённый torch и
+# встраиваемый Python. Версии здесь и в PACKAGES/TORCH packaging/windows/pin-espeech.py — одни и те же.
 --extra-index-url https://download.pytorch.org/whl/cu132
 torch==2.14.1+cu132
 numpy==2.4.6
