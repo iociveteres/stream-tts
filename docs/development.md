@@ -43,7 +43,8 @@
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой
-│   └── import-voices.sh   # регистрация голосов из пар .wav + .txt и сохранение в voices/
+│   ├── import-voices.sh   # регистрация голосов из пар .wav + .txt и сохранение в voices/
+│   └── pack-handoff.py    # архив кода без данных для внешнего исполнителя (handoff/, git bundle и zip)
 ├── tools/                 # подбор образцов голосов (docs/voice-pipeline.md), запуск из корня проекта
 │   ├── voices/            # общее: страница выбора, синтез и оценки, модель эмоций и её сверка на слух, CAM++;
 │   │                      # pack-sets.py — коллекции для импорта voice-sets/<модель>/<набор>.zip
@@ -66,7 +67,8 @@
 │                          # test_server.py (сервер с настоящей моделью)
 ├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
-│                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план)
+│                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план),
+│                          # refactor-brief.md (ТЗ на структурный рефакторинг для внешнего исполнителя)
 │
 │   Данные (в git не попадают):
 ├── models/                # модели и пакеты (volume; админка качает сюда); espeech/ — модель ESpeech
