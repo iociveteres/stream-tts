@@ -18,7 +18,7 @@
 ; «Сервер». Удаление спрашивает, удалить ли также модели (с espeech-runtime), голоса и настройки.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.1"
+  #define AppVersion "0.2.0"
 #endif
 #ifndef CudaVersion
   #error Нужны /D из downloads.json: собирайте через build-exe.py --setup
