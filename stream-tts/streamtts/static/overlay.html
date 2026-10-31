@@ -8,12 +8,6 @@
   /* Фон прозрачный: страница добавляется в OBS как Browser Source */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
     font-family: "Segoe UI", system-ui, sans-serif; }
-  #sub { position: fixed; left: 50%; bottom: 6%; transform: translateX(-50%); max-width: 80%;
-    padding: 12px 20px; border-radius: 12px; background: rgba(10, 10, 14, .72); color: #fff;
-    font-size: 30px; line-height: 1.3; text-align: center; text-shadow: 0 2px 4px #000;
-    opacity: 0; transition: opacity .25s; overflow-wrap: anywhere; }
-  #sub.on { opacity: 1; }
-  #sub b { color: #9fc6ff; font-weight: 600; }
   #status { position: fixed; left: 12px; top: 12px; padding: 6px 12px; border-radius: 8px;
     background: rgba(10, 10, 14, .72); color: #ddd; font-size: 16px; display: none; }
   #status.on { display: block; }
@@ -26,14 +20,11 @@
 <body>
 <div id="status"></div>
 <button id="unlock">🔊 Включить звук</button>
-<div id="sub"></div>
 <script src="/static/i18n.js"></script>
 <script>
 "use strict";
 // Звук приходит по WebSocket кусками PCM16 и ставится в очередь Web Audio.
-const params = new URLSearchParams(location.search);
-const showSub = params.get("subtitles") !== "0";
-const $sub = document.getElementById("sub"), $status = document.getElementById("status"),
+const $status = document.getElementById("status"),
       $unlock = document.getElementById("unlock");
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 const PREBUFFER = 0.3;   // запас на неровный поток в начале и после провала
@@ -54,13 +45,11 @@ function stopAll() {
   if (!cur) return;
   for (const s of cur.sources) { s.onended = null; try { s.stop(); } catch (e) {} }
   cur = null;
-  $sub.classList.remove("on");
 }
 function checkDone() {
   if (cur && cur.endMsg && cur.sources.size === 0) {
     send({ type: "ended", id: cur.id });
     cur = null;
-    $sub.classList.remove("on");
   }
 }
 function play(buf) {
@@ -87,13 +76,6 @@ function onMessage(m) {
   else if (m.type === "start") {
     stopAll();
     cur = { id: m.id, sr: m.sr, next: 0, sources: new Set(), endMsg: false };
-    if (showSub && m.subtitle) {
-      const i = m.subtitle.indexOf(": ");
-      $sub.replaceChildren();
-      if (i > 0) { const b = document.createElement("b"); b.textContent = m.subtitle.slice(0, i) + ": ";
-        $sub.append(b, m.subtitle.slice(i + 2)); } else $sub.textContent = m.subtitle;
-      $sub.classList.add("on");
-    }
   }
   else if (m.type === "end") { if (cur && cur.id === m.id) { cur.endMsg = true; checkDone(); } }
   else if (m.type === "stop") { if (cur && cur.id === m.id) stopAll(); }

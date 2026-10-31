@@ -21,7 +21,6 @@ DEFAULTS = {
     "filter_links": True,
     "filter_profanity": True,
     "read_nick": False,
-    "subtitles": False,         # субтитры в оверлее
     "queue_limit": 20,
     "streaming": True,
     "max_chars": 500,
@@ -69,7 +68,7 @@ class Settings:
             for src in ("reward", "chat"):
                 self.data["sources"][src]["access"] = data.get("access", "all")
             self.data["sources"]["chat"]["on"] = bool(data.get("chat_all"))
-        for k in ("access", "chat_all"):
+        for k in ("access", "chat_all", "subtitles"):  # subtitles — убранные субтитры оверлея
             self.data.pop(k, None)
         for name, d in DEFAULTS["sources"].items():  # новые поля способа после обновления
             self.data["sources"][name] = {**copy.deepcopy(d), **self.data["sources"].get(name, {})}

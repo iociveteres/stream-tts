@@ -225,8 +225,8 @@ class StreamTTS:
 
 
 class Played:
-    def __init__(self, id, subtitle):
-        self.id, self.subtitle = id, subtitle
+    def __init__(self, id):
+        self.id = id
         self.chunks = []
         self.started_at = time.monotonic()   # пришёл start
         self.first_at = None    # первый кусок звука
@@ -281,7 +281,7 @@ class Overlay:
             if t in ("active", "inactive"):
                 self.active = t == "active"
             elif t == "start":
-                cur = Played(d["id"], d.get("subtitle", ""))
+                cur = Played(d["id"])
                 self.items.append(cur)
             elif t == "end" and cur and cur.id == d["id"]:
                 cur.ended = True

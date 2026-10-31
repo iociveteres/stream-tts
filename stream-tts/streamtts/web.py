@@ -144,7 +144,7 @@ async def voices_zip(request):
 
 
 # --- состояние ---
-SETTINGS_KEYS = ("enabled", "sources", "reply", "filter_links", "filter_profanity", "read_nick", "subtitles",
+SETTINGS_KEYS = ("enabled", "sources", "reply", "filter_links", "filter_profanity", "read_nick",
                  "queue_limit", "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "lang",
                  "test_phrases", "update_check")
 ACCESS_LEVELS = ("all", "subs", "vip", "mods")

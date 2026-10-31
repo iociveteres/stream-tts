@@ -537,8 +537,7 @@ class Engine:
         if item.play_start is None:
             item.play_start = time.time()
         self.ended.discard(item.id)
-        subtitle = f"{item.display}: {item.text}" if self.s["subtitles"] else ""
-        await ov.send({"type": "start", "id": item.id, "sr": SR, "subtitle": subtitle})
+        await ov.send({"type": "start", "id": item.id, "sr": SR})
         await self.poke()
         sent = 0
         lost = lambda: ov is not self.overlay.active or ov.ws.closed

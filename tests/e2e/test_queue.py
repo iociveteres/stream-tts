@@ -92,12 +92,11 @@ def test_links_stripped(tts):
 
 
 def test_profanity_beep(tts):
-    """Мат вырезается: синтез кусками, на месте слова — тон 800 Гц, в субтитрах ***."""
-    tts.api.ok("/api/settings", dict(subtitles=True))
+    """Мат вырезается: синтез кусками, на месте слова — тон 800 Гц, в журнале ***."""
     ov = tts.overlay()
     it = ov.played(tts.api.test("ну блять и ладно", login="potty", voice="alpha"))
     assert texts(tts.cosy) == ["ну", "и ладно"]
-    assert it.subtitle == "potty: ну *** и ладно"
+    assert "potty [alpha]: ну *** и ладно" in [j["text"] for j in tts.api.state()["engine"]["journal"]]
     assert band_share(it.audio, 800) > 0.01
     assert band_share(it.audio, VOICES["alpha"][0]) > 0.5
 
