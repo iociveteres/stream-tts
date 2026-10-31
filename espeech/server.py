@@ -35,10 +35,10 @@ import numpy as np
 log = logging.getLogger("espeech")
 API_VERSION = 1
 MODEL_NAME = "ESpeech-TTS-1_SFT-256K"
-STEPS = (16, 32, 12)
-PARAMS = {"nfe_steps": {"type": "choice", "choices": list(STEPS), "default": 16, "title": "Шагов синтеза",
-                        "help": "16 — быстро и почти как 32; 32 — максимальное качество, вдвое медленнее; "
-                                "12 — быстрее, звучание заметно другое"}}
+STEPS = (12, 16, 32)
+PARAMS = {"nfe_steps": {"type": "choice", "choices": list(STEPS), "default": 16, "title": "Качество синтеза",
+                        "help": "12 — быстрее, но заметно теряется качество; 16 — оптимально; "
+                                "32 — наибольшее качество, но вдвое медленнее"}}
 
 
 class HTTPError(Exception):

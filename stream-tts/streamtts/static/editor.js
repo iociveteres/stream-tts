@@ -305,7 +305,7 @@ function renderEdVariants() {
   const box = $("#ed-variants");
   if (!D.variants.length) {
     box.replaceChildren(h("p", { class: "muted small" },
-      T("Вариантов пока нет: выделите отрезок на волне записи и нажмите «+ Вариант из выделения».")));
+      T("Вариантов пока нет. Выделите отрезок на волне записи и нажмите «+ Вариант из выделения».")));
     return;
   }
   box.replaceChildren(...D.variants.map(v => {
@@ -318,7 +318,7 @@ function renderEdVariants() {
         v[k] = clamp(+e.target.value || 0, 0, src.dur); upd(); drawWave(v.src); renderSaveVariants(); edChanged(); } }));
     const esp = edEngine().id === "espeech";
     const text = h("textarea", { class: "short" + (esp ? " grow" : ""), rows: 2, placeholder: esp
-        ? T("Ровно то, что звучит в отрезке; ударение — «+» перед гласной")
+        ? T("Расшифровка отрезка")
         : T("Расшифровка отрезка, слово в слово"),
       oninput: e => { v.text = e.target.value; edChanged(); } });
     text.value = v.text;
@@ -345,8 +345,7 @@ function renderEdVariants() {
           renderEdVariants(); renderMatrix(); renderSaveVariants(); drawAllWaves(); edChanged();
         } }, "✕")),
       esp ? h("div", { class: "row" }, text, h("button", { type: "button",
-        title: T("Разметить ударения, как их поставит модель: числа станут словами, «+» — перед ударной гласной. " +
-          "Неверное ударение поправьте вручную или словарём ударений на вкладке «Сервер»."),
+        title: T("Автоматическая расстановка ударений моделью"),
         onclick: () => edAccent(v, text) }, T("Ударения"))) : text,
       esp ? tempoRow(v) : null);
   }));

@@ -196,7 +196,7 @@ class Launcher:
         if self.downloaded:
             from . import download
             if download.runtime_state() != "ok" or not model_ready(self.models):
-                raise Unavailable(tr("ESpeech не скачан: скачайте его на вкладке «Сервер»"))
+                raise Unavailable(tr("ESpeech не скачан. Скачать — на вкладке «Сервер»"))
             write_pth(RUNTIME)   # папку программы могли перенести
         else:
             if not os.path.isfile(self.server):

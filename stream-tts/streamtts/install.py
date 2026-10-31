@@ -72,15 +72,14 @@ PACKAGES = {
     "frontend": dict(
         title="Создание голосов из записи",
         about="ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса). Нужен, чтобы сделать "
-              "голос из записи; для озвучки не нужен.",
+              "голос из записи.",
         files=FRONTEND, size=252891972, license="Apache-2.0", source=REPO, restart=True,
         alt=("frontend-onnx/campplus.onnx", "frontend-onnx/speech_tokenizer_v3.onnx")),
     # Веса Demucs обучены на MusDB: автор называет их исследовательскими (facebookresearch/demucs#267, #327, #508),
     # код Demucs и экспорт в ONNX — MIT. Поэтому пакет не входит в установщик, а качается по кнопке, с пометкой.
     "music": dict(
         title="Очистка образца от музыки",
-        about="Demucs v4 (htdemucs, int8): отделяет голос от музыки — галочка «убрать музыку» у варианта образца в "
-              "редакторе голоса. Работает на процессоре: 20 секунд записи — около 10 секунд.",
+        about="Demucs v4 отделяет голос от музыки. Нужен для функции «убрать музыку» в редакторе голоса.",
         files=("htdemucs_int8.onnx",), into="demucs", size=84108789, source="HRSadeghi/demucs-onnx",
         license="веса — только для исследований"),
 }

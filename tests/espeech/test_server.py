@@ -117,7 +117,7 @@ def jaina(srv):
 def test_status(srv):
     s = srv.get("/status")
     assert s["engine"] == "espeech" and s["api_version"] == 1
-    assert s["params"]["nfe_steps"]["choices"] == [16, 32, 12]
+    assert s["params"]["nfe_steps"]["choices"] == [12, 16, 32]
     assert s["capabilities"]["stream"] and "espeech" in s["capabilities"]["voice_formats"]
 
 

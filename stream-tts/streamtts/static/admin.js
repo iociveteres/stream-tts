@@ -154,7 +154,7 @@ function renderQueue() {
   const q = S.engine.queue;
   const playing = q.find(i => i.state === "playing");
   $("#now").replaceChildren(playing ? h("span", {}, h("b", {}, playing.display + ": "), playing.text,
-    h("span", { class: "muted small" }, `  · ${playing.voice}`)) : T("Тишина"));
+    h("span", { class: "muted small" }, `  · ${playing.voice}`)) : T("Ничего не воспроизводится"));
   $("#now").classList.toggle("muted", !playing);
   $("#qcount").textContent = q.length ? `(${q.length})` : "";
   $("#qempty").hidden = q.length > 0;
@@ -169,7 +169,7 @@ function renderQueue() {
     h("td", {}, h("button", { class: "icon danger", title: T("Убрать и вернуть баллы"),
       onclick: () => api("/api/remove", { id: i.id }) }, "✕")))));
   const ov = S.engine.overlay;
-  $("#ovstate").replaceChildren(!ov.active ? h("span", { class: "bad" }, T("Оверлей не подключён: фразы ждут в очереди."))
+  $("#ovstate").replaceChildren(!ov.active ? h("span", { class: "bad" }, T("Источник в OBS не подключён, фразы ждут в очереди"))
     : ov.ready ? h("span", { class: "good" }, ov.count > 1 ? T("Подключён (окон: {n}, играет последнее).", { n: ov.count })
       : T("Подключён."))
     : h("span", { class: "warn" }, T("Подключён, но звук не включён: кликните «Включить звук» в окне оверлея.")));
@@ -328,13 +328,13 @@ function copyBtn(text) {
     onclick: () => navigator.clipboard.writeText(text).then(() => toast(T("Скопировано"))) }, "⧉");
 }
 function guideSteps() {
-  const name = (S.twitch.login || T("канал")) + "-stream-tts";
+  const name = (S.twitch.login || T("имя_канала")) + "-stream-tts";
   return [
     { title: T("Включите двухфакторную аутентификацию"),
-      body: [h("p", {}, T("Без 2FA консоль разработчика Twitch не даст зарегистрировать приложение.")),
+      body: [h("p", {}, T("2FA необходима, чтобы зарегистрировать приложение через консоль разработчика Twitch.")),
         h("a", { class: "btn", href: "https://www.twitch.tv/settings/security", target: "_blank", rel: "noopener" },
           T("Настройки безопасности Twitch ↗")),
-        h("p", { class: "muted small" }, T("Раздел «Безопасность и конфиденциальность» → «Двухфакторная аутентификация»."))],
+        h("p", { class: "muted small" }, T("«Безопасность и конфиденциальность» → «Двухфакторная аутентификация»."))],
       mock: h("div", { class: "mock" }, mockBar("twitch.tv/settings/security"), h("div", { class: "side" },
         h("div", {}, h("div", {}, T("Профиль")), h("div", {}, T("Каналы и видео")),
           h("div", { class: "hl" }, T("Безопасность"))),
@@ -343,11 +343,10 @@ function guideSteps() {
             h("span", { class: "btnm" }, T("Включить"))))))
     },
     { title: T("Откройте консоль разработчика"),
-      body: [h("p", {}, T("Войдите тем же аккаунтом. Ссылка ведёт сразу на форму «Register Your Application» " +
-        "(в консоли: Applications → «+ Register Your Application»).")),
+      body: [h("p", {}, T("Войдите тем же аккаунтом. Ссылка ведёт сразу на форму «Register Your Application».")),
         h("a", { class: "btn", href: "https://dev.twitch.tv/console/apps/create", target: "_blank", rel: "noopener" },
           "dev.twitch.tv/console ↗"),
-        h("p", { class: "muted small" }, T("Консоль открывается в новой вкладке: внутри другой страницы Twitch её не показывает."))],
+        h("p", { class: "muted small" }, "«Applications» → «+ Register Your Application»")],
       mock: h("div", { class: "mock" }, mockBar("dev.twitch.tv/console/apps"), h("div", { class: "side" },
         h("div", {}, h("div", {}, "Dashboard"), h("div", { style: "color:var(--ink)" }, "Applications"), h("div", {}, "Extensions")),
         h("div", { class: "body" }, h("b", {}, "Applications"),
@@ -356,14 +355,14 @@ function guideSteps() {
     { title: T("Заполните форму"),
       body: [h("ul", {},
           h("li", {}, "Name: ", h("code", {}, name), " ", copyBtn(name),
-            h("div", { class: "muted small" }, T("Имя должно быть уникальным во всём Twitch. Занято — добавьте что-нибудь."))),
+            h("div", { class: "muted small" }, T("Имя должно быть уникальным, занято — добавьте что-нибудь."))),
           h("li", {}, "OAuth Redirect URLs: ", h("code", {}, "http://localhost"), " ", copyBtn("http://localhost"),
             " " + T("и кнопка Add"), h("div", { class: "muted small" },
               T("Поле обязательное, но для входа по коду не используется. Twitch может написать, " +
-              "что адрес должен быть HTTPS: к localhost это не относится, http://localhost он принимает."))),
+              "что адрес должен быть HTTPS. К localhost это не относится, http://localhost будет работать."))),
           h("li", {}, T("Category: любая, например Broadcaster Suite.")),
           h("li", {}, h("b", { class: "warn" }, "Client Type: Public. "),
-            T("Тип клиента после создания, вероятно, не поменять: с Confidential вход по коду не работает, " +
+            T("Тип клиента после создания, вероятно, не поменять. С Confidential вход по коду не работает, " +
             "придётся регистрировать приложение заново."))),
         h("p", {}, T("Нажмите Create."))],
       mock: h("div", { class: "mock" }, mockBar("dev.twitch.tv/console/apps/create"), h("div", { class: "body" },
@@ -633,7 +632,7 @@ function renderPackages() {
     const hint = !p.usable ? T("В этой версии программы нет onnxruntime: пакет работает в программе для Windows, в Docker " +
         "и при запуске из исходников с пакетами из requirements.txt.") : "";
     return h("li", { class: p.installed ? "" : "on" }, h("div", { class: "grow" },
-      h("b", {}, p.title), " ", h("span", { class: "muted small" }, fmtMB(p.size) + " · " + p.license),
+      h("b", {}, p.title), " ", h("span", { class: "muted small" }, fmtMB(p.size)),
       S.setup && p.installed ? h("span", { class: "tag" }, T("установлен")) : null,
       h("div", { class: "small muted" }, p.about),
       hint ? h("div", { class: "small warn" }, hint) : null,
@@ -692,7 +691,7 @@ function renderServer() {
   $("#dl-text").textContent = {
     running: dlProgress(d),
     done: d.package === "cuda" ? T("Готово: CUDA установлена, сервер перезапускается.")
-      : d.package === "espeech" ? T("Готово: ESpeech скачан.")
+      : d.package === "espeech" ? T("ESpeech скачан")
       : d.package ? ((pkg(d.package) || {}).restart ? T("Готово: пакет скачан, сервер перезапускается.")
         : T("Готово: пакет скачан."))
       : T("Готово: {quant} скачана, сервер перезапускается.", { quant: d.quant }),
@@ -777,7 +776,7 @@ function renderAccents() {
       const r = await api("/api/accents/delete", { word: w.word });
       if (r.ok) { accents = r.words; renderAccents(); }
     } }, "✕"))),
-    ...(accents.length ? [] : [h("li", { class: "muted small" }, T("Словарь пуст."))]));
+    ...(accents.length ? [] : [h("li", { class: "muted small" }, T("Словарь пуст"))]));
 }
 /** Слово в словарь; → удалось ли. */
 async function addAccent(accented) {
@@ -840,32 +839,24 @@ function renderEspeech(st, d) {
   let action;
   if (mine && running) action = h("button", { onclick: () => api("/api/model/cancel") }, T("Отменить"));
   else if (e.installed) action = h("button", { class: "icon danger", title: T("Удалить ESpeech"), onclick: async () => {
-      if (await ask(T("Удалить ESpeech (рантайм и модель, {size})? Голоса .espeech останутся, скачать его можно " +
-          "будет снова.", { size: fmtMB(e.disk) }), T("Удалить"), true)) api("/api/espeech/delete"); } }, "✕");
+      if (await ask(T("Удалить ESpeech ({size})? Голоса останутся, скачать его можно будет снова.", { size: fmtMB(e.disk) }), T("Удалить"), true)) api("/api/espeech/delete"); } }, "✕");
   else action = h("button", { class: "primary", disabled: running, onclick: () => api("/api/espeech/download") },
     e.runtime === "outdated" && e.model ? T("Обновить") : T("Скачать"));
   const status = mine && ["running", "error", "cancelled"].includes(d.state) ? h("div", { class: "small " + ({ error: "bad" }[d.state] || "") },
       { running: dlProgress(d), error: T("Ошибка: {e}. «Скачать» продолжит с того же места.", { e: d.error }),
         cancelled: T("Загрузка отменена: «Скачать» продолжит с того же места.") }[d.state])
-    : mine && d.state === "done" && e.installed ? h("div", { class: "small good" }, T("Готово: ESpeech скачан."))
+    : mine && d.state === "done" && e.installed ? h("div", { class: "small good" }, T("ESpeech скачан"))
     : null;
   const size = e.installed ? T("на диске {disk}", { disk: fmtMB(e.disk) })
     : T("скачать {size}, на диске {disk}", { size: fmtMB(e.size), disk: fmtMB(e.disk) });
-  const what = e.installed ? null : h("div", { class: "small muted" }, e.runtime === "outdated" && e.model
-    ? T("Вышла новая сборка рантайма ESpeech (Python и PyTorch): скачайте её, модель останется.")
-    : T("Скачаются Python с PyTorch и модель с Hugging Face (веса ESpeech, вокодер Vocos, ударения RUAccent)") +
-      (e.cuda ? T(", а ещё CUDA для видеокарты NVIDIA") : "") + T(". Модель соберётся на этом компьютере, это " +
-      "займёт несколько минут."));
+  const what = !e.installed && e.runtime === "outdated" && e.model ? h("div", { class: "small muted" },
+    T("Вышло обновление ESpeech. Модель скачивать заново не придётся.")) : null;
   $("#espeech").replaceChildren(h("li", { class: e.installed ? "" : "on" }, h("div", { class: "grow" },
     h("b", {}, "ESpeech-TTS-1_SFT-256K"), " ", h("span", { class: "muted small" }, size),
     e.installed ? h("span", { class: "tag" }, T("установлен")) : null,
-    h("div", { class: "small muted" }, T("Русская модель с ударениями: звучит естественнее CosyVoice, но фраза " +
-      "синтезируется целиком, без потока.")),
+    h("div", { class: "small muted" }, T("Звучит естественнее CosyVoice, но озвучка начинается с задержкой.")),
     what,
-    !e.gpu ? h("div", { class: "small warn" }, T("Видеокарты NVIDIA нет: ESpeech будет работать на процессоре, " +
-      "а это в десятки раз медленнее, чем звучит речь, — для стрима не годится.")) : null,
-    h("div", { class: "small warn" }, T("Лицензия весов: на Hugging Face указана Apache-2.0, но это, похоже, " +
-      "дообученная F5-TTS, а её веса — CC-BY-NC-4.0 (только некоммерческое использование).")),
+    !e.gpu ? h("div", { class: "small warn" }, T("Нет видеокарты NVIDIA. На процессоре ESpeech слишком медленный для стрима.")) : null,
     status), action));
 }
 
@@ -972,8 +963,7 @@ function renderUpdate() {
   $("#update-check").disabled = !u.available;
   $("#update-now").disabled = !u.available || u.checking;
   const lines = [];
-  if (!u.available) lines.push(h("div", { class: "muted" }, T("Новую версию проверяет программа для Windows. " +
-    "Из исходников и в Docker обновляйтесь через git pull.")));
+  if (!u.available) {}   // новую версию проверяет только программа для Windows: кнопки неактивны, без пояснения
   else if (u.checking) lines.push(h("div", { class: "muted" }, T("Проверяю…")));
   else {
     if (u.newer) lines.push(h("div", {},

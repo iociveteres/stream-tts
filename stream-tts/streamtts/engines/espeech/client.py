@@ -19,9 +19,9 @@ class Client(Base):
     ENGINE = "espeech"
     SETTINGS = {"nfe_steps": "espeech_steps"}
     # Как в PARAMS сервера: схема, пока он не ответил (строки переводятся при показе, static/en.json)
-    DEFAULT_PARAMS = {"nfe_steps": {"type": "choice", "choices": [16, 32, 12], "default": 16, "title": "Шагов синтеза",
-                                    "help": "16 — быстро и почти как 32; 32 — максимальное качество, вдвое медленнее; "
-                                            "12 — быстрее, звучание заметно другое"}}
+    DEFAULT_PARAMS = {"nfe_steps": {"type": "choice", "choices": [12, 16, 32], "default": 16, "title": "Качество синтеза",
+                                    "help": "12 — быстрее, но заметно теряется качество; 16 — оптимально; "
+                                            "32 — наибольшее качество, но вдвое медленнее"}}
 
     def params(self, stream):
         return dict(nfe_steps=int(self.s["espeech_steps"]))

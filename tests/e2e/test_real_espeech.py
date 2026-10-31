@@ -86,7 +86,7 @@ def test_espeech_startup(esp, report):
     c, rt = state(esp), esp.runtime()
     assert c["engine"] == "espeech" and rt["state"] == "running" and rt["model"] == "ESpeech-TTS-1_SFT-256K"
     assert [v["name"] for v in esp.api.state()["voices"]] == [JAINA]
-    assert [(p["key"], p["choices"]) for p in c["params"]] == [("espeech_steps", [16, 32, 12])]
+    assert [(p["key"], p["choices"]) for p in c["params"]] == [("espeech_steps", [12, 16, 32])]
     assert c["capabilities"]["accent"] and [e["id"] for e in c["engines"] if e["available"]] == \
         (["cosyvoice", "espeech"] if esp.cosy else ["espeech"])
     report(f"ESpeech: устройство {rt['backend']}, CosyVoice для смены модели — {'есть' if esp.cosy else 'нет'}")

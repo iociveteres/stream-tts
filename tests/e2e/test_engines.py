@@ -93,8 +93,8 @@ def test_model_params(two):
     two.use("espeech")
     p = two.api.state()["cosy"]["params"]
     assert [(x["key"], x["param"], x["value"], x["choices"]) for x in p] == \
-        [("espeech_steps", "nfe_steps", 16, [16, 32, 12])]
-    assert p[0]["title"] == "Шагов синтеза"
+        [("espeech_steps", "nfe_steps", 16, [12, 16, 32])]
+    assert p[0]["title"] == "Качество синтеза"
     two.api.ok("/api/settings", dict(espeech_steps=32))
     assert two.api.state()["cosy"]["params"][0]["value"] == 32
     r = two.api.post("/api/settings", dict(espeech_steps=20))

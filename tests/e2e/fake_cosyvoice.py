@@ -70,9 +70,9 @@ def dominant_hz(x):
     return float(np.fft.rfftfreq(len(x), 1 / SR)[np.argmax(spec)])
 
 
-ESPEECH_PARAMS = {"nfe_steps": {"type": "choice", "choices": [16, 32, 12], "default": 16, "title": "Шагов синтеза",
-                                 "help": "16 — быстро и почти как 32; 32 — максимальное качество, вдвое медленнее; "
-                                         "12 — быстрее, звучание заметно другое"}}
+ESPEECH_PARAMS = {"nfe_steps": {"type": "choice", "choices": [12, 16, 32], "default": 16, "title": "Качество синтеза",
+                                 "help": "12 — быстрее, но заметно теряется качество; 16 — оптимально; "
+                                         "32 — наибольшее качество, но вдвое медленнее"}}
 SPEECH_PIECE = 1.0   # с звука в куске потока espeech
 VOWELS = "аеёиоуыэюя"
 WORD = re.compile(r"[А-Яа-яЁё+]+")
