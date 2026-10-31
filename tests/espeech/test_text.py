@@ -1,4 +1,5 @@
 """espeech-server без модели: нарезка фразы на куски, длительность, нормализатор, словарь ударений пользователя,
+ударения, уже стоящие в тексте,
 подсказка в логе о причине недоступной видеокарты. Запуск: espeech/.venv/Scripts/python -m pytest
 tests/espeech/test_text.py (секунды)."""
 import os, sys
@@ -7,7 +8,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from espeech import model as M, normalize, pipeline as P  # noqa: E402
-from espeech.accent import UserAccents  # noqa: E402
+from espeech.accent import UserAccents, keep_marked, unmark  # noqa: E402
 from espeech.server import cuda_note  # noqa: E402
 
 BPS = 24.0   # байт на секунду звука — темп медленного голоса (Артес ~22–24)
@@ -109,3 +110,15 @@ def test_user_accents(tmp_path):
     assert u.delete("ЗАМОК") and not u.delete("замок")
     assert "замок" not in dict(UserAccents(path).items())
     assert UserAccents().apply("Зам+ок.") == "Зам+ок."
+
+
+def test_marks_in_text_kept():
+    """Ударения в тексте: до normalize снимаются («з+амок» не становится «з плюс амок»), после разметки модели
+    возвращаются в свои слова; «+25», «18+», «C++» — не ударения."""
+    t = "Привет, з+амок на ГОР+Е! +25 градусов, 18+, C++ и +оба"
+    assert unmark(t) == "Привет, замок на ГОРЕ! +25 градусов, 18+, C++ и оба"
+    assert "плюс амок" not in normalize.normalize(unmark(t))
+    model = "прив+ет, зам+ок на гор+е! плюс двадцать пять гр+адусов, восемнадцать плюс, си и об+а"
+    assert keep_marked(t, model) == ("прив+ет, з+амок на гор+е! плюс двадцать пять гр+адусов, восемнадцать плюс, "
+                                     "си и +оба")
+    assert keep_marked("Зам+ок", "З+амок") == "Зам+ок" and keep_marked("замок", "з+амок") == "з+амок"

@@ -128,6 +128,17 @@ def test_accent(srv):
     assert "вс+ем" in d["accented"] and "+" in d["accented"].split()[-1]
 
 
+def test_accent_again(srv):
+    """Повторная разметка не меняет текст, ударение, поставленное вручную, остаётся (раньше normalize делал из
+    «з+амок» «з плюс амок»)."""
+    accent = lambda t: json.loads(srv.request("POST", "/accent", dict(text=t))[1])["accented"]
+    once = accent("Старый замок стоит на горе. Донат 500р")
+    assert accent(once) == once and "плюс" not in once, once
+    word = once.split()[1]
+    manual = once.replace(word, "зам+ок" if word == "з+амок" else "з+амок", 1)
+    assert accent(manual) == manual
+
+
 def test_whole_and_stream(srv, jaina):
     x = srv.tts(text=LONG, voice=jaina, seed=3)
     assert 6 < len(x) / 24000 < 20 and np.abs(x).max() > 3000

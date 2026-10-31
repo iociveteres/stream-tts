@@ -144,12 +144,12 @@ torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимост
 |---|---|
 | `GET /status` | `model_loaded`, `engine: espeech`, `api_version`, `device`, `capabilities` (stream, accent, extract, train, voice_formats, user_accents), `params` — схема настроек для админки (`nfe_steps`: 16 / 32 / 12), `memory` (uss, видеопамять), `error` |
 | `GET /speaker` | имена голосов; папка перечитывается при каждом запросе — новые файлы без перезапуска |
-| `POST /speaker?type=extract` | голос из образца в памяти: multipart `name`, `text` (без «+» ударения ставит RUAccent), `audio` (WAV PCM16 моно 24 кГц, до 12 с), необязательные `tempo`, `title`; 409 — имя занято |
+| `POST /speaker?type=extract` | голос из образца в памяти: multipart `name`, `text` (ударения в словах без «+» ставит RUAccent, стоящие остаются), `audio` (WAV PCM16 моно 24 кГц, до 12 с), необязательные `tempo`, `title`; 409 — имя занято |
 | `POST /speaker/save {name, path}` | голос в файл `.espeech`; относительный `path` — от папки `--voices` (`<набор>/<имя>.espeech`: так сохраняет редактор stream-tts) |
 | `DELETE /speaker/<имя>` | выгрузить; голос из файла вернётся, когда файл изменится, или после перезапуска |
 | `POST /tts {text, voice, seed?, stream?, nfe_steps?}` | WAV PCM16 24 кГц; `stream` — заголовок с неизвестной длиной и PCM по мере готовности кусков (chunked); `seed` по умолчанию случайный, один на все куски фразы; поля cosyvoice (`chunk_tokens` и др.) игнорируются |
 | `POST /tts/stop` | остановить текущий синтез: видеокарта свободна через 0,1–0,2 с, целиком — ответ с тем, что успело |
-| `POST /accent {text}` | как прочитает модель: `{normalized, accented}` |
+| `POST /accent {text}` | как прочитает модель: `{normalized, accented}`; ударения, уже стоящие в тексте, остаются (до нормализации снимаются, иначе «з+амок» стал бы «з плюс амок»), повторная разметка текст не меняет |
 | `GET /accents`, `POST /accents {accented}`, `DELETE /accents/<слово>` | словарь ударений пользователя: `{words: [{word, accented}]}`; добавить или заменить слово («з+амок»; 400 — не одно русское слово с «+» перед гласной); убрать (404 — нет такого) |
 | `POST /model/unload`, `/model/load` | выгрузить и загрузить модель (torch возвращает не всю память: stream-tts выгружает остановкой процесса) |
 

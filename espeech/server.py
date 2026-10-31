@@ -14,7 +14,8 @@ API (всё JSON, кроме звука):
 - POST /tts {text, voice, seed?, stream?, nfe_steps?} — WAV 24 кГц PCM16; stream=true — WAV-заголовок с неизвестной
   длиной и PCM по мере готовности кусков (chunked). Поля cosyvoice (mode, chunk_tokens, …) игнорируются;
 - POST /tts/stop — остановить текущий синтез (шаг Эйлера доработает, видеокарта свободна через 0,1–0,2 с);
-- POST /accent {text} — как прочитает модель: {normalized, accented};
+- POST /accent {text} — как прочитает модель: {normalized, accented}; ударения, уже стоящие в тексте, остаются как
+  есть (accent.keep_marked), повторная разметка текст не меняет;
 - GET /accents — словарь ударений пользователя {words: [{word, accented}]}; POST /accents {accented} — добавить или
   заменить слово («з+амок»; 400 — не одно русское слово с «+» перед гласной); DELETE /accents/<слово> — убрать.
   Слова пользователя перекрывают словарь RUAccent и омографы (accent.UserAccents), хранятся в файле --user-accents
@@ -339,7 +340,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, e.voices.names())
 
     def speaker_extract(self, path, q):
-        from . import voices
+        from . import accent, voices
         e = self.engine
         e.require()
         if q.get("type") != "extract":
@@ -363,8 +364,7 @@ class Handler(BaseHTTPRequestHandler):
         sec = len(ref) / 24000
         if not 1.0 <= sec <= voices.MAX_REF_SEC:
             raise HTTPError(400, f"образец {sec:.1f} с: нужно от 1 до {voices.MAX_REF_SEC:g} с (лучше 6–7)")
-        if "+" not in text:
-            text = e.accent(text)
+        text = accent.keep_marked(text, e.accent(accent.unmark(text)))   # без «+» — разметка модели
         tempo = float(form["tempo"]) if form.get("tempo") else None
         title = (form.get("title") or b"").decode() or None
         e.call(e.voices.add, name, ref, text, tempo, dict(title=title))
@@ -400,12 +400,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, dict(ok=True))
 
     def accent(self, path, q):
+        from . import accent
         e = self.engine
         if e.acc is None:
             raise HTTPError(503, "RUAccent не загружен")
         text = str(self.json().get("text", ""))
-        norm = e.normalize(text)
-        self.send(200, dict(normalized=norm, accented=e.accent(norm)))
+        # ударения, поставленные вручную (или прошлым нажатием «Ударения»), остаются как есть
+        norm = e.normalize(accent.unmark(text))
+        self.send(200, dict(normalized=norm, accented=accent.keep_marked(text, e.accent(norm))))
 
     def accents(self, path, q):
         e = self.engine

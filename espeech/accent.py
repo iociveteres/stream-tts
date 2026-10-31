@@ -140,6 +140,32 @@ def _mark(src, val):
     return "".join(out)
 
 
+# Ударение, которое уже стоит в тексте: «+» перед гласной внутри слова или в его начале («з+амок», «+оба»).
+# «+25», «18+» и «C++» — не ударения.
+STRESS = re.compile(r"(?<![\dA-Za-z_])\+(?=[аеёиоуыэюяАЕЁИОУЫЭЮЯ])")
+
+
+def unmark(text):
+    """Текст без ударений: перед normalize, иначе «з+амок» станет «з плюс амок»."""
+    return STRESS.sub("", text)
+
+
+def keep_marked(src, accented):
+    """Слова, где в src ударение уже стояло, — с ним, а не с разметкой модели (accented): повторная разметка не
+    трогает поправленное вручную. Остальные слова — как в accented. Регистр — из accented (normalize его меняет)."""
+    marked = {}
+    for m in TOKEN.finditer(src):
+        w = m.group(0)
+        if STRESS.search(w):
+            marked[w.replace("+", "").lower()] = w.lower()
+
+    def sub(m):
+        w = m.group(0)
+        v = marked.get(w.replace("+", "").lower())
+        return _mark(w, v) if v else w
+    return TOKEN.sub(sub, accented) if marked else accented
+
+
 class UserAccents:
     """Свои ударения пользователя поверх RUAccent: слово (строчными, без «+») → его разметка («з+амок»).
 

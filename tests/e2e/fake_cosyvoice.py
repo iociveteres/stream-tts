@@ -164,9 +164,10 @@ class FakeCosy:
 
     def _accent(self, text):
         """Как у espeech-server: цифры словами (только 2 — для теста), «+» перед первой гласной каждого слова, поверх —
-        словарь пользователя (регистр — из текста)."""
+        словарь пользователя (регистр — из текста). Слово, где ударение уже стоит, остаётся как есть (accent.keep_marked):
+        повторная разметка не трогает поправленное вручную."""
         norm = text.replace("2", "два")
-        acc = " ".join(next((w[:i] + "+" + w[i:] for i, ch in enumerate(w) if ch.lower() in VOWELS), w)
+        acc = " ".join(w if "+" in w else next((w[:i] + "+" + w[i:] for i, ch in enumerate(w) if ch.lower() in VOWELS), w)
                        for w in norm.split())
 
         def user(m):
