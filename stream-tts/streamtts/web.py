@@ -190,7 +190,8 @@ def model_params(ctx):
 
 def models(ctx):
     """Модели в памяти (вкладка «Статистика»): синтез и ONNX-фронтенд — на сервере синтеза, htdemucs — в stream-tts.
-    Модель синтеза выгружается остановкой встроенного сервера (у готового сервера в тестах — никак)."""
+    Модель синтеза выгружается остановкой встроенного сервера (у готового сервера в тестах — никак). Объём памяти не
+    показывается: cosyvoice-server его не отдаёт, а фронтенд и htdemucs живут в общих процессах, их долю не измерить."""
     rt = ctx.runtime.public() if ctx.runtime else None
     up = ctx.tts.ok is True
     out = [dict(id="tts", name=(rt and rt["model"]) or ctx.tts.info.get("model") or ctx.tts.title,
@@ -199,12 +200,12 @@ def models(ctx):
                 load=bool(rt and rt["unloaded"]))]
     if ctx.tts.frontend_ready:
         out.append(dict(id="frontend", name="speech_tokenizer + campplus", what=tr("создание голосов из записи"),
-                        where=tr("сервер синтеза, ~300 МБ ОЗУ"), loaded=up and ctx.tts.frontend_loaded,
+                        where=tr("сервер синтеза"), loaded=up and ctx.tts.frontend_loaded,
                         unload=up and ctx.tts.frontend_loaded, load=False))
     if separate.available():
         sep = ctx.editor.separator
         out.append(dict(id="music", name="htdemucs int8", what=tr("очистка образца от музыки"),
-                        where=tr("stream-tts, процессор, ~1 ГБ ОЗУ"), loaded=sep.session is not None,
+                        where=tr("stream-tts, процессор"), loaded=sep.session is not None,
                         unload=sep.session is not None and not sep.lock.locked(), load=False))
     return out
 
