@@ -73,15 +73,15 @@ PACKAGES = {
         title="Создание голосов из записи",
         about="ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса). Нужен, чтобы сделать "
               "голос из записи.",
-        files=FRONTEND, size=252891972, license="Apache-2.0", source=REPO, restart=True,
+        files=FRONTEND, size=252891972, source=REPO, restart=True,
         alt=("frontend-onnx/campplus.onnx", "frontend-onnx/speech_tokenizer_v3.onnx")),
     # Веса Demucs обучены на MusDB: автор называет их исследовательскими (facebookresearch/demucs#267, #327, #508),
-    # код Demucs и экспорт в ONNX — MIT. Поэтому пакет не входит в установщик, а качается по кнопке, с пометкой.
+    # код Demucs и экспорт в ONNX — MIT. Поэтому пакет не входит в установщик, а качается по кнопке; лицензии всех
+    # загрузок перечислены на странице «Информация» установщика (packaging/windows/THIRD-PARTY*.txt).
     "music": dict(
         title="Очистка образца от музыки",
         about="Demucs v4 отделяет голос от музыки. Нужен для функции «убрать музыку» в редакторе голоса.",
-        files=("htdemucs_int8.onnx",), into="demucs", size=84108789, source="HRSadeghi/demucs-onnx",
-        license="веса — только для исследований"),
+        files=("htdemucs_int8.onnx",), into="demucs", size=84108789, source="HRSadeghi/demucs-onnx"),
 }
 CHUNK = 1 << 20
 RETRIES = 5
@@ -458,7 +458,7 @@ def packages(installed=None):
     """Необязательные пакеты для админки. installed — id -> bool для пакетов, файлов которых не видно (фронтенд
     готового сервера в тестах)."""
     installed = installed or {}
-    return [dict(id=pid, title=tr(p["title"]), about=tr(p["about"]), size=p["size"], license=tr(p["license"]),
+    return [dict(id=pid, title=tr(p["title"]), about=tr(p["about"]), size=p["size"],
                  source=p["source"], restart=bool(p.get("restart")), usable=package_usable(pid),
                  installed=installed[pid] if pid in installed else package_installed(pid))
             for pid, p in PACKAGES.items()]

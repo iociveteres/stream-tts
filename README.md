@@ -285,6 +285,8 @@ docker compose up -d --build   # после git pull: пересобрать и 
 - cosyvoice.cpp: MIT.
 - Модели CosyVoice3 GGUF: Apache-2.0.
 - FFmpeg из репозиториев Ubuntu может включать GPL-компоненты. Это важно только при публикации образа.
+- Программа для Windows: всё, что она ставит и качает по кнопкам, с лицензиями —
+  [packaging/windows/THIRD-PARTY.txt](packaging/windows/THIRD-PARTY.txt) (страница «Информация» установщика).
 
 Это неофициальная сборка: ни cosyvoice.cpp, ни этот проект не связаны с командой CosyVoice.
 Клонируйте только свой голос или голоса людей, которые дали на это согласие.

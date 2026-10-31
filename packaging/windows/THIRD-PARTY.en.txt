@@ -2,10 +2,12 @@ StreamTTS is MIT-licensed, see licenses\StreamTTS-LICENSE.txt. The model
 audio samples (streamtts\static\quants) are synthesized with a voice from
 the ru_RU-denis dataset, CC0: https://github.com/OHF-Voice/voice-datasets
 
-StreamTTS for Windows includes third-party software. Licenses are listed
-below; full texts are in the program folder: runtime\licenses\
-(cosyvoice-server and the libraries next to it) and licenses\ (Python
-and its packages).
+Below is every third-party component the installer puts in place and
+the program can download on request. Full license texts are in the
+program folder: runtime\licenses\ (the speech servers and the libraries
+next to them) and licenses\ (Python and its packages).
+
+== Included in the installer ==
 
 cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT,
   see runtime\licenses\cosyvoice.cpp-LICENSE and
@@ -30,10 +32,8 @@ FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), BtbN lgpl-shared build —
   LGPL 2.1 or later, see runtime\licenses\ffmpeg-LICENSE.txt
   Source code: https://github.com/FFmpeg/FFmpeg (branch release/8.1)
   Build: https://github.com/BtbN/FFmpeg-Builds
-NVIDIA CUDA Runtime and cuBLAS (cudart64_13.dll, cublas64_13.dll,
-  cublasLt64_13.dll; not part of the installer, downloaded on the Server
-  tab) — NVIDIA CUDA Toolkit EULA, redistributable files:
-  https://docs.nvidia.com/cuda/eula/
+espeech-server (runtime\espeech) — MIT; its model code follows F5-TTS,
+  Vocos and x-transformers (MIT), see runtime\licenses\espeech-THIRD-PARTY.txt
 Microsoft Visual C++ 14.51 runtime (msvcp140*.dll, vcruntime140*.dll,
   concrt140.dll in runtime\ and next to StreamTTS.exe) — Microsoft Visual
   Studio distributable code license
@@ -52,15 +52,37 @@ Nuitka (the program's compiler): its runtime in StreamTTS.exe is AGPLv3
   the compiled program under any license,
   see licenses\nuitka\LICENSE-RUNTIME.txt
 
-The speech model (CosyVoice3 0.5B, Apache-2.0) is not part of the installer:
-the program downloads it on the Server tab from
-https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+== Downloaded on request in the program ==
 
-The music removal model (Demucs v4 htdemucs in ONNX) is not part of the
-installer: it is downloaded on request in the settings from
-https://huggingface.co/HRSadeghi/demucs-onnx
-The Demucs and export code is MIT, but the weights were trained on MusDB
-and, according to the Demucs author, are for research use only
-(https://github.com/facebookresearch/demucs/issues/327).
-
-Note: the StreamTTS interface is in Russian.
+CosyVoice3 0.5B speech model (GGUF) — Apache-2.0
+  https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+Voice creation from a recording: CosyVoice3 ONNX frontend (speech
+  tokenizer and CAM++) — Apache-2.0, same repository
+CUDA for NVIDIA graphics cards: ggml-cuda.dll — MIT (llama.cpp); CUDA
+  Runtime and cuBLAS (cudart64_13.dll, cublas64_13.dll, cublasLt64_13.dll)
+  — NVIDIA CUDA Toolkit EULA, redistributable files:
+  https://docs.nvidia.com/cuda/eula/
+  From the release https://github.com/ggml-org/llama.cpp/releases/tag/b11500
+Music removal from a sample: Demucs v4 htdemucs in ONNX
+  https://huggingface.co/HRSadeghi/demucs-onnx
+  The Demucs and export code is MIT, but the weights were trained on
+  MusDB and, according to the Demucs author, are for research use only
+  (https://github.com/facebookresearch/demucs/issues/327).
+ESpeech model:
+  ESpeech-TTS-1_SFT-256K weights
+  https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K
+  Hugging Face lists Apache-2.0, but this looks like a fine-tuned
+  F5-TTS, whose weights are CC-BY-NC-4.0 (non-commercial use only):
+  https://huggingface.co/SWivid/F5-TTS
+  Vocos vocoder (vocos-mel-24khz) — MIT,
+  https://huggingface.co/charactr/vocos-mel-24khz
+  RUAccent 1.5.8.3 stress marks — Apache-2.0, its models
+  (ruaccent/accentuator) — MIT, https://github.com/Den4ikAI/ruaccent
+  embeddable Python 3.11.9 — PSF License 2.0
+  PyTorch 2.14.1 — BSD-3-Clause and others, the CUDA libraries in it —
+  NVIDIA CUDA Toolkit EULA
+  Python packages: numpy — BSD-3-Clause and others;
+  psutil, protobuf — BSD-3-Clause; onnxruntime,
+  razdel — MIT; safetensors, tokenizers, onnx, ml_dtypes — Apache-2.0;
+  typing_extensions — PSF-2.0. License texts are in
+  espeech-runtime\Lib\site-packages\*.dist-info

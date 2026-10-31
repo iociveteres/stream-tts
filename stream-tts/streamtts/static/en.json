@@ -530,7 +530,6 @@
  "Набор": "Set",
  "Очистка образца от музыки": "Remove music from samples",
  "Demucs v4 отделяет голос от музыки. Нужен для функции «убрать музыку» в редакторе голоса.": "Demucs v4 separates the voice from music. Needed for “remove music” in the voice editor.",
- "веса — только для исследований": "weights: research use only",
  "В этой версии программы нет onnxruntime: пакет работает в программе для Windows, в Docker и при запуске из исходников с пакетами из requirements.txt.": "This build has no onnxruntime: the package works in the Windows app, in Docker and when running from source with the packages from requirements.txt.",
  "Голос отделяется от музыки (Demucs) один раз, около 10 секунд на 20 секунд записи": "The voice is separated from music (Demucs) once, about 10 seconds per 20 seconds of audio",
  "Готово: пакет скачан.": "Done: package downloaded.",

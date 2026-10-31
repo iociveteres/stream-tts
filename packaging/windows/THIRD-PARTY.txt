@@ -2,9 +2,12 @@ StreamTTS — MIT, см. licenses\StreamTTS-LICENSE.txt. Примеры звук
 моделей (streamtts\static\quants) синтезированы голосом из датасета
 ru_RU-denis, CC0: https://github.com/OHF-Voice/voice-datasets
 
-StreamTTS для Windows включает сторонние программы. Их лицензии ниже,
-полные тексты — в папке программы: runtime\licenses\ (cosyvoice-server
-и библиотеки рядом с ним) и licenses\ (Python и его пакеты).
+Ниже — всё стороннее, что ставит установщик и что программа может
+скачать по кнопке. Полные тексты лицензий — в папке программы:
+runtime\licenses\ (серверы синтеза и библиотеки рядом с ними) и
+licenses\ (Python и его пакеты).
+
+== В установщике ==
 
 cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT,
   см. runtime\licenses\cosyvoice.cpp-LICENSE и
@@ -29,10 +32,8 @@ FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), сборка BtbN lgpl-shared —
   LGPL 2.1 or later, см. runtime\licenses\ffmpeg-LICENSE.txt
   Исходный код: https://github.com/FFmpeg/FFmpeg (ветка release/8.1)
   Сборка: https://github.com/BtbN/FFmpeg-Builds
-NVIDIA CUDA Runtime и cuBLAS (cudart64_13.dll, cublas64_13.dll,
-  cublasLt64_13.dll; в установщик не входят, скачиваются во вкладке
-  «Сервер») — NVIDIA CUDA Toolkit EULA, распространяемые файлы:
-  https://docs.nvidia.com/cuda/eula/
+espeech-server (runtime\espeech) — MIT; код модели в нём — по F5-TTS,
+  Vocos и x-transformers (MIT), см. runtime\licenses\espeech-THIRD-PARTY.txt
 Рантайм Microsoft Visual C++ 14.51 (msvcp140*.dll, vcruntime140*.dll,
   concrt140.dll в runtime\ и рядом с StreamTTS.exe) — лицензия Microsoft
   на распространяемый код Visual Studio
@@ -51,13 +52,37 @@ Nuitka (компилятор программы): его runtime в StreamTTS.ex
   собранную программу под любой лицензией,
   см. licenses\nuitka\LICENSE-RUNTIME.txt
 
-Модель синтеза (CosyVoice3 0.5B, Apache-2.0) в установщик не входит:
-программа скачивает её во вкладке «Сервер» с
-https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+== Скачивается по кнопке в программе ==
 
-Модель очистки от музыки (Demucs v4 htdemucs в ONNX) в установщик
-не входит: она скачивается по кнопке в настройках с
-https://huggingface.co/HRSadeghi/demucs-onnx
-Код Demucs и экспорта — MIT, а веса обучены на MusDB и, по словам
-автора Demucs, предназначены только для исследований
-(https://github.com/facebookresearch/demucs/issues/327).
+Модель синтеза CosyVoice3 0.5B (GGUF) — Apache-2.0
+  https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+Создание голосов из записи: ONNX-фронтенд CosyVoice3 (речевой
+  токенизатор и CAM++) — Apache-2.0, оттуда же
+CUDA для видеокарт NVIDIA: ggml-cuda.dll — MIT (llama.cpp); CUDA Runtime
+  и cuBLAS (cudart64_13.dll, cublas64_13.dll, cublasLt64_13.dll) —
+  NVIDIA CUDA Toolkit EULA, распространяемые файлы:
+  https://docs.nvidia.com/cuda/eula/
+  Из релиза https://github.com/ggml-org/llama.cpp/releases/tag/b11500
+Очистка образца от музыки: Demucs v4 htdemucs в ONNX
+  https://huggingface.co/HRSadeghi/demucs-onnx
+  Код Demucs и экспорта — MIT, а веса обучены на MusDB и, по словам
+  автора Demucs, предназначены только для исследований
+  (https://github.com/facebookresearch/demucs/issues/327).
+Модель ESpeech:
+  веса ESpeech-TTS-1_SFT-256K
+  https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K
+  На Hugging Face указана Apache-2.0, но это, похоже, дообученная
+  F5-TTS, а её веса — CC-BY-NC-4.0 (только некоммерческое
+  использование): https://huggingface.co/SWivid/F5-TTS
+  вокодер Vocos (vocos-mel-24khz) — MIT,
+  https://huggingface.co/charactr/vocos-mel-24khz
+  ударения RUAccent 1.5.8.3 — Apache-2.0, его модели
+  (ruaccent/accentuator) — MIT, https://github.com/Den4ikAI/ruaccent
+  встраиваемый Python 3.11.9 — PSF License 2.0
+  PyTorch 2.14.1 — BSD-3-Clause и другие, библиотеки CUDA в нём —
+  NVIDIA CUDA Toolkit EULA
+  пакеты Python: numpy — BSD-3-Clause и другие;
+  psutil, protobuf — BSD-3-Clause; onnxruntime,
+  razdel — MIT; safetensors, tokenizers, onnx, ml_dtypes — Apache-2.0;
+  typing_extensions — PSF-2.0. Тексты лицензий — в
+  espeech-runtime\Lib\site-packages\*.dist-info
