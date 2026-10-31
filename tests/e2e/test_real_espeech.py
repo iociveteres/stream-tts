@@ -131,9 +131,8 @@ def test_espeech_editor(esp, report):
     acc = api.ok("/api/draft/accent", dict(text=PIECE[2]))["accented"]
     assert acc.count("+") >= 10 and acc.replace("+", "") == PIECE[2]
     full = open(REF + ".txt", encoding="utf-8").read().strip()
-    v = dict(id="a", src=src["id"], start=PIECE[0], end=PIECE[1], text=acc, denoise=False,
-             tempo=dict(start=0, end=src["dur"], text=full))
-    api.ok("/api/draft", dict(variants=[v]))
+    v = dict(id="a", src=src["id"], start=PIECE[0], end=PIECE[1], text=acc, denoise=False)
+    api.ok("/api/draft", dict(variants=[v], tempo=dict(src=src["id"], start=0, end=src["dur"], text=full)))
     phrase = api.state()["settings"]["test_phrases"][0]
     t0 = time.monotonic()
     r = api.get("/api/draft/synth?variant=a&phrase=0", timeout=300)

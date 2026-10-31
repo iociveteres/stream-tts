@@ -1,7 +1,7 @@
 // Редактор голоса из записи (editor.py, вкладка «Голоса» → «+ Добавить голос»): записи и их волна, варианты
 // образца, тестовые фразы, сохранение. Отдельный файл после admin.js (его помощники — h, T, api, S — общие):
 // записи, волну и матрицу фраз возьмёт и страница дообучения ESpeech. Особенности модели — D.engine из
-// /api/draft (пределы длины, пакеты, ударения), у ESpeech ещё кнопка «Ударения» и отрезок для темпа.
+// /api/draft (пределы длины, пакеты, ударения), у ESpeech ещё кнопка «Ударения» и карточка «Темп речи».
 // Черновик живёт на сервере; здесь его копия D. Варианты правятся на месте и уходят на сервер целиком с задержкой
 // (edChanged), перед синтезом и сохранением — сразу (edFlush): сервер синтезирует то, что у него записано.
 const pkg = id => (S.packages || []).find(p => p.id === id);
@@ -12,7 +12,7 @@ let D = null;
 const edEngine = () => (D && D.engine) || { id: S.cosy.engine, min: 2, max: 30, ok: [10, 20],
   packages: S.cosy.engine === "cosyvoice" ? ["frontend", "music"] : ["music"] };
 const edPackages = () => edEngine().packages;
-const TEMPO_MAX = 60;   // с: отрезок для темпа ESpeech (engines/espeech/editor.py)
+const TEMPO_MAX = 60, SPEED_MAX = 30;   // с и %: отрезок и поправка темпа ESpeech (engines/espeech/editor.py)
 const ed = { bufs: {}, views: {}, sel: null, busy: new Set(), synthAll: false, timer: 0, saving: null };
 let actx = null, edSrc = null, edBtn = null, edPlay = null, edAnim = 0;
 const audioCtx = () => actx || (actx = new AudioContext());
@@ -104,7 +104,8 @@ async function edFlush() {
   ed.timer = 0;
   if (ed.saving) await ed.saving;
   ed.saving = (async () => {
-    const body = { variants: D.variants.map(({ ready, ...v }) => v), compare: D.compare, name: D.name, set: D.set };
+    const body = { variants: D.variants.map(({ ready, ...v }) => v), tempo: D.tempo || null, speed: D.speed || 0,
+      compare: D.compare, name: D.name, set: D.set };
     const r = await api("/api/draft", body);
     if (!r.ok) return false;
     // готовность синтеза — с сервера (у изменённого варианта новый ключ), остальное остаётся как в форме
@@ -124,6 +125,7 @@ function renderEditor() {
   $("#ed-title").textContent = T("Новый голос {engine}", { engine: e.title || S.cosy.title });
   renderEdSources();
   renderEdVariants();
+  renderEdTempo();
   renderMatrix();
   $("#ed-compare").replaceChildren(h("option", { value: "" }, T("— без сравнения —")),
     ...S.voices.map(v => h("option", { value: v.name, selected: v.name === D.compare }, v.name)));
@@ -204,10 +206,11 @@ function drawWave(sid) {
   g.font = "11px Segoe UI, system-ui, sans-serif";
   const v = view(s), X = t => (t - v.a) / (v.b - v.a) * w;
   const band = (a, b, color, alpha) => { g.globalAlpha = alpha; g.fillStyle = color; g.fillRect(X(a), 0, Math.max(1, X(b) - X(a)), hh); g.globalAlpha = 1; };
-  for (const x of D.variants) if (x.src === sid && x.tempo && edEngine().id === "espeech") {
-    band(x.tempo.start, x.tempo.end, col("--good"), 0.1);   // отрезок для темпа ESpeech — под образцом
+  const tp = D.tempo;
+  if (tp && tp.src === sid && edEngine().id === "espeech") {
+    band(tp.start, tp.end, col("--good"), 0.1);   // отрезок для темпа ESpeech — под образцами
     g.fillStyle = col("--good");
-    g.fillText(T("темп {v}", { v: vLabel(x) }), X(x.tempo.start) + 3, 26);
+    g.fillText(T("темп"), X(tp.start) + 3, 26);
   }
   for (const x of D.variants) if (x.src === sid) {
     band(x.start, x.end, col("--accent"), 0.16);
@@ -278,9 +281,9 @@ async function playSel(s, btn) {
   const sel = ed.sel && ed.sel.src === s.id ? ed.sel : view(s);
   edPlayBuffer(await loadSource(s.id), btn, sel.a, sel.b, s.id);
 }
+const r2 = x => Math.round(x * 100) / 100;
 function addVariant(s) {
   if (!ed.sel || ed.sel.src !== s.id) { toast(T("Сначала выделите отрезок на волне этой записи"), true); return; }
-  const r2 = x => Math.round(x * 100) / 100;
   const v = { id: "v" + Date.now().toString(36), src: s.id, start: r2(ed.sel.a), end: r2(ed.sel.b), text: "", denoise: false,
     music: false, ready: [] };
   D.variants.push(v);
@@ -291,13 +294,15 @@ function addVariant(s) {
   edChanged();
   $(`.variant[data-id="${v.id}"] textarea`).focus();
 }
-function focusVariant(v) {
-  const s = D.sources.find(x => x.id === v.src);
-  ed.sel = { src: v.src, a: v.start, b: v.end };
-  const pad = Math.max(1, (v.end - v.start) * 0.25);
-  setView(s, v.start - pad, v.end + pad);
+/** Отрезок a–b записи src: выделить, приблизить и прокрутить к нему. */
+function focusRange(src, a, b) {
+  const s = D.sources.find(x => x.id === src);
+  if (!s) return;
+  ed.sel = { src, a, b };
+  const pad = Math.max(1, (b - a) * 0.25);
+  setView(s, a - pad, b + pad);
   D.sources.forEach(x => { drawWave(x.id); showSel(x.id); });
-  $(`canvas.wave[data-src="${v.src}"]`).scrollIntoView({ behavior: "smooth", block: "center" });
+  $(`canvas.wave[data-src="${src}"]`).scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 // Варианты образца
@@ -334,7 +339,7 @@ function renderEdVariants() {
         h("label", { class: "check small" }, h("input", { type: "checkbox", checked: v.denoise,
           onchange: e => { v.denoise = e.target.checked; edChanged(); } }), T("шумоподавление")),
         h("span", { class: "grow" }),
-        h("button", { type: "button", class: "icon", title: T("Показать на волне"), onclick: () => focusVariant(v) }, "⌖"),
+        h("button", { type: "button", class: "icon", title: T("Показать на волне"), onclick: () => focusRange(v.src, v.start, v.end) }, "⌖"),
         h("button", { type: "button", title: T("Послушать образец с обработкой"), onclick: async e => {
           const btn = e.currentTarget;
           await edFlush();
@@ -346,8 +351,7 @@ function renderEdVariants() {
         } }, "✕")),
       esp ? h("div", { class: "row" }, text, h("button", { type: "button",
         title: T("Автоматическая расстановка ударений моделью"),
-        onclick: () => edAccent(v, text) }, T("Ударения"))) : text,
-      esp ? tempoRow(v) : null);
+        onclick: () => edAccent(v, text) }, T("Ударения"))) : text);
   }));
 }
 /** Расшифровка варианта — разметкой модели (POST /api/draft/accent: без фильтров озвучки). */
@@ -358,30 +362,58 @@ async function edAccent(v, area) {
   renderSaveVariants();
   edChanged();
 }
-/** Отрезок для темпа ESpeech: длительность фразы считается по нему (кадров на байт текста), а не по образцу. */
-function tempoRow(v) {
-  const take = () => {
-    if (!ed.sel || ed.sel.src !== v.src) { toast(T("Сначала выделите на волне этой записи отрезок для темпа"), true); return; }
-    const r2 = x => Math.round(x * 100) / 100, d = ed.sel.b - ed.sel.a;
-    if (d > TEMPO_MAX) { toast(T("Отрезок для темпа длиннее {n} с", { n: TEMPO_MAX }), true); return; }
-    v.tempo = { start: r2(ed.sel.a), end: r2(ed.sel.b), text: v.tempo ? v.tempo.text : "" };
-    renderEdVariants(); drawWave(v.src); edChanged();
-    $(`.variant[data-id="${v.id}"] .tempo textarea`).focus();
-  };
-  const btn = h("button", { type: "button", title: T("Выделите на волне отрезок подлиннее образца (можно вместе с " +
-    "ним) и расшифруйте его: по нему считается темп речи голоса") }, T("Темп по выделению"));
-  btn.onclick = take;
-  if (!v.tempo) return h("div", { class: "tempo small muted" }, T("Темп — по самому образцу"), btn);
-  const t = v.tempo, area = h("textarea", { class: "short grow", rows: 2,
-    placeholder: T("Расшифровка отрезка для темпа"), oninput: e => { t.text = e.target.value; edChanged(); } });
-  area.value = t.text;
-  return h("div", { class: "tempo" },
-    h("span", { class: "small" }, T("Темп по отрезку {a}–{b} · {dur}", { a: fmtPos(t.start), b: fmtPos(t.end),
-      dur: fmtSec(t.end - t.start) })),
-    btn,
-    h("button", { type: "button", class: "icon danger", title: T("Темп — по самому образцу"), onclick: () => {
-      delete v.tempo; renderEdVariants(); drawWave(v.src); edChanged(); } }, "✕"),
-    area);
+// Темп речи ESpeech (engines/espeech/editor.py): общий для вариантов отрезок с расшифровкой (без него — по образцу
+// варианта) и поправка ползунком
+function renderEdTempo() {
+  const box = $("#ed-tempo");
+  if (edEngine().id !== "espeech") { box.replaceChildren(); return; }
+  const t = D.tempo, take = h("button", { type: "button", class: t ? null : "primary", onclick: takeTempo },
+    t ? T("Взять выделение") : T("+ Отрезок из выделения"));
+  let seg;
+  if (!t) seg = h("div", { class: "row" }, h("span", { class: "small muted" }, T("Как в образце")), take);
+  else {
+    const src = D.sources.find(s => s.id === t.src) || { name: "?" }, rate = h("span", { class: "small muted" });
+    const upd = () => {   // букв в секунду — для сравнения на глаз, сервер считает кадры на байт
+      const n = (t.text.match(/\p{L}/gu) || []).length;
+      rate.textContent = n ? T("{n} букв/с", { n: fmtNum(n / (t.end - t.start), 1) }) : "";
+    };
+    upd();
+    const area = h("textarea", { class: "short", rows: 2, placeholder: T("Расшифровка отрезка"),
+      oninput: e => { t.text = e.target.value; upd(); edChanged(); } });
+    area.value = t.text;
+    seg = h("div", { class: "variant" },
+      h("div", { class: "row" },
+        h("b", {}, T("Отрезок")), h("span", { class: "muted small" }, src.name),
+        h("span", { class: "small" }, `${fmtPos(t.start)}–${fmtPos(t.end)} · ${fmtSec(t.end - t.start)}`),
+        h("button", { type: "button", title: T("Послушать отрезок"), onclick: e => playTempo(t, e.currentTarget) }, "▶"),
+        h("button", { type: "button", class: "icon", title: T("Показать на волне"),
+          onclick: () => focusRange(t.src, t.start, t.end) }, "⌖"),
+        rate, h("span", { class: "grow" }), take,
+        h("button", { type: "button", class: "icon danger", title: T("Убрать отрезок"), onclick: () => {
+          D.tempo = null; renderEdTempo(); drawWave(t.src); edChanged(); } }, "✕")),
+      area);
+  }
+  const speed = D.speed || 0, fmt = x => x > 0 ? `+${x} %` : x < 0 ? `−${-x} %` : "0 %", val = h("b", {}, fmt(speed));
+  box.replaceChildren(seg, h("div", { class: "row mt" },
+    h("span", { class: "small" }, T("Медленнее")),
+    h("input", { type: "range", class: "speed", min: -SPEED_MAX, max: SPEED_MAX, step: 5, value: speed,
+      "aria-label": T("Поправка темпа"), oninput: e => { val.textContent = fmt(+e.target.value); },
+      onchange: e => { D.speed = +e.target.value; renderEdTempo(); edChanged(); } }),
+    h("span", { class: "small" }, T("Быстрее")), val,
+    speed ? h("button", { type: "button", onclick: () => { D.speed = 0; renderEdTempo(); edChanged(); } },
+      T("Сбросить")) : null));
+}
+function takeTempo() {
+  const sel = ed.sel;
+  if (!sel) { toast(T("Сначала выделите на волне отрезок для темпа"), true); return; }
+  if (sel.b - sel.a > TEMPO_MAX) { toast(T("Отрезок для темпа длиннее {n} с", { n: TEMPO_MAX }), true); return; }
+  D.tempo = { src: sel.src, start: r2(sel.a), end: r2(sel.b), text: D.tempo ? D.tempo.text : "" };
+  renderEdTempo(); drawAllWaves(); edChanged();
+  $("#ed-tempo textarea").focus();
+}
+async function playTempo(t, btn) {
+  if (edBtn === btn) { edStop(); return; }
+  edPlayBuffer(await loadSource(t.src), btn, t.start, t.end, t.src);
 }
 
 // Тестовые фразы: строки — фразы, столбцы — варианты и голос для сравнения

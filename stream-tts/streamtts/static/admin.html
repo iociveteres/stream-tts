@@ -221,7 +221,7 @@
     <ul id="ed-packages" class="setlist"></ul>
   </div>
   <div class="card">
-    <h2>1. Записи</h2>
+    <h2 class="step">Записи</h2>
     <p class="muted small" data-hint="ed-sources" data-t>Аудио до 15 минут и менее 512 МБ.<br>
       Выделите отрезок на волне мышью, чтобы добавить его как вариант.<br>
       Скролл мыши — масштаб; Shift + скролл мыши — прокрутка; ЛКМ — слушать с выбранного места.</p>
@@ -230,7 +230,7 @@
     <div id="ed-sources"></div>
   </div>
   <div class="card">
-    <h2>2. Образец голоса</h2>
+    <h2 class="step">Образец голоса</h2>
     <div class="hint small" data-hint="ed-transcript" data-t>В расшифровке слово в слово должно быть описано то, что звучит в отрезке: каждое
       слово, повтор, «э-э», оборванное на краю слово.<br>
       Знаки препинания расставляйте как слышится: запятая на паузе, точка в конце фразы, «?» и «!» по интонации.<br>
@@ -241,8 +241,14 @@
       их так, как прочитает модель. Неверные поправьте вручную.</div>
     <div id="ed-variants" class="mt"></div>
   </div>
+  <div class="card" data-engine="espeech" hidden>
+    <h2 class="step">Темп речи</h2>
+    <p class="muted small" data-hint="ed-tempo" data-t>Скорость речи голоса во всех фразах. Без отрезка — как в образце.<br>
+      Точнее всего — отрезок 20–60 секунд обычной речи с расшифровкой.</p>
+    <div id="ed-tempo"></div>
+  </div>
   <div class="card">
-    <h2>3. Тестовые фразы</h2>
+    <h2 class="step">Тестовые фразы</h2>
     <div class="row">
       <label class="grow">Сравнить с голосом <select id="ed-compare"></select></label>
       <button type="button" id="ed-synth-all">Синтезировать всё</button>
@@ -257,7 +263,7 @@
     </details>
   </div>
   <div class="card">
-    <h2>4. Сохранение</h2>
+    <h2 class="step">Сохранение</h2>
     <form id="ed-save" class="rgrid">
       <label>Вариант <select name="variant" required></select></label>
       <label>Имя голоса <input name="name" required maxlength="64" spellcheck="false" translate="no"

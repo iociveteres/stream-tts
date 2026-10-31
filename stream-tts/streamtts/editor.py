@@ -2,7 +2,8 @@
 
 Черновик один на программу, папка <данные>/draft/:
 - sources/<id>.wav — загруженные записи после ffmpeg (24 кГц моно PCM16, не длиннее MAX_SOURCE_SEC);
-- draft.json — записи, варианты образца, голос для сравнения, имя и набор будущего голоса;
+- draft.json — записи, варианты образца, общие поля модели (у ESpeech — темп), голос для сравнения, имя и набор
+  будущего голоса;
 - cache/<ключ>-<фраза>.mp3 — тестовый синтез, выровненный по громкости, как примеры голосов (ref-<голос>-… —
   голос для сравнения);
 - cache/vocals-<хеш отрезка>.wav — отрезок без музыки (separate.py), считается один раз: ~10 с на 20 с записи.
@@ -14,8 +15,9 @@ _draft-<ключ>, где ключ — хеш параметров: изменё
 Служебные голоса в список голосов не попадают (voices.refresh). Синтез — с приоритетом «послушать» и тем же seed,
 что у примеров, поэтому варианты различаются только образцом.
 
-Особенности модели — в engines/<id>/editor.py (Maker): пределы длины образца, свои поля варианта (у ESpeech —
-отрезок для темпа), проверка (у CosyVoice — ONNX-фронтенд), регистрация образца (у ESpeech — ударения и темп), путь
+Особенности модели — в engines/<id>/editor.py (Maker): пределы длины образца, свои поля варианта и общие для всех
+вариантов поля черновика (Maker.SHARED, у ESpeech — отрезок и поправка темпа; в ключ и регистрацию идут вместе с
+вариантом, _full), проверка (у CosyVoice — ONNX-фронтенд), регистрация образца (у ESpeech — ударения и темп), путь
 файла голоса. Черновик общий; ключ варианта и кэш сравнения с голосом у каждой модели свои (голос с тем же именем
 звучит у них по-разному), ключ CosyVoice — как до второй модели.
 
@@ -78,7 +80,14 @@ class Editor:
     # --- черновик ---
     def _load(self):
         d = store.read_json(self.path, None) or {}
-        return dict(dict(sources=[], variants=[], compare="", name="", set=""), **d)
+        d = dict(dict(sources=[], variants=[], compare="", name="", set=""), **d)
+        for m in self.makers.values():
+            m.upgrade(d)
+        return d
+
+    def _full(self, v, d):
+        """Вариант с общими полями черновика (Maker.SHARED): ключ, проверка и регистрация видят их у варианта."""
+        return dict(v, **{k: d[k] for m in self.makers.values() for k in m.SHARED if d.get(k) is not None})
 
     def _save(self, d):
         os.makedirs(self.dir, exist_ok=True)
@@ -105,7 +114,7 @@ class Editor:
         phrases = [_hash(p) for p in self.s["test_phrases"]]
         ready = lambda prefix: [i for i, h in enumerate(phrases) if os.path.exists(self._cache(f"{prefix}-{h}"))]
         for v in d["variants"]:
-            v["ready"] = ready(self.key(v))
+            v["ready"] = ready(self.key(self._full(v, d)))
         m = self.maker
         d["compare_ready"] = ready(m.ref_name(d["compare"])) if d["compare"] else []
         d["frontend"] = self.tts.frontend_ready
@@ -138,6 +147,12 @@ class Editor:
                 out.update(m.fields(v, srcs[src]["dur"]))
             variants.append(out)
         d["variants"] = variants
+        for m in self.makers.values():
+            for k, x in m.shared(data, srcs).items():
+                if x is None:
+                    d.pop(k, None)
+                else:
+                    d[k] = x
         if "compare" in data:
             c = str(data["compare"] or "")
             d["compare"] = c if c in self.voices.names() else ""
@@ -151,7 +166,7 @@ class Editor:
     def _prune(self, d):
         """Синтез и дорожки без музыки вариантов, которых больше нет (сравнение с голосами остаётся: он не
         устаревает)."""
-        keep = {self.key(v, m) for v in d["variants"] for m in self.makers.values()}
+        keep = {self.key(self._full(v, d), m) for v in d["variants"] for m in self.makers.values()}
         vocals = {self.vocals_name(v) + ".wav" for v in d["variants"] if v.get("music")}
         for f in glob.glob(os.path.join(self.dir, "cache", "*.*")):
             name = os.path.basename(f)
@@ -192,6 +207,10 @@ class Editor:
         d = self._load()
         d["sources"] = [s for s in d["sources"] if s["id"] != sid]
         d["variants"] = [v for v in d["variants"] if v["src"] != sid]
+        for m in self.makers.values():   # общие поля с отрезком этой записи (темп ESpeech)
+            for k in m.SHARED:
+                if isinstance(d.get(k), dict) and d[k].get("src") == sid:
+                    del d[k]
         self._save(d)
         self._prune(d)
         with contextlib.suppress(OSError):
@@ -203,10 +222,12 @@ class Editor:
         return self._src_path(sid)
 
     def _variant(self, vid):
-        v = next((v for v in self._load()["variants"] if v["id"] == vid), None)
+        """Вариант с общими полями черновика."""
+        d = self._load()
+        v = next((v for v in d["variants"] if v["id"] == vid), None)
         if not v:
             raise ValueError(tr("нет такого варианта"))
-        return v
+        return self._full(v, d)
 
     def _cut(self, sid, start, end):
         with wave.open(self.source_path(sid)) as w:
@@ -303,7 +324,8 @@ class Editor:
                 if name not in speakers:
                     # Прежние регистрации изменённых и удалённых вариантов — по списку сервера, а не по памяти:
                     # после перезапуска stream-tts они иначе оставались на сервере до «Удалить черновик»
-                    keep = {DRAFT_PREFIX + self.key(d) for d in self._load()["variants"]}
+                    d = self._load()
+                    keep = {DRAFT_PREFIX + self.key(self._full(x, d)) for x in d["variants"]}
                     for old in speakers:
                         if old.startswith(DRAFT_PREFIX) and old not in keep:
                             await self.tts.delete_speaker(old)

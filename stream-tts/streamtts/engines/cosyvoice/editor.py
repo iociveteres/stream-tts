@@ -25,10 +25,21 @@ class Maker:
         self.tts = tts
         self._fe_timer = None
 
+    SHARED = ()   # поля черновика, общие для всех вариантов (у ESpeech — темп)
+
     @staticmethod
     def fields(raw, dur):
         """Свои поля варианта (у CosyVoice нет)."""
         return {}
+
+    @staticmethod
+    def shared(raw, srcs):
+        """Общие поля черновика из запроса админки (у CosyVoice нет)."""
+        return {}
+
+    @staticmethod
+    def upgrade(d):
+        """Черновик прежнего формата (у CosyVoice не менялся)."""
 
     def key_parts(self, v):
         return []   # ключ варианта — как до второй модели: синтез старых черновиков не пропадает
