@@ -23,8 +23,6 @@ ENV_EXAMPLE = """\
 # 0.0.0.0 — открыть оверлей для OBS на другом ПК; тогда обязателен пароль админки
 #STREAM_TTS_BIND=127.0.0.1
 #STREAM_TTS_PASSWORD=
-# Внешний cosyvoice-server вместо встроенного (Docker, другая машина)
-#COSYVOICE_URL=http://192.168.1.10:8080
 # Устройство синтеза: cuda, vulkan или cpu (иначе — выбор во вкладке «Сервер»)
 #COSYVOICE_BACKEND=
 """

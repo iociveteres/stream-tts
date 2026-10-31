@@ -93,7 +93,7 @@ scripts/download-model.sh --list
 Видеопамять — пик cosyvoice-server на RTX 3060 Ti: обычно и на самом длинном образце голоса (~22 с); на Vulkan
 примерно на 0,5 ГБ больше. Q8_0, Q6_K и Q5_K_M мы сравнили на 54 фразах: разборчивость (Whisper) и сходство
 голоса (CAM++) в пределах шума, разница на слух едва заметна
-([docs/stream-tts-deploy.md](docs/stream-tts-deploy.md#первый-запуск-режим-managed)).
+([docs/stream-tts-deploy.md](docs/stream-tts-deploy.md#первый-запуск)).
 
 Если Hugging Face недоступен, файлы можно скачать вручную и положить так:
 

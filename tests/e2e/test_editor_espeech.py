@@ -1,6 +1,6 @@
 """Редактор голоса с моделью ESpeech (engines/espeech/editor.py) и словарь ударений пользователя (/api/accents).
 
-Поддельный espeech-server (FakeCosy(engine="espeech")) — единственный сервер в TTS_SERVERS: голос из образца без
+Поддельный espeech-server (FakeCosy(engine="espeech")) — единственный сервер синтеза: голос из образца без
 ONNX-фронтенда, текст образца — разметкой POST /accent («+» перед первой гласной слова), темп — полем tempo, файл
 голоса — путь «<набор>/<имя>.espeech» от папки голосов сервера. Запись — та же, что в test_editor.py: 500 Гц в
 первой половине, 650 Гц во второй."""
@@ -26,7 +26,7 @@ def tempo_of(seconds, accented):
 def esp_shared(loop, tmp_path_factory):
     esp = loop.run(FakeCosy(engine="espeech").start())
     server = StreamTTS(str(tmp_path_factory.mktemp("editor-espeech")), None,
-                       dict(FAST_ENV, TTS_SERVERS=f"espeech={esp.url}")).start()
+                       dict(FAST_ENV, STREAM_TTS_TEST_SERVERS=f"espeech={esp.url}")).start()
     ctx = Ctx(loop, server, esp)
     ctx.idle(30)
     yield ctx
@@ -112,7 +112,7 @@ def test_espeech_synth_with_tempo(esp):
 
 
 def test_espeech_save(esp):
-    """Сохранение: голос — «<набор>/<имя>.espeech» от папки голосов сервера, набор — в <данные>/sets/, образец и
+    """Сохранение: голос — «<набор>/<имя>.espeech» от папки голосов сервера, набор — в её manifest.json, образец и
     размеченный текст — в <данные>/samples/espeech/. Голос другой модели с тем же именем получает файл ESpeech только
     в своём наборе."""
     api, fake = esp.api, esp.cosy
@@ -124,7 +124,7 @@ def test_espeech_save(esp):
     ex = [c for c in fake.called("extract") if c["name"] == "Esp_Voice"][0]
     assert ex["text"] == "р+аз дв+а тр+и" and ex["tempo"]
     data = esp.server.data
-    assert os.path.isfile(os.path.join(data, "sets", "my-set", "manifest.json"))
+    assert os.path.isfile(os.path.join(esp.server.dir, "voices", "my-set", "manifest.json"))
     x, sr, _ = read_wav(open(os.path.join(data, "samples", "espeech", "Esp_Voice.wav"), "rb").read())
     assert sr == SR and abs(len(x) - 6.5 * SR) <= 1
     assert open(os.path.join(data, "samples", "espeech", "Esp_Voice.txt"), encoding="utf-8").read() == "р+аз дв+а тр+и\n"

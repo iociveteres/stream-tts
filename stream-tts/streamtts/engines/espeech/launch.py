@@ -1,4 +1,4 @@
-"""Запуск espeech-server в режиме managed (общий наблюдатель процесса — runtime.py).
+"""Запуск встроенного espeech-server (общий наблюдатель процесса — runtime.py).
 
 Сервер — Python-пакет espeech (папка espeech/ проекта), запускается python -m espeech интерпретатором его окружения:
 - ESPEECH_SERVER — путь к python(.exe) или к папке с ним (или к папке espeech/ с .venv); пакет ищется вверх от
@@ -50,7 +50,7 @@ def downloadable():
 
 
 def find_server():
-    """Интерпретатор espeech-server для режима managed или None. У программы для Windows — python.exe рантайма,
+    """Интерпретатор espeech-server или None. У программы для Windows — python.exe рантайма,
     даже если он ещё не скачан: модель видна в выборе, а сервер ждёт загрузки (args)."""
     p = env("ESPEECH_SERVER")
     if p:

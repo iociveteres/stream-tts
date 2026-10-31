@@ -1,4 +1,4 @@
-"""Модели синтеза (engines/): выбор CosyVoice / ESpeech при двух внешних серверах (TTS_SERVERS), настройки модели
+"""Модели синтеза (engines/): выбор CosyVoice / ESpeech при двух готовых серверах (STREAM_TTS_TEST_SERVERS), настройки модели
 по схеме params из /status, голоса без файла для текущей модели, свои примеры у каждой модели, «как прочитает».
 
 Два поддельных сервера: cosyvoice (alpha, bravo, charlie) и espeech (alpha, charlie — у bravo нет .espeech)."""
@@ -38,7 +38,7 @@ def two_shared(loop, tmp_path_factory):
     cosy = loop.run(FakeCosy().start())
     esp = loop.run(FakeCosy(engine="espeech", voices=ESPEECH_VOICES).start())
     server = StreamTTS(str(tmp_path_factory.mktemp("engines")), None,
-                       dict(FAST_ENV, TTS_SERVERS=f"cosyvoice={cosy.url},espeech={esp.url}")).start()
+                       dict(FAST_ENV, STREAM_TTS_TEST_SERVERS=f"cosyvoice={cosy.url},espeech={esp.url}")).start()
     ctx = Two(loop, server, cosy, esp)
     ctx.idle()
     yield ctx
@@ -201,7 +201,7 @@ def test_engine_survives_restart(loop, tmp_path):
     """Выбранная модель — в settings.json: после перезапуска stream-tts работает та же."""
     cosy = loop.run(FakeCosy().start())
     esp = loop.run(FakeCosy(engine="espeech", voices=ESPEECH_VOICES).start())
-    env = dict(FAST_ENV, TTS_SERVERS=f"cosyvoice={cosy.url},espeech={esp.url}")
+    env = dict(FAST_ENV, STREAM_TTS_TEST_SERVERS=f"cosyvoice={cosy.url},espeech={esp.url}")
     server = StreamTTS(str(tmp_path), None, env).start()
     try:
         ctx = Two(loop, server, cosy, esp)

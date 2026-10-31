@@ -1,6 +1,6 @@
 """ESpeech с настоящей моделью (маркер real, по умолчанию пропускается): pytest tests/e2e -m real.
 
-stream-tts в режиме managed запускает espeech-server интерпретатором espeech/.venv (ESPEECH_SERVER) на свободном
+stream-tts сам запускает espeech-server интерпретатором espeech/.venv (ESPEECH_SERVER) на свободном
 порту, со своими данными: модель — жёсткие ссылки (или копии) на models/espeech во временной папке, голос wc3-jaina
 собирает tools/espeech/make-voice.py из voice-refs/cosyvoice/wc3/wc3-jaina.wav. Модель выбрана заранее (settings.json).
 Если есть и cosyvoice-server с Q5_K_M (как в test_real.py), тот же процесс проверяет смену модели: голос dota2-pudge
@@ -173,7 +173,7 @@ def test_espeech_user_accents(esp, report):
 
 
 def test_switch_model(esp, report):
-    """Смена модели в режиме managed: перезапуск сервера другого движка на том же порту, голоса — свои у каждой.
+    """Смена модели: перезапуск сервера другого движка на том же порту, голоса — свои у каждой.
     Последним: сервер перезапускается."""
     if not esp.cosy:
         pytest.skip("нет cosyvoice-server или модели Q5_K_M: смена модели не проверена")

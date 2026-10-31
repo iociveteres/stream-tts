@@ -7,7 +7,6 @@ import os, re, threading
 
 import numpy as np
 
-from conftest import EDITOR_VOICES
 from fake_cosyvoice import FRONTEND, VOICES
 from harness import SR, decode, dominant_hz, ffmpeg, make_wav, read_wav, sine, wait_for
 
@@ -181,8 +180,8 @@ def test_compare_voice(editor):
 
 # --- сохранение ---
 def test_save_voice(editor):
-    """Сохранение с внешним сервером: имя проверяется, .gguf — в COSYVOICE_VOICES на машине сервера, набор — в
-    <данные>/sets/<набор>/manifest.json, образец — в <данные>/samples/; голос сразу в списке и в своём разделе."""
+    """Сохранение: имя проверяется, .gguf и manifest.json набора — в <голоса>/<набор>/, образец — в
+    <данные>/samples/; голос сразу в списке и в своём разделе."""
     api, cosy = editor.api, editor.cosy
     src = add_source(api)
     set_variants(api, variant(src, "a", 1, 6, text="  образец  голоса "))
@@ -196,12 +195,13 @@ def test_save_voice(editor):
 
     r = api.post("/api/draft/save", dict(variant="a", name="Fresh.Voice_1", set="My Set"))
     assert r.status == 200, r.text
-    path = f"{EDITOR_VOICES}/Fresh.Voice_1.gguf"
+    folder = os.path.join(editor.server.dir, "voices", "my-set")
+    path = os.path.join(folder, "Fresh.Voice_1.gguf")
     assert r.json() == dict(ok=True, name="Fresh.Voice_1", set="my-set", path=path)
     assert [c["name"] for c in cosy.called("extract")] == ["Fresh.Voice_1"]
     assert [(c["name"], c["path"]) for c in cosy.called("save")] == [("Fresh.Voice_1", path)]
     data = editor.server.data
-    with open(os.path.join(data, "sets", "my-set", "manifest.json"), encoding="utf-8") as f:
+    with open(os.path.join(folder, "manifest.json"), encoding="utf-8") as f:
         assert f.read().count("Fresh.Voice_1") == 1
     x, sr, ch = read_wav(open(os.path.join(data, "samples", "Fresh.Voice_1.wav"), "rb").read())
     assert (sr, ch) == (SR, 1) and abs(len(x) - 5 * SR) <= 1
@@ -277,7 +277,7 @@ def test_no_frontend(tts):
     try:
         src = add_source(api)
         d = set_variants(api, variant(src, "a", 1, 6))["draft"]
-        assert d["frontend"] is False and d["managed"] is False
+        assert d["frontend"] is False
         r = synth(api, variant="a")
         assert r.status == 400 and r.text == "на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"
         r = api.post("/api/draft/save", dict(variant="a", name="nofront", set="x"))

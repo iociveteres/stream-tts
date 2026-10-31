@@ -28,7 +28,7 @@ DEFAULTS = {
     "chunk_tokens": 150,        # токенов в куске стриминга (по умолчанию в cosyvoice.cpp 28: заметно медленнее)
     "engine": "",               # модель синтеза (engines/): cosyvoice | espeech, пустая — первая доступная
     "espeech_steps": 16,        # ESpeech: шагов синтеза (nfe_steps) — 16 / 32 / 12, в каждом запросе
-    "espeech_device": "",       # ESpeech в режиме managed: auto | cuda | cpu (у CosyVoice — backend)
+    "espeech_device": "",       # ESpeech: auto | cuda | cpu (у CosyVoice — backend)
     "demo_phrase": CONTENT["demo_phrase"]["ru"],
     "test_phrases": CONTENT["test_phrases"]["ru"],   # редактор голоса: фразы для сравнения вариантов образца
     "voices": {},               # имя -> {enabled, gain_db, calib_db (CosyVoice), calib_db_<модель> (другие модели)}

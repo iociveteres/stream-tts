@@ -1,10 +1,10 @@
 """Движки синтеза: у каждого свой пакет engines/<id>/ — описание (ID, TITLE, VOICE_EXT, DEVICES, загрузки),
-запуск в режиме managed (Launcher, find_server) и клиент (Client, общий протокол — client.py). Модули лежат внутри
+запуск встроенного сервера (Launcher, find_server) и клиент (Client, общий протокол — client.py). Модули лежат внутри
 пакета streamtts: собранная программа (Nuitka) импортов извне не видит.
 
 Модель одна единовременно (settings.engine): Tts — сервер синтеза выбранной модели для ядра stream-tts. Смена модели —
-другой клиент и, в режиме managed, перезапуск встроенного сервера с запуском другого движка на том же порту; в
-режиме external — сервер того движка из TTS_SERVERS. Очередь к серверу (lane) общая: смена ждёт текущий запрос и
+другой клиент и перезапуск встроенного сервера с запуском другого движка на том же порту (в тестах с готовыми
+серверами, config.TEST_SERVERS, — сервер того движка). Очередь к серверу (lane) общая: смена ждёт текущий запрос и
 держит очередь, пока новый сервер не ответит, — озвучка ждёт, а не падает на перезапуске."""
 import asyncio, logging
 
@@ -22,8 +22,9 @@ READY_TIMEOUT = 300   # загрузка модели на CPU бывает до
 class Tts:
     """Клиент выбранного движка: атрибуты, которых здесь нет (synth, stream, stop, speakers, schema, accent…), — его."""
 
-    def __init__(self, settings, servers, launchers, api_key=""):
-        self.s, self.servers, self.launchers, self.api_key = settings, servers or {}, launchers or {}, api_key
+    def __init__(self, settings, servers, launchers):
+        """launchers — запуск серверов найденных движков; servers — готовые серверы {движок: адрес}, только в тестах."""
+        self.s, self.servers, self.launchers = settings, servers or {}, launchers or {}
         self.lane = Lane()
         have = self.launchers or self.servers
         self.available = [i for i in ENGINES if i in have]
@@ -35,8 +36,7 @@ class Tts:
 
     def _client(self, engine):
         url = self.runtime.url if self.runtime else self.servers[engine]
-        key = self.api_key if engine == cosyvoice.ID else ""
-        return ENGINES[engine].Client(url, self.s, key, lane=self.lane)
+        return ENGINES[engine].Client(url, self.s, lane=self.lane)
 
     def __getattr__(self, name):
         return getattr(self.__dict__["client"], name)
@@ -57,8 +57,7 @@ class Tts:
         """Модели для выбора в админке."""
         out = []
         for i, E in ENGINES.items():
-            why = "" if i in self.available else \
-                tr("нет {name}", name=E.Launcher.NAME) if not self.servers else tr("не задан в TTS_SERVERS")
+            why = "" if i in self.available else tr("нет {name}", name=E.Launcher.NAME)
             out.append(dict(id=i, title=E.TITLE, available=i in self.available, why=why))
         return out
 

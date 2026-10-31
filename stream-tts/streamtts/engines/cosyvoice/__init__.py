@@ -1,4 +1,4 @@
-"""Движок CosyVoice3: cosyvoice-server из cosyvoice.cpp (его код не наш). Описание, запуск в режиме managed
+"""Движок CosyVoice3: cosyvoice-server из cosyvoice.cpp (его код не наш). Описание, запуск сервера
 (launch.py), клиент (client.py) и особенности редактора голоса (editor.py)."""
 from .client import Client
 from .editor import Maker

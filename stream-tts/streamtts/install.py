@@ -1,4 +1,4 @@
-"""Загрузки через админку (режим managed): модель, CUDA, ESpeech, дополнительные пакеты; установка наборов голосов.
+"""Загрузки через админку: модель, CUDA, ESpeech, дополнительные пакеты; установка наборов голосов.
 Установщик программы для Windows ничего не качает: модель, CUDA и ESpeech — кнопки на вкладке «Сервер» (при первом
 запуске без модели админка открывается на ней), пакеты — в настройках.
 
@@ -456,12 +456,11 @@ def package_usable(pid):
 
 
 def packages(installed=None):
-    """Необязательные пакеты для админки. installed — id -> bool для пакетов, файлов которых не видно (фронтенд на
-    внешнем сервере)."""
+    """Необязательные пакеты для админки. installed — id -> bool для пакетов, файлов которых не видно (фронтенд
+    готового сервера в тестах)."""
     installed = installed or {}
     return [dict(id=pid, title=tr(p["title"]), about=tr(p["about"]), size=p["size"], license=tr(p["license"]),
                  source=p["source"], restart=bool(p.get("restart")), usable=package_usable(pid),
-                 dir=os.path.join(paths.MODELS, p.get("into", "")),
                  installed=installed[pid] if pid in installed else package_installed(pid))
             for pid, p in PACKAGES.items()]
 

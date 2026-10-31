@@ -7,7 +7,6 @@ import asyncio, logging, os
 
 from ..client import BACKGROUND, PREVIEW
 from ...i18n import tr
-from ...paths import env
 
 log = logging.getLogger("editor")
 
@@ -42,11 +41,8 @@ class Maker:
             raise ValueError(tr("на сервере синтеза нет фронтенда для создания голосов: скачайте пакет"))
 
     def target(self, name, set_name, folder):
-        """Куда сервер пишет голос: folder — <голоса>/<набор> со встроенным сервером, None — внешний сервер
-        (COSYVOICE_VOICES на его машине, без подпапки: cosyvoice/entrypoint.sh склеивает имя голоса из подпапок)."""
-        if folder:
-            return os.path.join(folder, name + self.EXT)
-        return env("COSYVOICE_VOICES", "/voices").rstrip("/") + f"/{name}{self.EXT}"
+        """Куда сервер пишет голос: полный путь в folder (<голоса>/<набор>)."""
+        return os.path.join(folder, name + self.EXT)
 
     async def register(self, name, v, text, wav, editor):
         """Под lane.hold: голос из образца; фронтенд грузится к первому и выгружается после простоя."""

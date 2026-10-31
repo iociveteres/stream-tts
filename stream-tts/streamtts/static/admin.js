@@ -581,7 +581,7 @@ function renderDemoProgress() {
 }
 
 // --- настройки ---
-// --- сервер (режим managed): модель, устройство, наборы голосов ---
+// --- сервер: модель, устройство, наборы голосов ---
 const fmtMB = b => T("{n} МБ", { n: fmtNum(b / 1048576, 0) });
 const fmtDur = s => s < 60 ? T("{n} с", { n: Math.ceil(s) }) : T("{n} мин", { n: Math.round(s / 60) });
 const BACKEND_NAMES = { auto: T("Автоматически"), cuda: T("Видеокарта NVIDIA (CUDA)"), vulkan: T("Видеокарта (Vulkan)"),
@@ -631,12 +631,7 @@ function renderPackages() {
       : null;
     if (!p.usable) action = h("span", { class: "tag" }, T("недоступен"));
     const hint = !p.usable ? T("В этой версии программы нет onnxruntime: пакет работает в программе для Windows, в Docker " +
-        "и при запуске из исходников с пакетами из requirements.txt.")
-      : S.setup || p.installed ? ""
-      : p.restart ? T("Сервер синтеза внешний: скачайте фронтенд на нём (scripts/download-model.sh --frontend int8) " +
-        "и перезапустите cosyvoice.")
-      : T("Сервер синтеза внешний, загрузка пакетов отключена: положите файлы в {dir}.",
-        { dir: p.dir });
+        "и при запуске из исходников с пакетами из requirements.txt.") : "";
     return h("li", { class: p.installed ? "" : "on" }, h("div", { class: "grow" },
       h("b", {}, p.title), " ", h("span", { class: "muted small" }, fmtMB(p.size) + " · " + p.license),
       S.setup && p.installed ? h("span", { class: "tag" }, T("установлен")) : null,
@@ -937,7 +932,7 @@ $("#set-import").onclick = async () => {
   finally { btn.disabled = false; }
 };
 
-// Встроенный сервер (режим managed): бэкенд, модель, число голосов
+// Встроенный сервер: бэкенд, модель, число голосов
 function runtimeInfo(rt) {
   if (!rt) return "";
   const backend = { cpu: "CPU" }[rt.backend.toLowerCase()] || rt.backend.replace(/\d+$/, "") || "…";

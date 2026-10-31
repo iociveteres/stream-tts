@@ -16,7 +16,7 @@ usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--cr
                 Их адреса, размеры и sha256 — в stream-tts/streamtts/downloads.json (cuda.archives), отсюда же их
                 берёт и этот скрипт, так что версия CUDA закреплена в одном месте.
 --flat DIR собирает core (без espeech/: из исходников espeech-server запускается из espeech/.venv) и файлы CUDA в одну
-папку: так выглядит runtime/ в корне проекта для запуска stream-tts из исходников в режиме managed
+папку: так выглядит runtime/ в корне проекта для запуска stream-tts из исходников
 (docs/stream-tts-deploy.md). По умолчанию out — packaging/windows/build/runtime, загрузки
 кешируются в packaging/windows/build/cache. Нужен только Python 3 (стандартная библиотека).
 

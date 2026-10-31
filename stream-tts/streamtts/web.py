@@ -165,7 +165,7 @@ def state(ctx, full=True):
         models=models(ctx),
         demos=dict(ctx.voices.progress),
         setup=ctx.install.public() if ctx.install else None,
-        # необязательные пакеты; с внешним сервером файлов не видно — о фронтенде говорит GET /frontend/model
+        # необязательные пакеты; у готового сервера в тестах файлов не видно — о фронтенде говорит GET /frontend/model
         packages=install.packages() if ctx.install else install.packages(dict(frontend=ctx.tts.frontend_ready)),
         bench=ctx.bench.public() if ctx.bench else None,
         update=ctx.updates.public(),
@@ -188,13 +188,12 @@ def model_params(ctx):
 
 
 def models(ctx):
-    """Модели в памяти (вкладка «Статистика»): синтез и ONNX-фронтенд — на cosyvoice-server, htdemucs — в stream-tts.
-    Модель синтеза выгружается только у встроенного сервера: внешний после POST /model/unload без перезапуска
-    контейнера голоса не вернёт (путь к модели и голоса знает только его entrypoint.sh)."""
+    """Модели в памяти (вкладка «Статистика»): синтез и ONNX-фронтенд — на сервере синтеза, htdemucs — в stream-tts.
+    Модель синтеза выгружается остановкой встроенного сервера (у готового сервера в тестах — никак)."""
     rt = ctx.runtime.public() if ctx.runtime else None
     up = ctx.tts.ok is True
     out = [dict(id="tts", name=(rt and rt["model"]) or ctx.tts.info.get("model") or ctx.tts.title,
-                what=tr("синтез речи"), where=(rt and rt["backend"]) or tr("внешний сервер"), loaded=up,
+                what=tr("синтез речи"), where=(rt and rt["backend"]) or "", loaded=up,
                 unload=bool(rt) and not rt["unloaded"] and rt["state"] == "running",
                 load=bool(rt and rt["unloaded"]))]
     if ctx.tts.frontend_ready:
@@ -457,10 +456,10 @@ async def post_profanity(request, ctx, data):
     return ok(sample=ctx.profanity.clean(sample, beep=tr("[писк]")) if sample else "")
 
 
-# --- первый запуск (режим managed): модель, устройство, наборы голосов ---
+# --- первый запуск: модель, устройство, наборы голосов ---
 def _install(ctx):
-    if not ctx.install:
-        raise ValueError(tr("сервер синтеза внешний (COSYVOICE_URL): модель и голоса ставятся на нём"))
+    if not ctx.install:   # готовый сервер в тестах: ставить некуда
+        raise ValueError("no built-in server")
     return ctx.install
 
 
@@ -739,8 +738,8 @@ async def post_espeech_delete(request, ctx, data):
 async def post_model_unload(request, ctx, data):
     what = str(data["id"])
     if what == "tts":
-        if not ctx.runtime:
-            return fail(tr("сервер синтеза внешний: модель выгружается на нём"))
+        if not ctx.runtime:   # готовый сервер в тестах
+            return fail("no built-in server")
         # после текущего запроса к серверу, иначе он оборвётся на середине
         async with ctx.tts.lane.hold(LIVE, tr("выгрузка модели")):
             await ctx.runtime.unload()

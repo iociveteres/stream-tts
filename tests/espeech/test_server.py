@@ -219,7 +219,7 @@ def test_memory_stable(srv, jaina):
 
 
 def test_save_relative_path(srv, jaina):
-    """Относительный path — от папки --voices (так сохраняет голос stream-tts: папку внешнего сервера он не знает)."""
+    """Относительный path — от папки --voices (так сохраняет голос stream-tts: «<набор>/<имя>.espeech»)."""
     st, data = srv.request("POST", "/speaker/save", dict(name=jaina, path="rel/jaina-rel.espeech"))
     assert st == 200, data
     path = os.path.join(srv.voices, "rel", "jaina-rel.espeech")

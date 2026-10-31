@@ -378,7 +378,7 @@ class Handler(BaseHTTPRequestHandler):
         name, target = d.get("name"), d.get("path")
         if not name or not target:
             raise HTTPError(400, "name и path обязательны")
-        if not os.path.isabs(target):   # от папки голосов: stream-tts не знает, где она у внешнего сервера
+        if not os.path.isabs(target):   # от папки голосов: так голос из редактора stream-tts ложится в набор
             root = os.path.abspath(e.args.voices or "")
             target = os.path.abspath(os.path.join(root, target))
             if not e.args.voices or os.path.commonpath([root, target]) != root:

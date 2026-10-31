@@ -89,16 +89,17 @@
 ├── voice-sets/            # коллекции для импорта: <модель>/<набор>.zip (tools/voices/pack-sets.py)
 ├── voice-origs/           # сырые звуковые паки
 ├── samples/               # тестовые аудио
-├── runtime/               # нативный cosyvoice-server с DLL и ffmpeg для режима managed из исходников (Windows)
+├── runtime/               # нативный cosyvoice-server с DLL и ffmpeg для stream-tts из исходников (Windows)
 └── stream-tts-data/       # настройки, токены и история stream-tts (volume)
 ```
 
 ## Образы
 
 Корневой `Dockerfile`, цели выбирает `docker-compose.yml`:
-- `stream-tts` (`stream-tts:cpu`, `stream-tts:cuda`) — stream-tts со встроенным cosyvoice-server (режим managed,
-  [stream-tts-deploy.md](stream-tts-deploy.md#docker));
-- `cosyvoice` (`cosyvoice-server:cpu`, `cosyvoice-server:cuda`) — только сервер, профиль `server-only`.
+- `stream-tts` (`stream-tts:cpu`, `stream-tts:cuda`) — stream-tts со встроенным cosyvoice-server
+  ([stream-tts-deploy.md](stream-tts-deploy.md#docker));
+- `cosyvoice` (`cosyvoice-server:cpu`, `cosyvoice-server:cuda`) — только сервер для инструментов подготовки голосов
+  (`scripts/`, `tools/`), профиль `server-only`.
 
 Обе цели на `ubuntu:26.04`: релизы cosyvoice.cpp собраны там и требуют glibc 2.43 и ICU 78 (в `python:*-slim` —
 2.41).
@@ -165,15 +166,14 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 ## stream-tts из исходников
 
 `cd stream-tts && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt`,
-затем `COSYVOICE_URL=http://localhost:8080 .venv/Scripts/python -m streamtts` (или конфигурация `stream-tts`
-в `.claude/launch.json`). Без `COSYVOICE_URL` stream-tts сам запускает нативный cosyvoice-server из `runtime/` в
-корне проекта (режим managed, [stream-tts-deploy.md](stream-tts-deploy.md)) с моделью из `models/` и
-голосами из `voices/`; конфигурация `stream-tts-managed` — на порту 8092 и с данными в `stream-tts-data/native/`,
-чтобы не мешать Docker-версии (её сервер на 8080 — внешний для конфигурации `stream-tts`). Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
+затем `.venv/Scripts/python -m streamtts`: stream-tts сам запускает нативный cosyvoice-server из `runtime/` в
+корне проекта ([stream-tts-deploy.md](stream-tts-deploy.md)) с моделью из `models/` и голосами из `voices/`.
+Конфигурация `stream-tts` в `.claude/launch.json` — на порту 8092 и с данными в `stream-tts-data/native/`, чтобы не
+мешать Docker-версии. Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
 проверка словаря `python stream-tts/check-i18n.py`. Свои варианты строк интерфейса —
-`stream-tts-ui-edit` (порт 8099, [stream-tts.md](stream-tts.md), «Правка текста интерфейса»). ESpeech со своими данными — `espeech-test` (espeech-server на
-8096, голоса и словарь ударений в `stream-tts-data/espeech-test/`) и `stream-tts-espeech` (stream-tts на 8095 с
-`TTS_SERVERS=espeech=…`): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Загрузку ESpeech, как у
+`stream-tts-ui-edit` (порт 8099, [stream-tts.md](stream-tts.md), «Правка текста интерфейса»). ESpeech со своими данными — `stream-tts-espeech` (порт 8095,
+данные, голоса и словарь ударений в `stream-tts-data/espeech-test/`, модель из `models/`; ESpeech выбирается на
+вкладке «Сервер»): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Загрузку ESpeech, как у
 программы для Windows, — `stream-tts-espeech-dl` (порт 8097, всё в `stream-tts-data/espeech-dl/`: `rt/` — копия
 `packaging/windows/build/runtime/core` и `cuda` после `build-runtime.py --cuda`, туда же скачанный рантайм и модель),
 собранный `build-exe.py --runtime all` exe — `streamtts-exe-test` (порт 8098, данные, модели и голоса в
@@ -190,7 +190,8 @@ stream-tts/.venv/Scripts/python -m pytest tests/e2e
 ```
 
 Тест запускает настоящий процесс stream-tts (`python -m streamtts`) на свободном порту, данные, модели, голоса и
-проект у него во временной папке. Вместо cosyvoice-server — поддельный (`fake_cosyvoice.py`): те же адреса API, а
+проект у него во временной папке. Вместо cosyvoice-server — поддельный (`fake_cosyvoice.py`, адрес — в `STREAM_TTS_TEST_SERVERS`, только для
+тестов): те же адреса API, а
 вместо речи синус, у каждого голоса своя частота и громкость. `FakeCosy(engine="espeech", voices=…)` — поддельный
 espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, `/accent`, словарь ударений `/accents`
 (синтез записывает, как прочитал бы текст), голос из образца без фронтенда с полем `tempo`, поток кусками по 1 с,
@@ -237,10 +238,10 @@ stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpe
 после обрыва без повторной загрузки, выбор по списку, подмена хвоста или файла, распаковка колёс, состояние
 рантайма, закреплённое в `downloads.json`; `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
 предел), варианты и их проверки, синтез ячеек (фронтенд, `_draft-*`, перерегистрация, кэш, сравнение), сохранение
-(имя, путь на внешнем сервере, manifest, образец, ошибка сервера), черновик после перезапуска и его удаление, сервер
+(имя, путь в `<голоса>/<набор>/`, manifest, образец, ошибка сервера), черновик после перезапуска и его удаление, сервер
 без фронтенда, очередь с живой озвучкой, выгрузка фронтенда, «убрать музыку» без пакета; `test_stats.py` —
 `/api/stats` (подсчёты, по часам, `hours`), удаление записей старше 30 дней, миграция базы и `settings.json` со
-старых версий; `test_engines.py` — две модели на двух поддельных серверах (`TTS_SERVERS`): список и смена модели,
+старых версий; `test_engines.py` — две модели на двух поддельных серверах: список и смена модели,
 настройки по схеме `params` (`nfe_steps` в запросе, значение не из схемы — отказ), голос без файла для модели
 (выбор зрителя сохраняется), свои примеры у каждой модели, порог стриминга, «как прочитает», выбор после
 перезапуска; `test_editor_espeech.py` — редактор с ESpeech (пределы 4–12 с, «Ударения» без фильтров, регистрация
@@ -253,7 +254,7 @@ stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpe
 stream-tts/.venv/Scripts/python -m pytest tests/e2e -m real
 ```
 
-stream-tts в режиме managed запускает свой cosyvoice-server из `runtime/` на свободном порту, со своими данными.
+stream-tts сам запускает свой cosyvoice-server из `runtime/` на свободном порту, со своими данными.
 Модель `CosyVoice3-2512_Q5_K_M.gguf`, ONNX-фронтенд и htdemucs — жёсткие ссылки (на другом диске — копии, удаляются
 после прогона) во временной папке моделей, голос `dota2-pudge` — копия; оригиналы в `models/` и `voices/` не
 меняются. Это второй сервер на той же видеокарте, поэтому сначала проверяется свободная видеопамять (`nvidia-smi`,
@@ -263,7 +264,7 @@ stream-tts в режиме managed запускает свой cosyvoice-server 
 (`asr.py` подпроцессом из корневого `.venv`, cuBLAS и cuDNN — из `torch/lib`, без CUDA — на процессоре), совпадает
 с исходным хотя бы на 60 % слов. Проверяется синтез целиком и стримингом, голос из записи через редактор (с
 очисткой от музыки, если есть `models/demucs`) и его сохранение в `<голоса>/<набор>/`, потом то же на CPU
-(`/api/backend`, сервер перезапускается). `test_real_espeech.py` — ESpeech в режиме managed: espeech-server из
+(`/api/backend`, сервер перезапускается). `test_real_espeech.py` — ESpeech: espeech-server из
 `espeech/.venv` (`ESPEECH_SERVER`), модель — ссылки на `models/espeech`, голос `wc3-jaina` собирает
 `tools/espeech/make-voice.py` из `voice-refs/cosyvoice/wc3/wc3-jaina.wav` (без них уровень пропускается): синтез короткой
 (целиком) и длинной (потоком) фразы, «как прочитает», голос из редактора (кусок записи Джайны, темп по всей

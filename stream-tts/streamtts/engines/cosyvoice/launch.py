@@ -1,4 +1,4 @@
-"""Запуск cosyvoice-server в режиме managed (общий наблюдатель процесса — runtime.py).
+"""Запуск встроенного cosyvoice-server (общий наблюдатель процесса — runtime.py).
 
 Сервер берётся из рантайма (paths.RUNTIME, рядом с программой) или из COSYVOICE_SERVER (путь к нему или к его
 папке). Аргументы собираются как в cosyvoice/entrypoint.sh:
@@ -27,7 +27,7 @@ BACKENDS = ("auto", "cuda", "vulkan", "cpu")
 
 
 def find_server():
-    """Путь к cosyvoice-server для режима managed или None."""
+    """Путь к cosyvoice-server или None."""
     p = env("COSYVOICE_SERVER")
     if p:
         return os.path.join(p, "cosyvoice-server" + EXE) if os.path.isdir(p) else p

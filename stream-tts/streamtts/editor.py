@@ -20,9 +20,7 @@ _draft-<ключ>, где ключ — хеш параметров: изменё
 звучит у них по-разному), ключ CosyVoice — как до второй модели.
 
 Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет файл голоса модели (.gguf,
-.espeech). Со встроенным сервером — в paths.VOICES/<набор>/ с manifest.json набора (так и в Docker); с внешним —
-куда скажет Maker.target (CosyVoice — COSYVOICE_VOICES без подпапки, ESpeech — <набор>/ от папки голосов сервера), а
-набор записывается в <данные>/sets/<набор>/manifest.json. Имя занято, если у выбранной модели уже есть голос с ним;
+.espeech) в paths.VOICES/<набор>/ (путь — Maker.target), набор — в manifest.json той же папки. Имя занято, если у выбранной модели уже есть голос с ним;
 голос другой модели с тем же именем получает файл этой модели, но в том же наборе. Образец и расшифровка остаются в
 <данные>/samples/<голос>.wav и .txt (у моделей, кроме CosyVoice, — в samples/<модель>/)."""
 import asyncio, contextlib, glob, hashlib, io, json, logging, math, os, re, secrets, shutil, wave
@@ -113,7 +111,6 @@ class Editor:
         d["frontend"] = self.tts.frontend_ready
         d["music"] = separate.available()
         d["sets"] = self.sets()
-        d["managed"] = self.runtime is not None
         d["engine"] = dict(id=m.ENGINE, title=self.tts.title, min=m.SAMPLE_MIN, max=m.SAMPLE_MAX, ok=list(m.SAMPLE_OK),
                            packages=list(m.PACKAGES), accent=bool(self.tts.capabilities.get("accent")))
         return d
@@ -364,13 +361,9 @@ class Editor:
                                 voice=name, set=other or tr("голоса без набора")))
         x = await self.sample(v)
         text = " ".join(v["text"].split())
-        if self.runtime:
-            folder = os.path.join(paths.VOICES, set_name)
-            manifest = os.path.join(folder, "manifest.json")
-            os.makedirs(folder, exist_ok=True)
-        else:
-            folder = None
-            manifest = os.path.join(config.DATA, "sets", set_name, "manifest.json")
+        folder = os.path.join(paths.VOICES, set_name)
+        manifest = os.path.join(folder, "manifest.json")
+        os.makedirs(folder, exist_ok=True)
         target = m.target(name, set_name, folder)
         async with self.tts.lane.hold(PREVIEW, tr("сохранение голоса {voice}", voice=name)):
             if name in await self.tts.speakers():
@@ -381,7 +374,6 @@ class Editor:
             except Exception:
                 await self.tts.delete_speaker(name)
                 raise
-        os.makedirs(os.path.dirname(manifest), exist_ok=True)
         meta = store.read_json(manifest, {})
         meta[name] = dict(meta.get(name) or {}, source="editor")
         store.write_json(manifest, meta)

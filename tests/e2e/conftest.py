@@ -206,15 +206,10 @@ def spawn(loop, tmp_path):
         loop.run(cosy.close())
 
 
-# Внешний сервер синтеза: путь .gguf при сохранении голоса — на его машине (editor.py)
-EDITOR_VOICES = "/srv/voices"
-
-
 @pytest.fixture(scope="module")
 def editor_shared(loop, tmp_path_factory):
     cosy = loop.run(FakeCosy(frontend=True).start())
-    server = StreamTTS(str(tmp_path_factory.mktemp("editor")), cosy.url,
-                       dict(FAST_ENV, COSYVOICE_VOICES=EDITOR_VOICES)).start()
+    server = StreamTTS(str(tmp_path_factory.mktemp("editor")), cosy.url, FAST_ENV).start()
     ctx = Ctx(loop, server, cosy)
     ctx.idle(30)
     yield ctx

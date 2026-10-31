@@ -1,4 +1,4 @@
-"""Встроенный сервер синтеза (режим managed): stream-tts сам запускает сервер движка и следит за ним.
+"""Встроенный сервер синтеза: stream-tts сам запускает сервер движка и следит за ним.
 
 Здесь — общее для всех движков: процесс, порт, перезапуски, вывод в лог, остановка на время смены файлов (paused),
 выгрузка модели. Что запускать и с какими аргументами, решает запуск движка (engines/<id>/launch.py, Launcher):
@@ -113,7 +113,7 @@ class Managed:
         return self.launcher.server
 
     def public(self):
-        return dict(mode="managed", state=self.state, error=self.error, restarts=self.restarts, server=self.server,
+        return dict(state=self.state, error=self.error, restarts=self.restarts, server=self.server,
                     unloaded=self.unloaded, pid=self.proc.pid if self.proc and self.proc.returncode is None else None,
                     **self.launcher.public())
 

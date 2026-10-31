@@ -122,8 +122,9 @@ class Api:
 
 
 class StreamTTS:
-    """Процесс stream-tts. Окружение очищено от переменных проекта: Client ID Twitch, пароль, адрес cosyvoice
-    задаются только тестом. cosy_url=None — режим managed: stream-tts сам запускает cosyvoice-server (уровень real)."""
+    """Процесс stream-tts. Окружение очищено от переменных проекта: Client ID Twitch, пароль, серверы синтеза
+    задаются только тестом. cosy_url — готовый (поддельный) cosyvoice-server (STREAM_TTS_TEST_SERVERS); None —
+    stream-tts сам запускает свой сервер (уровень real) или серверы задаёт env."""
 
     def __init__(self, workdir, cosy_url, env=None):
         self.dir = workdir
@@ -147,7 +148,7 @@ class StreamTTS:
             STREAM_TTS_RUNTIME=os.path.join(self.dir, "runtime"),
             STREAM_TTS_LANG="ru", PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
         if self.cosy_url:
-            env["COSYVOICE_URL"] = self.cosy_url
+            env["STREAM_TTS_TEST_SERVERS"] = f"cosyvoice={self.cosy_url}"
         env.update(self.extra)
         return env
 

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Два образа из готовых релизов cosyvoice.cpp и llama.cpp (цель выбирает docker-compose.yml):
-# - stream-tts (по умолчанию): озвучка наград Twitch со встроенным cosyvoice-server (режим managed, runtime.py
-#   и engines/cosyvoice/launch.py);
+# - stream-tts (по умолчанию): озвучка наград Twitch со встроенным cosyvoice-server (runtime.py и
+#   engines/cosyvoice/launch.py);
 # - cosyvoice: только cosyvoice-server (профиль server-only), аргументы собирает entrypoint.sh.
 # GPU=cuda добавляет CUDA-бэкенд. Обе цели на ubuntu 26.04: бинарники собраны в CI на ubuntu-26.04
 # (glibc 2.43, ICU 78), а в python:*-slim glibc 2.41.
@@ -89,9 +89,8 @@ RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements
 COPY stream-tts/streamtts ./streamtts
 
 # LD_LIBRARY_PATH не задаётся: в /opt/cosyvoice свой libonnxruntime.so (1.30), он перебил бы onnxruntime из venv;
-# серверу путь добавляет engines/cosyvoice/launch.py. COSYVOICE_URL не задан — режим managed;
-# COSYVOICE_HOST=0.0.0.0 открывает сервер для порта 8080 контейнера (WebUI и инструменты), stream-tts ходит к нему
-# по 127.0.0.1.
+# серверу путь добавляет engines/cosyvoice/launch.py. Сервер запускает stream-tts; COSYVOICE_HOST=0.0.0.0 открывает
+# его для порта 8080 контейнера (WebUI и инструменты), stream-tts ходит к нему по 127.0.0.1.
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     STREAM_TTS_DATA=/data \

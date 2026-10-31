@@ -93,12 +93,10 @@ class Voices:
 
     # --- эффекты ---
     def _read_manifests(self):
-        """voice-refs/<модель>/<набор>/manifest.json проекта, <голоса>/<набор>/manifest.json установленных наборов и
-        <данные>/sets/<набор>/manifest.json голосов из записи на внешнем сервере (editor.py)
-        (перечитываются при изменении файлов): post и набор голоса."""
+        """voice-refs/<модель>/<набор>/manifest.json проекта и <голоса>/<набор>/manifest.json установленных наборов и
+        голосов из записи (перечитываются при изменении файлов): post и набор голоса."""
         files = (glob.glob(os.path.join(config.PROJECT, "voice-refs", "*", "*", "manifest.json"))
-                 + glob.glob(os.path.join(paths.VOICES, "*", "manifest.json"))
-                 + glob.glob(os.path.join(config.DATA, "sets", "*", "manifest.json")))
+                 + glob.glob(os.path.join(paths.VOICES, "*", "manifest.json")))
         stamp = sum(os.path.getmtime(f) for f in files)
         if stamp != self._manifests[0]:
             merged, sets = {}, {}

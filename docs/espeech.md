@@ -99,7 +99,7 @@ Windows нет).
 espeech/.venv/Scripts/python -m espeech --models models/espeech --voices voices --port 8094
 ```
 
-`--user-accents <файл>` — словарь ударений пользователя (JSON); stream-tts в режиме managed передаёт
+`--user-accents <файл>` — словарь ударений пользователя (JSON); stream-tts передаёт
 `<данные>/espeech/accents.json`.
 
 Конфигурация `espeech` в `.claude/launch.json`. Окружение для разработки — `espeech/requirements.txt` (Python 3.11,
@@ -207,15 +207,14 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
 
 ## План встраивания в stream-tts
 
-Решения: одна модель единовременно (смена — перезапуск сервера); модели — внешние модули с HTTP API (позже может
+Решения: одна модель единовременно (смена — перезапуск сервера); модели — отдельные серверы с HTTP API, их запускает stream-tts (позже может
 добавиться третья, лёгкая); RUAccent — полный режим; LoRA не вливать в веса; CPU медленнее реального времени
 допустим; torch — с download.pytorch.org. Этапы:
 
 1. ~~Сервер `espeech/`, `tools/espeech/` (веса, словарь, голоса)~~ — сделано. Обучение LoRA в `tools/espeech/`
    перенесено в этап 5: от исследования «дообучение на 6 ГБ» зависит, каким оно будет.
-2. ~~Модели в stream-tts~~ — сделано: `streamtts/engines/<id>/` (описание, запуск в режиме managed, клиент), общий
-   наблюдатель процесса в `runtime.py`, выбор модели на вкладке «Сервер» (смена — перезапуск встроенного сервера,
-   внешние серверы — `TTS_SERVERS`), настройки по схеме `params` (`espeech_steps: 16` в каждом запросе), проверка
+2. ~~Модели в stream-tts~~ — сделано: `streamtts/engines/<id>/` (описание, запуск, клиент), общий
+   наблюдатель процесса в `runtime.py`, выбор модели на вкладке «Сервер» (смена — перезапуск встроенного сервера), настройки по схеме `params` (`espeech_steps: 16` в каждом запросе), проверка
    скорости с выбранными шагами, «как прочитает», голоса и примеры по моделям; e2e — `test_engines.py` на
    поддельных серверах, `test_real_espeech.py` с настоящей моделью. Поток ESpeech — с 6 с расчётного звука: короче
    фраза приходит одним куском, а громкость потока по примеру голоса гуляет сильнее (−12,9…−14,4 LUFS против −16).
@@ -229,8 +228,9 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
    ([stream-tts-windows.md](stream-tts-windows.md), «ESpeech»): установщик кладёт код espeech-server и DLL-заглушки
    (`build-runtime.py`), программа качает встраиваемый Python 3.11, пакеты, облегчённый torch (только нужные файлы
    колеса, диапазонами), CUDA для cuBLAS, если её нет, и исходники модели, а папку модели собирает
-   `espeech/prepare.py`; всё закреплено в `downloads.json` (раздел `espeech`, `pin-espeech.py`). Осталось: Docker —
-   отдельный образ и сервис `espeech` (torch в образ stream-tts не класть), `TTS_SERVERS=cosyvoice=…,espeech=…`.
+   `espeech/prepare.py`; всё закреплено в `downloads.json` (раздел `espeech`, `pin-espeech.py`). Осталось: Docker. Отдельного
+   сервиса `espeech` не будет: сервер выбранной модели stream-tts запускает сам, в своём контейнере, — как туда
+   попадает torch (в образ stream-tts его класть не хотели), ещё не решено.
 5. LoRA: обучение в `tools/espeech/`, потом в программе (страница модуля ESpeech, задача в процессе сервера).
 6. Документация: `stream-tts.md`, `stream-tts-windows.md`, `voices.md`.
 

@@ -101,19 +101,20 @@ def main():
     i18n.load_edits()
     ctx.db = store.DB(os.path.join(config.DATA, "stream-tts.sqlite"))
     ctx.profanity = filters.Profanity(prof)
-    # Режим: external (TTS_SERVERS или COSYVOICE_URL заданы или встроенного сервера нет) или managed (runtime.py):
-    # серверы движков, которые нашлись (engines/<id>/launch.py), запускается сервер выбранной модели
+    # Сервер выбранной модели stream-tts запускает сам (runtime.py, engines/<id>/launch.py); готовые серверы — только
+    # в тестах (config.TEST_SERVERS)
     servers, launchers = {}, {}
-    for k, url in config.TTS_SERVERS.items():
+    for k, url in config.TEST_SERVERS.items():
         if k in engines.ENGINES:
             servers[k] = url
         else:
-            log.warning("TTS_SERVERS: неизвестная модель %s (есть: %s)", k, ", ".join(engines.ENGINES))
+            log.warning("STREAM_TTS_TEST_SERVERS: неизвестная модель %s (есть: %s)", k, ", ".join(engines.ENGINES))
     if not servers:
         launchers = {k: E.Launcher(p, ctx.settings) for k, E in engines.ENGINES.items() if (p := E.find_server())}
         if not launchers:
-            servers = {"cosyvoice": "http://cosyvoice:8080"}
-    ctx.tts = engines.Tts(ctx.settings, servers, launchers, config.COSYVOICE_API_KEY)
+            log.error("не найден сервер синтеза (%s)", ", ".join(E.Launcher.NAME for E in engines.ENGINES.values()))
+            sys.exit(1)
+    ctx.tts = engines.Tts(ctx.settings, servers, launchers)
     ctx.runtime = ctx.tts.runtime
     ctx.voices = Voices(ctx.settings, ctx.tts)
     ctx.engine = Engine(ctx.settings, ctx.db, ctx.tts, ctx.voices, ctx.profanity)
@@ -121,7 +122,7 @@ def main():
     ctx.twitch = Twitch(ctx.settings, ctx.engine)
     ctx.engine.twitch = ctx.twitch
     ctx.load = stats.Load()
-    # Первый запуск через админку (модель, устройство, наборы голосов) — только для встроенного сервера
+    # Первый запуск через админку (модель, устройство, наборы голосов); в тестах с готовым сервером их нет
     ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set,
                                     launchers.get("cosyvoice"), launchers.get("espeech")) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.tts, ctx.voices, ctx.runtime)

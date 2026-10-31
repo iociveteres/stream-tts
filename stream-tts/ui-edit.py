@@ -32,8 +32,8 @@ for k, v in dict(STREAM_TTS_PORT="8099", STREAM_TTS_DATA=DATA, STREAM_TTS_MODELS
                  STREAM_TTS_VOICES=os.path.join(DATA, "voices"), STREAM_TTS_LANG="ru",
                  STREAM_TTS_UI_EDITS=os.path.join(ROOT, "stream-tts-data", "ui-edits.json")).items():
     os.environ.setdefault(k, v)
-os.environ["TTS_SERVERS"] = f"cosyvoice={cosy.url},espeech={espeech.url}"
-for k in ("COSYVOICE_URL", "TWITCH_CLIENT_ID", "STREAM_TTS_PASSWORD"):
+os.environ["STREAM_TTS_TEST_SERVERS"] = f"cosyvoice={cosy.url},espeech={espeech.url}"
+for k in ("TWITCH_CLIENT_ID", "STREAM_TTS_PASSWORD"):
     os.environ.pop(k, None)
 
 sys.path.insert(0, HERE)

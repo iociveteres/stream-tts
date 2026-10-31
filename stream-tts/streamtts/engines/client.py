@@ -77,10 +77,9 @@ class Client:
     DEFAULT_PARAMS = {}
     frontend_ready = frontend_loaded = False   # ONNX-фронтенд для голосов из записи есть только у CosyVoice
 
-    def __init__(self, url, settings, api_key="", lane=None):
+    def __init__(self, url, settings, lane=None):
         self.url = url
         self.s = settings
-        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.session = None
         self.lane = lane or Lane()   # общая для всех движков: при смене модели очередь к серверу та же
         self.ok = None          # доступен ли сервер (последняя проверка)
@@ -89,8 +88,7 @@ class Client:
         self.checked = 0.0
 
     async def start(self):
-        self.session = aiohttp.ClientSession(headers=self.headers,
-                                             connector=aiohttp.TCPConnector(keepalive_timeout=KEEPALIVE))
+        self.session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(keepalive_timeout=KEEPALIVE))
 
     async def close(self):
         if self.session:
@@ -102,8 +100,6 @@ class Client:
     async def status(self):
         try:
             async with self.session.get(f"{self.url}/status", timeout=aiohttp.ClientTimeout(total=5)) as r:
-                if r.status == 401:
-                    raise RuntimeError(tr("неверный COSYVOICE_API_KEY"))
                 r.raise_for_status()
                 self.info = await r.json()
             self.ok, self.error = bool(self.info.get("model_loaded")), ""

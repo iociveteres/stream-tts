@@ -12,7 +12,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 
 | Путь | Что | В git |
 |---|---|---|
-| `setup.sh`, `Dockerfile`, `docker-compose*.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server (:8090 и :8080), профиль `server-only` — только сервер (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
+| `setup.sh`, `Dockerfile`, `docker-compose*.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server (:8090 и :8080), профиль `server-only` — только сервер для `scripts/` и `tools/` (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
 | `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent) для stream-tts, HTTP API как у cosyvoice-server ([docs/espeech.md](docs/espeech.md)); вторая модель stream-tts (`streamtts/engines/espeech`) | да, кроме `.venv` |
 | `stream-tts/streamtts/` | stream-tts на :8090: озвучка наград Twitch, админка, оверлей OBS (спецификация [docs/stream-tts.md](docs/stream-tts.md), развёртывание `stream-tts-deploy.md`, Windows `stream-tts-windows.md`) | да |
 | `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml`; `pin-espeech.py` и `stubs/*.def` — загрузки ESpeech и DLL-заглушки torch | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
@@ -53,12 +53,12 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - `engine.chat` принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
   (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах.
 - Порты: cosyvoice 8080 (в Docker — сервер внутри контейнера stream-tts), stream-tts 8090, `review.py` 8765, `pick.py` 8766, `emotion-eval.py` 8767, espeech-server 8094; из исходников
-  `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
-  модели) — 8093, `stream-tts-espeech` — 8095 с `espeech-test` на 8096 (свои голоса и словарь в
-  `stream-tts-data/espeech-test/`), `stream-tts-espeech-dl` — 8097 (загрузка ESpeech как у программы для Windows, всё в
+  `stream-tts` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
+  модели) — 8093, `stream-tts-espeech` — 8095 (свои данные, голоса и словарь в `stream-tts-data/espeech-test/`),
+  `stream-tts-espeech-dl` — 8097 (загрузка ESpeech как у программы для Windows, всё в
   `stream-tts-data/espeech-dl/`), `streamtts-exe-test` — собранный exe на 8098 с данными в `stream-tts-data/exe-test/`, `stream-tts-ui-edit` (режим
   правки строк интерфейса на поддельном сервере, `stream-tts/ui-edit.py`) — 8099.
-  Встроенный espeech-server (режим managed, выбор ESpeech) — на свободном порту или `ESPEECH_PORT`. Конфигурации — `.claude/launch.json`.
+  Встроенный espeech-server (выбор ESpeech) — на свободном порту или `ESPEECH_PORT`. Конфигурации — `.claude/launch.json`.
 
 ## Запуск
 
@@ -70,8 +70,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   библиотека; остальным (numpy, onnxruntime, faster-whisper, torch cu124 и др.) нужен `.venv/Scripts/python.exe`
   (3.11), cuBLAS/cuDNN для faster-whisper — из `torch/lib`. Везде нужны `ffmpeg`/`ffprobe` в PATH; звук в
   пайплайне — 24 кГц моно.
-- stream-tts без Docker: `stream-tts/.venv` (3.14), конфигурация `stream-tts` (`COSYVOICE_URL=http://localhost:8080`,
-  данные из `stream-tts-data/`).
+- stream-tts без Docker: `stream-tts/.venv` (3.14), конфигурация `stream-tts` (порт 8092, данные в
+  `stream-tts-data/native/`).
 - espeech-server: `espeech/.venv` (3.11, `espeech/requirements.txt`), конфигурация `espeech` —
   `python -m espeech --models models/espeech --voices voices`; папка модели — `tools/espeech/prepare.py`. Занимает
   ~0,8 ГБ видеопамяти рядом с cosyvoice-server: видеокарта общая, замеры скорости — чередующимися прогонами.
@@ -101,7 +101,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   логах.
 - Замеры скорости — по `elapsed_ms` из `docker compose logs stream-tts` (вывод сервера — логгер `cosyvoice`) или
   через `127.0.0.1`: `localhost` из Python на Windows добавляет ~2 с (сначала пробует IPv6).
-- stream-tts без `COSYVOICE_URL` запускает свой сервер (режим managed): в Docker — из образа (`/opt/cosyvoice`), из
+- stream-tts всегда сам запускает сервер выбранной модели, указать ему готовый сервер нельзя (только тестам —
+  `STREAM_TTS_TEST_SERVERS`, в документацию для пользователя не писать): в Docker — из образа (`/opt/cosyvoice`), из
   исходников — `runtime/cosyvoice-server.exe`, и тогда это второй сервер на той же видеокарте (1,5–1,9 ГБ
   видеопамяти на Q8_0).
 - Встроенный сервер останавливается, пока ставится или удаляется набор голосов, и перезапускается при выгрузке

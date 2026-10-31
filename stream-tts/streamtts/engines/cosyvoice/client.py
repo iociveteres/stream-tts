@@ -18,8 +18,8 @@ STREAM_MIN_CHUNKS = 1.5
 class Client(Base):
     ENGINE = "cosyvoice"
 
-    def __init__(self, url, settings, api_key="", lane=None):
-        super().__init__(url, settings, api_key, lane)
+    def __init__(self, url, settings, lane=None):
+        super().__init__(url, settings, lane)
         self.frontend_paths = None   # пути ONNX-фронтенда с сервера (GET /frontend/model); {} — не настроен
 
     async def _checked(self):

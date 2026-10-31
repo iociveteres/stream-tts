@@ -1,5 +1,5 @@
 services:
-  # Озвучка наград Twitch (docs/stream-tts.md) со встроенным cosyvoice-server (режим managed): модель, устройство
+  # Озвучка наград Twitch (docs/stream-tts.md) со встроенным cosyvoice-server: модель, устройство
   # и наборы голосов выбираются в админке, сервер запускается и останавливается вместе с stream-tts.
   stream-tts:
     build:
@@ -27,10 +27,7 @@ services:
       STREAM_TTS_PORT: "${STREAM_TTS_PORT:-8090}"
       STREAM_TTS_PASSWORD: "${STREAM_TTS_PASSWORD:-}"
       STREAM_TTS_LANG: "${STREAM_TTS_LANG:-}"      # ru | en: язык при первом запуске, потом — в админке
-      # Пусто — встроенный сервер; адрес — внешний (другая машина), тогда модель и голоса ставятся на нём.
       # MODEL сюда не передаётся: он закрепил бы модель и отключил выбор в админке.
-      COSYVOICE_URL: "${COSYVOICE_URL:-}"
-      COSYVOICE_API_KEY: "${COSYVOICE_API_KEY:-}"
       COSYVOICE_BACKEND: "${COSYVOICE_BACKEND:-}"  # auto | cuda | cpu, иначе выбор в админке
       TWITCH_CLIENT_ID: "${TWITCH_CLIENT_ID:-}"
     restart: unless-stopped
