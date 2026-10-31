@@ -508,7 +508,7 @@
  "Новый голос": "New voice",
  "← К списку голосов": "← Back to voices",
  "Удалить черновик": "Delete draft",
- "Голос — это образец: 10–20 секунд записи и её точная расшифровка. Хороший образец — один голос без музыки и эффектов, с ровной подачей: если спокойная реплика стоит рядом с криком, синтез скачет. Из одного персонажа лучше сделать два голоса, спокойный и с напором. Сделайте несколько вариантов из разных мест записи и сравните их на тестовых фразах: разница на слух бывает большой.": "A voice is a sample: 10–20 seconds of recording plus its exact transcript. A good sample is a single voice with no music or effects and an even delivery: if a calm line sits next to a shout, the synthesis jumps around. From one character it is better to make two voices, a calm one and an intense one. Make several variants from different parts of the recording and compare them on the test phrases: they can sound very different.",
+ "Голос — это образец: 10–20 секунд записи и её точная расшифровка.<br> Хороший образец — один голос без музыки и эффектов, с ровной подачей: если спокойная реплика стоит рядом с криком, синтез скачет.<br> Из одного персонажа лучше сделать два голоса, спокойный и с напором.<br> Сделайте несколько вариантов из разных мест записи и сравните их на тестовых фразах: разница на слух бывает большой.": "A voice is a sample: 10–20 seconds of recording plus its exact transcript.<br> A good sample is a single voice with no music or effects and an even delivery: if a calm line sits next to a shout, the synthesis jumps around.<br> From one character it is better to make two voices, a calm one and an intense one.<br> Make several variants from different parts of the recording and compare them on the test phrases: they can sound very different.",
  "1. Записи": "1. Recordings",
  "Аудио до 15 минут и менее 512 МБ.<br> Выделите отрезок на волне мышью, чтобы добавить его как вариант.<br> Скролл мыши — масштаб; Shift + скролл мыши — прокрутка; ЛКМ — слушать с выбранного места.": "Audio up to 15 minutes and under 512 MB.<br> Select a segment on the waveform with the mouse to add it as a variant.<br> Mouse wheel zooms; Shift + mouse wheel scrolls; a left click plays from that point.",
  "Файлы записей": "Recording files",
@@ -686,7 +686,7 @@
  "Ударение — «+» перед ударной гласной, например з+амок.": "Stress is “+” before the stressed vowel of a Russian word.",
  "Добавить": "Add",
  "Поиск по словарю": "Search the dictionary",
- "Образец — 6–7 секунд спокойной речи, одна-две целые фразы. Модель повторяет манеру образца во всех фразах. Сделайте несколько вариантов и сравните их на тестовых фразах.": "A sample is 6–7 seconds of calm speech, one or two whole phrases. The model repeats the sample's manner in every phrase. Make several variants and compare them on the test phrases.",
+ "Образец — 6–7 секунд спокойной речи, одна-две целые фразы.<br> Модель повторяет манеру образца во всех фразах.<br> Сделайте несколько вариантов и сравните их на тестовых фразах.": "A sample is 6–7 seconds of calm speech, one or two whole phrases.<br> The model repeats the sample's manner in every phrase.<br> Make several variants and compare them on the test phrases.",
  "«+» перед гласной — ударение. Кнопка «Ударения» расставит их так, как прочитает модель. Неверные поправьте вручную.": "“+” before a vowel marks stress. The Stress button places them the way the model will read the text. Fix wrong ones by hand.",
  "В имени допустимы латиница, цифры, «-», «_» и «.». Зрители используют его в команде выбора голоса.<br> Набор — раздел на странице голосов для зрителей. Впишите новое название (латиница, цифры, «-» и «_») — при сохранении голоса на странице появится раздел с этим названием заглавными буквами.<br> Если голос с таким именем уже есть у другой модели, этот станет его версией для текущей модели.": "The name may use Latin letters, digits, “-”, “_” and “.”. Viewers use it in the voice command.<br> A set is a section on the viewers' voices page. Type a new name (Latin letters, digits, “-” and “_”) — when the voice is saved, a section with that name in capitals appears on the page.<br> If a voice with this name already exists for the other model, this one becomes its version for the current model.",
  "Её собирает <code>tools/espeech/prepare.py</code> из файлов Hugging Face.": "It is built by <code>tools/espeech/prepare.py</code> from the Hugging Face files.",
@@ -711,5 +711,7 @@
  "нет {files} в {dir}: переустановите программу": "no {files} in {dir}: reinstall the program",
  "пустой ответ": "empty response",
  "скачать {size}, на диске {disk}": "download {size}, {disk} on disk",
- "Нет видеокарты NVIDIA. На процессоре ESpeech слишком медленный для стрима.": "No NVIDIA graphics card. On the CPU ESpeech is too slow for streaming."
+ "Нет видеокарты NVIDIA. На процессоре ESpeech слишком медленный для стрима.": "No NVIDIA graphics card. On the CPU ESpeech is too slow for streaming.",
+ "Показать подсказки": "Show hints",
+ "Скрыть подсказку": "Hide hint"
 }

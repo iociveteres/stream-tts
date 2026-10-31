@@ -1,6 +1,6 @@
 """Запуск и доступ: сервис поднимается с поддельным cosyvoice, пароль закрывает админку и API, но не оверлей и страницу
-голосов, POST в API только JSON со своего адреса, настройки переживают перезапуск."""
-import subprocess
+голосов, POST в API только JSON со своего адреса, настройки (и скрытые подсказки) переживают перезапуск."""
+import re, subprocess
 
 from harness import Api, wait_for
 
@@ -91,3 +91,23 @@ def test_settings_survive_restart(spawn):
     assert s["settings"]["queue_limit"] == 7 and s["settings"]["read_nick"] is True
     assert {v["name"]: v["enabled"] for v in s["voices"]}["bravo"] is False
     assert s["bans"] == ["troll"]
+
+
+def test_hidden_hints(spawn):
+    """Скрываемые подсказки админки (data-hint): скрытая крестиком подсказка — id в настройках, а не в браузере,
+    поэтому остаётся скрытой после перезагрузки страницы и перезапуска сервиса; «Показать подсказки» — пустой
+    список. Чужие значения (не id из разметки) не сохраняются."""
+    server, _ = spawn()
+    api = Api(server.base)
+    ids = re.findall(r'data-hint="([\w-]+)"', api.get("/").text)
+    assert {"ed-transcript", "ed-accents", "ed-save"} <= set(ids)
+    assert api.state()["settings"]["hidden_hints"] == []
+    api.ok("/api/settings", dict(hidden_hints=["ed-transcript", "ed-transcript", "<b>x</b>", 5, "ed-save"]))
+    assert api.state()["settings"]["hidden_hints"] == ["ed-save", "ed-transcript"]
+    server.stop()
+
+    again, _ = spawn(workdir=server.dir)
+    api = Api(again.base)
+    assert api.state()["settings"]["hidden_hints"] == ["ed-save", "ed-transcript"]
+    api.ok("/api/settings", dict(hidden_hints=[]))
+    assert api.state()["settings"]["hidden_hints"] == []

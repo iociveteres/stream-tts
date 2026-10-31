@@ -98,13 +98,34 @@ function connect() {
 }
 
 function renderAll() {
-  renderSettings(); renderVoices(); renderBans(); renderGuide(); renderReward(); renderSources(); renderTestVoices();
+  renderHints(); renderSettings(); renderVoices(); renderBans(); renderGuide(); renderReward(); renderSources(); renderTestVoices();
   renderLive();
 }
 function renderLive() {
   renderHeader(); renderQueue(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
   renderStreamNote(); renderServer(); renderReplyNote(); renderPackages(); renderUpdate(); edSync();
 }
+
+// --- подсказки: <… data-hint="id"> закрываются крестиком, «Показать подсказки» в шапке возвращает все.
+// Скрытые — в настройках (hidden_hints), а не в браузере: админку открывают из разных мест.
+const hiddenHints = () => (S && S.settings.hidden_hints) || [];
+for (const el of $$("[data-hint]")) el.prepend(h("button", { type: "button", class: "icon hint-x",
+  title: T("Скрыть подсказку"), "aria-label": T("Скрыть подсказку"),
+  onclick: () => setHints([...hiddenHints(), el.dataset.hint]) }, "✕"));
+function renderHints() {
+  const off = new Set(hiddenHints());
+  let any = false;
+  for (const el of $$("[data-hint]")) {
+    const x = off.has(el.dataset.hint);
+    el.classList.toggle("hint-off", x);
+    any ||= x;
+  }
+  $("#hints-show").hidden = !any;
+}
+async function setHints(ids) {
+  if ((await api("/api/settings", { hidden_hints: ids })).ok) { S.settings.hidden_hints = ids; renderHints(); }
+}
+$("#hints-show").onclick = () => setHints([]);
 
 // --- шапка ---
 function pill(text, cls, title) { return h("span", { class: "pill", title }, h("i", { class: "dot " + cls }), text); }

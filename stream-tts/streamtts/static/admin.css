@@ -132,7 +132,12 @@ table.bench tr.on td { background: color-mix(in srgb, var(--accent) 12%, transpa
   margin-left: 6px; }
 
 /* Новый голос (редактор) */
-#ed-packages:not(:empty) { margin-bottom: 10px; }
+#ed-packages:not(:empty) { margin-top: 10px; }
+/* Скрываемые подсказки (data-hint): крестик в правом верхнем углу, текст его не заезжает */
+p[data-hint], div[data-hint] { position: relative; padding-right: 30px; }
+button.hint-x { position: absolute; top: 4px; right: 4px; padding: 0 6px; line-height: 20px; font-size: 12px; opacity: .6; }
+button.hint-x:hover, button.hint-x:focus-visible { opacity: 1; }
+.hint-off { display: none !important; }
 .hint { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--warn);
   background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
 .source { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 12px; background: var(--bg);

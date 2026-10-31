@@ -11,6 +11,7 @@
 <header>
   <div class="brand">Stream TTS <span id="channel" class="muted"></span></div>
   <div class="row" id="pills"></div>
+  <button type="button" id="hints-show" class="small" hidden>Показать подсказки</button>
   <select id="lang" aria-label="Language / Язык" translate="no">
     <option value="ru">Русский</option><option value="en">English</option>
   </select>
@@ -205,18 +206,23 @@
         <button type="button" id="ed-discard" class="danger">Удалить черновик</button>
       </div>
     </div>
-    <ul id="ed-packages" class="setlist"></ul>
-    <p class="muted small" data-engine="cosyvoice">Голос — это образец: 10–20 секунд записи и её точная расшифровка.
+    <!-- data-hint — подсказка, которую можно скрыть (крестик, admin.js renderHints); id хранятся в настройках -->
+    <p class="ed-about" data-engine="cosyvoice" data-hint="ed-sample-cosyvoice" data-t>Голос — это образец: 10–20 секунд
+      записи и её точная расшифровка.<br>
       Хороший образец — один голос без музыки и эффектов, с ровной подачей: если спокойная реплика стоит рядом с
-      криком, синтез скачет. Из одного персонажа лучше сделать два голоса, спокойный и с напором. Сделайте несколько
-      вариантов из разных мест записи и сравните их на тестовых фразах: разница на слух бывает большой.</p>
-    <p class="muted small" data-engine="espeech" hidden>Образец — 6–7 секунд спокойной речи, одна-две целые фразы.
-      Модель повторяет манеру образца во всех фразах. Сделайте несколько вариантов и сравните их на тестовых
-      фразах.</p>
+      криком, синтез скачет.<br>
+      Из одного персонажа лучше сделать два голоса, спокойный и с напором.<br>
+      Сделайте несколько вариантов из разных мест записи и сравните их на тестовых фразах: разница на слух бывает
+      большой.</p>
+    <p class="ed-about" data-engine="espeech" data-hint="ed-sample-espeech" hidden data-t>Образец — 6–7 секунд спокойной
+      речи, одна-две целые фразы.<br>
+      Модель повторяет манеру образца во всех фразах.<br>
+      Сделайте несколько вариантов и сравните их на тестовых фразах.</p>
+    <ul id="ed-packages" class="setlist"></ul>
   </div>
   <div class="card">
     <h2>1. Записи</h2>
-    <p class="muted small" data-t>Аудио до 15 минут и менее 512 МБ.<br>
+    <p class="muted small" data-hint="ed-sources" data-t>Аудио до 15 минут и менее 512 МБ.<br>
       Выделите отрезок на волне мышью, чтобы добавить его как вариант.<br>
       Скролл мыши — масштаб; Shift + скролл мыши — прокрутка; ЛКМ — слушать с выбранного места.</p>
     <div class="row"><input type="file" id="ed-file" accept="audio/*,video/*" multiple class="grow"
@@ -225,13 +231,13 @@
   </div>
   <div class="card">
     <h2>2. Образец голоса</h2>
-    <div class="hint small" data-t>В расшифровке слово в слово должно быть описано то, что звучит в отрезке: каждое
+    <div class="hint small" data-hint="ed-transcript" data-t>В расшифровке слово в слово должно быть описано то, что звучит в отрезке: каждое
       слово, повтор, «э-э», оборванное на краю слово.<br>
       Знаки препинания расставляйте как слышится: запятая на паузе, точка в конце фразы, «?» и «!» по интонации.<br>
       Числа и сокращения — так, как их произносят: «двадцать пять», а не «25».<br>
       Ошибки в расшифровке могут стать причиной плохой генерации: синтез начинает глотать слова, повторять их или
       добавлять лишние звуки.</div>
-    <div class="hint small mt" data-engine="espeech" hidden>«+» перед гласной — ударение. Кнопка «Ударения» расставит
+    <div class="hint small mt" data-engine="espeech" data-hint="ed-accents" hidden>«+» перед гласной — ударение. Кнопка «Ударения» расставит
       их так, как прочитает модель. Неверные поправьте вручную.</div>
     <div id="ed-variants" class="mt"></div>
   </div>
@@ -259,7 +265,7 @@
       <label>Набор <input name="set" required maxlength="64" list="ed-sets" spellcheck="false" translate="no"
         placeholder="my-voices"></label>
       <datalist id="ed-sets"></datalist>
-      <p class="wide muted small" data-t>В имени допустимы латиница, цифры, «-», «_» и «.». Зрители используют его
+      <p class="wide muted small" data-hint="ed-save" data-t>В имени допустимы латиница, цифры, «-», «_» и «.». Зрители используют его
         в команде выбора голоса.<br>
         Набор — раздел на странице голосов для зрителей. Впишите новое название (латиница, цифры, «-» и «_») — при
         сохранении голоса на странице появится раздел с этим названием заглавными буквами.<br>

@@ -23,7 +23,7 @@ from harness import Api, Loop, Overlay, StreamTTS, wait_for  # noqa: E402
 
 # Настройки, которые тесты меняют (умолчания — store.DEFAULTS)
 DEFAULTS = dict(queue_limit=20, streaming=True, filter_links=True, filter_profanity=True, read_nick=False,
-                max_chars=500, chunk_tokens=150)
+                max_chars=500, chunk_tokens=150, hidden_hints=[])
 SOURCES = dict(reward=dict(on=True, access="all", allow=[]),
                command=dict(on=False, name="!tts", access="subs", allow=[], user_cd=60, global_cd=0),
                chat=dict(on=False, access="all", allow=[]))

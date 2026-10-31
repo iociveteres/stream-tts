@@ -146,8 +146,9 @@ async def voices_zip(request):
 # --- состояние ---
 SETTINGS_KEYS = ("enabled", "sources", "reply", "filter_links", "filter_profanity", "read_nick",
                  "queue_limit", "streaming", "max_chars", "token_ratio", "chunk_tokens", "demo_phrase", "lang",
-                 "test_phrases", "update_check")
+                 "test_phrases", "update_check", "hidden_hints")
 ACCESS_LEVELS = ("all", "subs", "vip", "mods")
+HINT_ID = re.compile(r"[a-z0-9-]{1,40}")
 
 
 def state(ctx, full=True):
@@ -295,6 +296,10 @@ async def post_settings(request, ctx, data):
             continue
         elif k == "update_check" and v not in updates.INTERVALS:
             continue
+        elif k == "hidden_hints":   # id подсказок из разметки (data-hint)
+            if not isinstance(v, list):
+                continue
+            v = sorted({x for x in v if isinstance(x, str) and HINT_ID.fullmatch(x)})[:100]
         elif k == "test_phrases":
             v = [" ".join(str(p).split())[:300] for p in v if str(p).strip()][:editor.MAX_PHRASES]
             if not v:
