@@ -1,6 +1,6 @@
 """Проверка скорости синтеза на этом компьютере (вкладка «Сервер»).
 
-Текущее устройство — одна фраза целиком (скорость относительно реального времени) и она же стримингом (через
+Текущее устройство — одна фраза целиком (RTF — время синтеза / длина звука) и она же стримингом (через
 сколько секунд первый звук) с текущими настройками модели (bench_info клиента: у CosyVoice — chunk_tokens, у ESpeech —
 число шагов). «Все устройства» — то же по очереди на CUDA, Vulkan и CPU:
 встроенный сервер перезапускается на каждом, в конце возвращается выбранное устройство. Перед замером короткая
@@ -115,7 +115,7 @@ class Bench:
         row = dict(backend=name, model=os.path.basename(self.runtime.launcher.model), rtf=round(whole / audio, 3),
                    first=round(first, 2) if first is not None else None, audio=round(audio, 1), ts=time.time(),
                    **self.tts.bench_info())
-        log.info("скорость %s: %.2f× реального времени, первый звук %s с", name, row["rtf"], row["first"])
+        log.info("скорость %s: RTF %.2f, первый звук %s с", name, row["rtf"], row["first"])
         same = lambda r: (r["backend"], r["model"], r.get("steps")) == (row["backend"], row["model"], row.get("steps"))
         results = [r for r in self.s.get("bench", []) if not same(r)]
         self.s.update(bench=results + [row])

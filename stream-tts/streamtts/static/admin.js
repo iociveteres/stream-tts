@@ -618,8 +618,10 @@ function playSample(key) {
   renderServer();
 }
 const fmtGB = mb => fmtNum(mb / 1024, 1);
-/** Скорость синтеза по rtf (время синтеза / длина звука): ×3,2 — втрое быстрее звучания, ×0,45 — медленнее. */
-const fmtSpeed = rtf => rtf == null || !(rtf > 0) ? "—" : "×" + fmtNum(1 / rtf, 1 / rtf < 1 ? 2 : 1);
+/** RTF — время синтеза / длина звука, везде два знака: 0,31 (меньше 1 — быстрее звучания). */
+const fmtRtfNum = rtf => rtf == null || !(rtf > 0) ? "—"
+  : Number(rtf).toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtRtf = rtf => rtf == null || !(rtf > 0) ? "—" : "RTF " + fmtRtfNum(rtf);
 
 function dlProgress(d) {
   const left = d.speed > 0 ? " · " + T("осталось {time}", { time: fmtDur((d.total - d.done) / d.speed) }) : "";
@@ -893,7 +895,7 @@ function renderBench(rt) {
   const steps = S.cosy.params.find(p => p.param === "nfe_steps");   // у ESpeech замер зависит от числа шагов
   $("#bench-table").replaceChildren(rows.length ? h("div", { class: "table-wrap" }, h("table", { class: "bench" },
     h("thead", {}, h("tr", {}, h("th", {}, T("Устройство")), h("th", {}, T("Модель")),
-      h("th", { class: "num", title: T("Во сколько раз синтез быстрее звучания фразы") }, T("Скорость")),
+      h("th", { class: "num", title: T("Время синтеза / длина фразы. Меньше — быстрее") }, "RTF"),
       h("th", { class: "num", title: T("Через сколько секунд начинает звучать длинная фраза при стриминге") },
         T("Первый звук")))),
     h("tbody", {}, ...rows.map(r => {
@@ -904,12 +906,12 @@ function renderBench(rt) {
         title: r.steps != null ? T("{date}, фраза {audio} с, шагов {steps}", { date, audio: fmtNum(r.audio), steps: r.steps })
           : T("{date}, фраза {audio} с, кусок {chunk} токенов", { date, audio: fmtNum(r.audio), chunk: r.chunk }) },
         h("td", {}, r.backend), h("td", {}, quant(r.model) + (r.steps != null ? T(", {n} шагов", { n: r.steps }) : "")),
-        h("td", { class: "num " + cls, title: verdict }, fmtSpeed(r.rtf)),
+        h("td", { class: "num " + cls, title: verdict }, fmtRtfNum(r.rtf)),
         h("td", { class: "num" }, r.first == null ? "—" : T("{n} с", { n: fmtNum(r.first) })));
     }))))
     : h("p", { class: "muted small" }, T("Замеров ещё нет.")),
-    ...(rows.length ? [h("p", { class: "muted small" }, T("×4 — синтез в 4 раза быстрее звучания фразы, ×0,5 — вдвое " +
-      "медленнее. Для стрима нужно больше ×1, лучше ×2 и выше (зелёный)."))] : []));   // replaceChildren(null) пишет «null»
+    ...(rows.length ? [h("p", { class: "muted small" }, T("RTF — время синтеза / длина фразы. Меньше 1 — быстрее звучания. " +
+      "Для стрима нужно меньше 0,9, лучше до 0,5 (зелёный)."))] : []));   // replaceChildren(null) пишет «null»
   const many = rt.backends.some(n => /^(cuda|vulkan)/i.test(n));
   $("#bench-all").hidden = !many || rt.locked.backend;
   $("#bench-one").disabled = $("#bench-all").disabled = running || !S.cosy.ok;
@@ -1028,7 +1030,7 @@ function renderStreamNote() {
   const rtf = S.engine.rtf, note = $("#stream-note");
   note.hidden = !(rtf > 0.9);
   if (!note.hidden) note.textContent = T("Скорость синтеза сейчас {speed}: стриминг будет заикаться, лучше его выключить.",
-    { speed: fmtSpeed(rtf) });
+    { speed: fmtRtf(rtf) });
 }
 function renderBans() {
   $("#bans").replaceChildren(...S.bans.map(b => h("li", {}, b, h("button", { title: T("Разбанить"),
@@ -1067,7 +1069,7 @@ function renderLiveStats() {
     g ? tile(T("Видеокарта"), `${g.util}%`, T("{used} / {total} ГБ · {temp} °C",
       { used: gb(g.mem_used), total: gb(g.mem_total), temp: g.temp }))
       : tile(T("Видеокарта"), T("нет данных"), T("nvidia-smi недоступен: нет видеокарты NVIDIA или она не проброшена в контейнер")),
-    tile(T("Скорость синтеза"), fmtSpeed(S.engine.rtf), T("последние фразы, во сколько раз быстрее звучания")));
+    tile(T("Скорость синтеза"), fmtRtf(S.engine.rtf), T("последние фразы")));
   drawLoad();
   renderModels();
 }
@@ -1165,7 +1167,7 @@ async function loadStats() {
     tile(T("Сыграно"), t.played || 0),
     tile(T("Возвратов"), t.refunded || 0, t.n ? `${fmtNum(100 * (t.refunded || 0) / t.n, 0)}%` : ""),
     tile(T("Ожидание до звука"), st.wait_ms == null ? "—" : T("{n} с", { n: fmtNum(st.wait_ms / 1000) }), T("в среднем")),
-    tile(T("Скорость синтеза"), fmtSpeed(st.synth_ratio),
+    tile(T("Скорость синтеза"), fmtRtf(st.synth_ratio),
       st.avg_audio_ms ? T("средняя фраза {n} с", { n: fmtNum(st.avg_audio_ms / 1000) }) : ""));
   drawHours(st, hours);
   bars("#top-voices", st.voices.map(x => [x.voice, x.n]));
