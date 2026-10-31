@@ -1,6 +1,7 @@
 """Режим правки строк интерфейса stream-tts (в разработке): админка с кнопкой «✎ Текст» на поддельном сервере
-синтеза из e2e-тестов (tests/e2e/fake_cosyvoice.py: голоса alpha, bravo, charlie, вместо речи синус). Видеокарта,
-модель и Docker-версия на 8090 не нужны и не задеваются, Twitch не подключён (свои данные).
+синтеза из e2e-тестов (tests/e2e/fake_cosyvoice.py: CosyVoice и ESpeech, модель — на вкладке «Сервер»; голоса
+alpha, bravo, charlie, вместо речи синус). Видеокарта, модель и Docker-версия на 8090 не нужны и не задеваются,
+Twitch не подключён (свои данные).
 
 Щелчок по надписи в режиме правки — окно с её строками; правки копятся в stream-tts-data/ui-edits.json
 ({русская строка: {"text", "note", "where"}}), сразу видны на странице и переживают перезапуск. Перенос в код
@@ -18,9 +19,11 @@ DATA = os.path.join(ROOT, "stream-tts-data", "ui-edit")
 sys.path.insert(0, os.path.join(ROOT, "tests", "e2e"))
 from fake_cosyvoice import FakeCosy  # noqa: E402
 
+# Оба сервера: модель переключается на вкладке «Сервер», и видны строки и CosyVoice, и ESpeech
 loop = asyncio.new_event_loop()
-cosy = FakeCosy(frontend=True)
+cosy, espeech = FakeCosy(frontend=True), FakeCosy(engine="espeech")
 loop.run_until_complete(cosy.start())
+loop.run_until_complete(espeech.start())
 threading.Thread(target=loop.run_forever, daemon=True).start()
 
 for d in ("models", "voices"):
@@ -29,8 +32,8 @@ for k, v in dict(STREAM_TTS_PORT="8099", STREAM_TTS_DATA=DATA, STREAM_TTS_MODELS
                  STREAM_TTS_VOICES=os.path.join(DATA, "voices"), STREAM_TTS_LANG="ru",
                  STREAM_TTS_UI_EDITS=os.path.join(ROOT, "stream-tts-data", "ui-edits.json")).items():
     os.environ.setdefault(k, v)
-os.environ["COSYVOICE_URL"] = cosy.url
-for k in ("TTS_SERVERS", "TWITCH_CLIENT_ID", "STREAM_TTS_PASSWORD"):
+os.environ["TTS_SERVERS"] = f"cosyvoice={cosy.url},espeech={espeech.url}"
+for k in ("COSYVOICE_URL", "TWITCH_CLIENT_ID", "STREAM_TTS_PASSWORD"):
     os.environ.pop(k, None)
 
 sys.path.insert(0, HERE)

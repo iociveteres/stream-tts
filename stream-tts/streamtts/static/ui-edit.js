@@ -100,6 +100,7 @@
     if (j) {
       for (const k of Object.keys(EDITS)) delete EDITS[k];
       Object.assign(EDITS, j.edits);
+      uiKeys();
       for (const c of changes) applyAll(c.r.key, current(c.r.key));
       toast(`Сохранено: ${changes.length}`);
       list();
@@ -133,15 +134,21 @@
     toggle.classList.toggle("primary", on);
     body.hidden = !on;
     document.body.classList.toggle("ui-edit-on", on);
-    if (!on && hovered) { hovered.classList.remove("ui-edit-hover"); hovered = null; }
+    if (!on) unhover();
     if (on) list();
   }
 
   // --- перехват щелчков: в режиме правки элементы страницы не срабатывают ---
   const active = e => (on || e.altKey) && !own(e.target) && !dlg.open;
+  // класс подсветки снимается до чтения строк: иначе он попадёт в innerHTML абзаца data-t, то есть в ключ
+  const unhover = () => {
+    if (hovered) { hovered.classList.remove("ui-edit-hover"); if (!hovered.classList.length) hovered.removeAttribute("class"); }
+    hovered = null;
+  };
   document.addEventListener("mouseover", e => {
-    if (!on || own(e.target)) return;
-    hovered?.classList.remove("ui-edit-hover");
+    if (!on) return;
+    unhover();
+    if (own(e.target)) return;
     hovered = e.target;
     hovered.classList.add("ui-edit-hover");
   }, true);
@@ -149,6 +156,7 @@
   document.addEventListener("pointerdown", e => {
     if (e.button !== 0 || !active(e)) return;
     e.preventDefault(); e.stopPropagation();
+    unhover();
     open(rowsFor(e.target));
   }, true);
   for (const type of ["mousedown", "click", "dblclick"]) {

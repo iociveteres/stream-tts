@@ -12,6 +12,8 @@ const RU = /[а-яё]/i;
 // UI_KEYS: показанный текст → исходная строка (правленые и с подстановками), UI_NODES: узел или data-t → исходная.
 const EDITS = LANG === "ru" ? window.UI_EDITS || null : null;
 const UI_KEYS = new Map(), UI_NODES = new WeakMap();
+const uiKeys = () => { for (const [k, e] of Object.entries(EDITS || {})) if (e.text) UI_KEYS.set(e.text.replace(/\s+/g, " ").trim(), k); };
+uiKeys();   // строки, которые сервер подменил сам (tr(): ошибки, настройки модели), приходят уже правлеными
 
 const norm = s => s.replace(/\s+/g, " ").trim();
 function lookup(s) {
