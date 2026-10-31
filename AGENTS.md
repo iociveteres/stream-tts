@@ -56,7 +56,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   `stream-tts-managed` — 8092 (его cosyvoice-server — на свободном порту), `stream-tts-en` (английский интерфейс без
   модели) — 8093, `stream-tts-espeech` — 8095 с `espeech-test` на 8096 (свои голоса и словарь в
   `stream-tts-data/espeech-test/`), `stream-tts-espeech-dl` — 8097 (загрузка ESpeech как у программы для Windows, всё в
-  `stream-tts-data/espeech-dl/`), `streamtts-exe-test` — собранный exe на 8098 с данными в `stream-tts-data/exe-test/`.
+  `stream-tts-data/espeech-dl/`), `streamtts-exe-test` — собранный exe на 8098 с данными в `stream-tts-data/exe-test/`, `stream-tts-ui-edit` (режим
+  правки строк интерфейса на поддельном сервере, `stream-tts/ui-edit.py`) — 8099.
   Встроенный espeech-server (режим managed, выбор ESpeech) — на свободном порту или `ESPEECH_PORT`. Конфигурации — `.claude/launch.json`.
 
 ## Запуск

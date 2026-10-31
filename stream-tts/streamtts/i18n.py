@@ -15,6 +15,10 @@ log = logging.getLogger("i18n")
 LANGS = ("ru", "en")
 SETUP_LANG = os.path.join(paths.APP, "setup-lang.txt")
 lang = "ru"
+# В разработке: режим правки строк интерфейса (ui-edit.py, docs/stream-tts.md «Правка текста интерфейса»).
+# Файл правок: {русская строка: {"text": новый вариант, "note": заметка, "where": вкладка}}, "" — строку убрать.
+EDITS_PATH = paths.env("STREAM_TTS_UI_EDITS")
+edits = {}
 
 # Тексты по умолчанию, которые видят зрители: меняются вместе с языком, только если их не трогали
 CONTENT = {
@@ -49,7 +53,13 @@ def catalog():
 
 
 def tr(text, /, **kw):   # / — чтобы подстановка {text} не сталкивалась с аргументом
-    s = catalog().get(" ".join(text.split()), text) if lang == "en" else text
+    if lang == "en":
+        s = catalog().get(" ".join(text.split()), text)
+    elif edits:
+        e = edits.get(" ".join(text.split()))
+        s = e["text"] if e else text
+    else:
+        s = text
     return s.format(**kw) if kw else s
 
 
@@ -103,10 +113,46 @@ def set_lang(settings, new, old=None):
     return demos
 
 
-def page(html):
-    """HTML-страница на текущем языке: lang у <html> и словарь для static/i18n.js."""
+def load_edits():
+    global edits
+    if not EDITS_PATH:
+        return
+    try:
+        with open(EDITS_PATH, encoding="utf-8") as f:
+            edits = json.load(f)
+    except FileNotFoundError:
+        edits = {}
+    except (OSError, ValueError) as e:
+        log.warning("%s: %s", EDITS_PATH, e)
+
+
+def save_edit(key, text, note="", where=""):
+    """Правка строки key; text=None — вернуть исходную."""
+    key = " ".join(key.split())
+    if text is None or (text == key and not note):
+        edits.pop(key, None)
+    else:
+        e = {"text": text, "note": note, "where": where}
+        if key not in catalog():
+            e["unknown"] = True   # не ключ словаря: строка с подставленными значениями или склеенная из частей
+        edits[key] = e
+    os.makedirs(os.path.dirname(os.path.abspath(EDITS_PATH)), exist_ok=True)
+    tmp = EDITS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(edits, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, EDITS_PATH)
+
+
+def page(html, edit=False):
+    """HTML-страница на текущем языке: lang у <html> и словарь для static/i18n.js. edit — страница с режимом
+    правки строк (только админка и только по-русски)."""
     if lang == "ru":
-        return html
+        if not (edit and EDITS_PATH):
+            return html
+        data = json.dumps(edits, ensure_ascii=False).replace("</", "<\\/")
+        return (html.replace("</head>", f"<script>window.UI_EDITS = {data};</script>\n"
+                                         '<link rel="stylesheet" href="/static/ui-edit.css">\n</head>', 1)
+                .replace("</body>", '<script src="/static/ui-edit.js"></script>\n</body>', 1))
     data = json.dumps(catalog(), ensure_ascii=False).replace("</", "<\\/")
     return (html.replace('<html lang="ru">', f'<html lang="{lang}">', 1)
             .replace("</head>", f"<script>window.I18N = {data};</script>\n</head>", 1))

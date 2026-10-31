@@ -38,7 +38,7 @@ def make_app(ctx):
     app.on_response_prepare.append(no_cache)
     app["token"] = hmac.new(_secret().encode(), config.PASSWORD.encode(), hashlib.sha256).hexdigest()
     r = app.router
-    r.add_get("/", page("admin.html"))
+    r.add_get("/", page("admin.html", edit=True))
     r.add_get("/login", page("login.html"))
     r.add_post("/login", login)
     r.add_get("/logout", logout)
@@ -63,6 +63,8 @@ def make_app(ctx):
         r.add_post(path, fn)
     r.add_post("/api/voicesets/import", api_voiceset_import)
     r.add_post("/api/draft/upload", api_draft_upload)
+    if i18n.EDITS_PATH:
+        r.add_post("/api/ui-edit", _wrap(post_ui_edit))
     return app
 
 
@@ -74,10 +76,10 @@ async def no_cache(request, response):
         response.headers["Cache-Control"] = "no-cache"
 
 
-def page(name):
+def page(name, edit=False):
     async def handler(request):
         with open(os.path.join(STATIC, name), encoding="utf-8") as f:
-            text = i18n.page(f.read())
+            text = i18n.page(f.read(), edit)
         return web.Response(text=text, content_type="text/html", headers={"Cache-Control": "no-cache"})
     return handler
 
@@ -774,6 +776,14 @@ async def post_update_dismiss(request, ctx, data):
     """Скрыть плашку о новой версии до следующей."""
     ctx.settings.update(update_dismissed=str(data["version"]))
     return ok()
+
+
+async def post_ui_edit(request, ctx, data):
+    """Режим правки строк (в разработке, STREAM_TTS_UI_EDITS): text=null — вернуть исходную строку."""
+    text = data.get("text")
+    i18n.save_edit(str(data["key"]), None if text is None else str(text), str(data.get("note", "")),
+                   str(data.get("where", "")))
+    return ok(edits=i18n.edits)
 
 
 def _wrap(fn):

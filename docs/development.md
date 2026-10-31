@@ -25,6 +25,7 @@
 │                          # espeech/.venv, THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
+│   ├── ui-edit.py         # режим правки строк интерфейса (в разработке): админка на поддельном сервере, :8099
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер: процесс, перезапуски),
 │                          # engines/ (модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент
 │                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск, клиент модели и
@@ -38,7 +39,7 @@
 │                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
 │                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp, кванты
 │                          # модели, рантайм и модель ESpeech), static/ (static/en.json — английский словарь, static/i18n.js — перевод
-│                          # страниц, static/quants/ — примеры звука квантов для вкладки «Сервер»)
+│                          # страниц, static/ui-edit.js и .css — режим правки строк, static/quants/ — примеры звука квантов для вкладки «Сервер»)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
 │                          # espeech-server и DLL-заглушки), pin-espeech.py (загрузки ESpeech в downloads.json и
 │                          # stubs/*.def — экспорт заглушек), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
@@ -169,7 +170,8 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 корне проекта (режим managed, [stream-tts-deploy.md](stream-tts-deploy.md)) с моделью из `models/` и
 голосами из `voices/`; конфигурация `stream-tts-managed` — на порту 8092 и с данными в `stream-tts-data/native/`,
 чтобы не мешать Docker-версии (её сервер на 8080 — внешний для конфигурации `stream-tts`). Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
-проверка словаря `python stream-tts/check-i18n.py`. ESpeech со своими данными — `espeech-test` (espeech-server на
+проверка словаря `python stream-tts/check-i18n.py`. Свои варианты строк интерфейса —
+`stream-tts-ui-edit` (порт 8099, [stream-tts.md](stream-tts.md), «Правка текста интерфейса»). ESpeech со своими данными — `espeech-test` (espeech-server на
 8096, голоса и словарь ударений в `stream-tts-data/espeech-test/`) и `stream-tts-espeech` (stream-tts на 8095 с
 `TTS_SERVERS=espeech=…`): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Загрузку ESpeech, как у
 программы для Windows, — `stream-tts-espeech-dl` (порт 8097, всё в `stream-tts-data/espeech-dl/`: `rt/` — копия

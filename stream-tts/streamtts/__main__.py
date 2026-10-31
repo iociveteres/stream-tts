@@ -98,6 +98,7 @@ def main():
     ctx = Ctx()
     ctx.settings = store.Settings(os.path.join(config.DATA, "settings.json"))
     i18n.init(ctx.settings)
+    i18n.load_edits()
     ctx.db = store.DB(os.path.join(config.DATA, "stream-tts.sqlite"))
     ctx.profanity = filters.Profanity(prof)
     # Режим: external (TTS_SERVERS или COSYVOICE_URL заданы или встроенного сервера нет) или managed (runtime.py):

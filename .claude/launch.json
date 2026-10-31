@@ -111,6 +111,14 @@
         "import os, sys; os.environ.update(STREAM_TTS_PORT='8095', TTS_SERVERS='espeech=http://127.0.0.1:8096', STREAM_TTS_DATA='stream-tts-data/espeech-test', STREAM_TTS_MODELS='stream-tts-data/espeech-test/models', STREAM_TTS_VOICES='stream-tts-data/espeech-test/voices'); sys.path.insert(0, 'stream-tts'); import runpy; runpy.run_module('streamtts', run_name='__main__')"
       ],
       "port": 8095
+    },
+    {
+      "name": "stream-tts-ui-edit",
+      "runtimeExecutable": "stream-tts/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "stream-tts/ui-edit.py"
+      ],
+      "port": 8099
     }
   ]
 }
