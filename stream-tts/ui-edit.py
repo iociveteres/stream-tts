@@ -21,7 +21,7 @@ from fake_cosyvoice import FakeCosy  # noqa: E402
 
 # Оба сервера: модель переключается на вкладке «Сервер», и видны строки и CosyVoice, и ESpeech
 loop = asyncio.new_event_loop()
-cosy, espeech = FakeCosy(frontend=True), FakeCosy(engine="espeech")
+cosy, espeech = FakeCosy(frontend=True), FakeCosy(engine="espeech", train=True)   # train — страница LoRA
 loop.run_until_complete(cosy.start())
 loop.run_until_complete(espeech.start())
 threading.Thread(target=loop.run_forever, daemon=True).start()
