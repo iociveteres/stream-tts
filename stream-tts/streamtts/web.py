@@ -5,6 +5,7 @@ from aiohttp import web
 
 from . import config, editor, filters, i18n, install, separate, stats, updates
 from .engines.client import LIVE
+from .engines.espeech import train as lora
 from .i18n import tr
 from .engine import SERVICE_COMMANDS
 from .twitch import TwitchError, explain
@@ -16,7 +17,7 @@ PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/static/i
 # Файлы, которые меняются под тем же адресом: статика при обновлении программы, примеры голосов при смене фразы
 REVALIDATE = ("/static/", "/voices/demos/")
 UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream"),
-           "/api/draft/upload": ("application/octet-stream",)}
+           "/api/draft/upload": ("application/octet-stream",), "/api/train/upload": ("application/octet-stream",)}
 MAX_UPLOAD = 512 << 20
 MAX_SET_UPLOAD = 2 << 30   # коллекция ESpeech: ~10 МБ на голос (адаптер LoRA), WC3 — ~680 МБ
 
@@ -59,12 +60,18 @@ def make_app(ctx):
     r.add_get("/api/draft/sample", api_draft_sample)
     r.add_get("/api/draft/synth", api_draft_synth)
     r.add_get("/api/accents", api_accents)
+    r.add_get("/api/train", api_train)
+    r.add_get("/api/train/status", api_train_status)
+    r.add_get("/api/train/item", api_train_item)
+    r.add_get("/api/train/source", api_train_source)
+    r.add_get("/api/train/synth", api_train_synth)
     for path, fn in POSTS.items():
         r.add_post(path, fn)
     r.add_post("/api/voicesets/import", api_voiceset_import)
     r.add_post("/api/draft/upload", api_draft_upload)
     if i18n.EDITS_PATH:
         r.add_post("/api/ui-edit", _wrap(post_ui_edit))
+    r.add_post("/api/train/upload", api_train_upload)
     return app
 
 
@@ -161,7 +168,9 @@ def state(ctx, full=True):
                   busy=ctx.tts.lane.holder[1] if ctx.tts.lane.holder else "", waiting=ctx.tts.lane.queued(),
                   runtime=ctx.runtime.public() if ctx.runtime else None,
                   engine=ctx.tts.id, title=ctx.tts.title, engines=ctx.tts.engines(), switching=ctx.tts.switching,
-                  capabilities=ctx.tts.capabilities, params=model_params(ctx)),
+                  capabilities=ctx.tts.capabilities, params=model_params(ctx),
+                  # обучение LoRA на espeech-server: state, voice, step, steps (из /status, раз в COSY_CHECK)
+                  training=ctx.tts.info.get("training") if ctx.tts.id == "espeech" else None),
         load=ctx.load.public(history=full),
         models=models(ctx),
         demos=dict(ctx.voices.progress),
@@ -490,6 +499,8 @@ async def post_model_use(request, ctx, data):
 async def post_backend(request, ctx, data):
     """Устройство синтеза выбранной модели (у каждой своя настройка: Launcher.DEVICE_KEY)."""
     _install(ctx)
+    if stop := await _restart_guard(ctx, data):
+        return stop
     backend, launcher = str(data.get("backend", "auto")), ctx.runtime.launcher
     devices = launcher.public()["devices"]
     if backend not in devices:
@@ -506,6 +517,8 @@ async def post_engine(request, ctx, data):
         return fail(tr("модель {engine} недоступна", engine=engine))
     if ctx.bench and ctx.bench.task and not ctx.bench.task.done():
         return fail(tr("идёт проверка скорости"))
+    if stop := await _restart_guard(ctx, data):
+        return stop
 
     async def switch():
         try:
@@ -588,12 +601,20 @@ async def post_accents_delete(request, ctx, data):
 
 async def post_bench(request, ctx, data):
     _install(ctx)
+    if data.get("all"):   # сервер перезапускается на каждом устройстве
+        if stop := await _restart_guard(ctx, data):
+            return stop
+    elif (t := await ctx.train.server_state()) and t.get("state") in lora.BUSY:
+        return fail(tr("идёт обучение LoRA: видеокарта занята им, замер был бы неверным — проверьте скорость после"))
     ctx.bench.start(bool(data.get("all")))
     return ok()
 
 
 async def post_voiceset_delete(request, ctx, data):
-    await _install(ctx).delete_set(str(data["name"]), data.get("model") or None)
+    inst = _install(ctx)
+    if stop := await _restart_guard(ctx, data):
+        return stop
+    await inst.delete_set(str(data["name"]), data.get("model") or None)
     return ok()
 
 
@@ -604,6 +625,8 @@ async def api_voiceset_import(request):
         inst = _install(ctx)
     except ValueError as e:
         return fail(str(e))
+    if stop := await _restart_guard(ctx, dict(force=request.headers.get("X-Force") == "1")):
+        return stop
     filename = urllib.parse.unquote(request.headers.get("X-Filename", "voices.zip"))
     fd, tmp = tempfile.mkstemp(suffix=".zip")
     try:
@@ -721,12 +744,18 @@ async def post_package_download(request, ctx, data):
 
 
 async def post_package_delete(request, ctx, data):
-    await _install(ctx).delete_package(str(data["id"]))
+    inst = _install(ctx)
+    if (install.PACKAGES.get(str(data["id"])) or {}).get("restart") and (stop := await _restart_guard(ctx, data)):
+        return stop   # сервер останавливается, пока удаляются файлы фронтенда
+    await inst.delete_package(str(data["id"]))
     return ok()
 
 
 async def post_cuda_download(request, ctx, data):
-    _install(ctx).start_cuda()
+    inst = _install(ctx)
+    if stop := await _restart_guard(ctx, data):   # распаковка — при остановленном сервере
+        return stop
+    inst.start_cuda()
     return ok()
 
 
@@ -736,8 +765,187 @@ async def post_espeech_download(request, ctx, data):
 
 
 async def post_espeech_delete(request, ctx, data):
-    await _install(ctx).delete_espeech()
+    inst = _install(ctx)
+    if stop := await _restart_guard(ctx, data):   # сервер ESpeech останавливается, пока удаляются файлы
+        return stop
+    await inst.delete_espeech()
     return ok()
+
+
+# --- обучение LoRA голоса ESpeech (engines/espeech/train.py): набор здесь, обучение — на espeech-server ---
+async def _restart_guard(ctx, data):
+    """Действие перезапускает встроенный сервер синтеза, а обучение LoRA и его несохранённые результаты живут в
+    процессе сервера: во время обучения — отказ, с несохранёнными результатами — вопрос (confirm, повтор с force).
+    → ответ-отказ или None."""
+    if not ctx.runtime:
+        return None
+    r = await ctx.train.guard(bool(data.get("force")))
+    if r is None:
+        return None
+    text, confirm = r
+    return web.json_response(dict(ok=False, error=text, confirm=confirm), status=409)
+
+
+def _train_fail(e):
+    if isinstance(e, lora.Refused):
+        return web.json_response(dict(ok=False, error=str(e), code=e.code), status=400)
+    if isinstance(e, ValueError):
+        return fail(str(e))
+    log.warning("обучение: %s: %s", type(e).__name__, e)
+    return fail(tr("сервер синтеза: {e}", e=str(e) or type(e).__name__))
+
+
+async def api_train(request):
+    """Набор реплик голоса и ход обучения на сервере (train: null и error — сервер не ответил)."""
+    ctx = request.app["ctx"]
+    try:
+        out = ctx.train.public(request.query.get("voice", ""))
+    except ValueError as e:
+        return fail(str(e))
+    try:
+        out["train"], out["error"] = await ctx.train.status(), ""
+    except Exception as e:
+        out["train"], out["error"] = None, tr("сервер синтеза: {e}", e=str(e) or type(e).__name__)
+    return ok(**out)
+
+
+async def api_train_status(request):
+    try:
+        return ok(train=await request.app["ctx"].train.status())
+    except Exception as e:
+        return _train_fail(e)
+
+
+async def api_train_item(request):
+    q = request.query
+    try:
+        return web.FileResponse(request.app["ctx"].train.item_path(q.get("voice", ""), q.get("id", "")))
+    except ValueError:
+        raise web.HTTPNotFound()
+
+
+async def api_train_source(request):
+    q = request.query
+    try:
+        return web.FileResponse(request.app["ctx"].train.source_path(q.get("voice", ""), q.get("id", "")))
+    except ValueError:
+        raise web.HTTPNotFound()
+
+
+async def api_train_synth(request):
+    q = request.query
+    try:
+        path = await request.app["ctx"].train.synth(q.get("voice", ""), q.get("adapter", ""), int(q.get("phrase", -1)))
+    except ValueError as e:
+        raise web.HTTPBadRequest(text=str(e))
+    except Exception as e:
+        raise web.HTTPServiceUnavailable(text=tr("синтез: {e}", e=e))
+    return web.FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+
+async def api_train_upload(request):
+    """Реплика (X-Kind: item) или запись для нарезки (source): файл сырым телом, голос и имя файла — в X-Voice и
+    X-Filename (URL-кодированы). Текст пары «имя.txt» админка присылает следом (/api/train/items)."""
+    ctx = request.app["ctx"]
+    voice = urllib.parse.unquote(request.headers.get("X-Voice", ""))
+    filename = urllib.parse.unquote(request.headers.get("X-Filename", "audio"))
+    fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(filename)[1][:10])
+    try:
+        size = 0
+        with os.fdopen(fd, "wb") as f:
+            async for chunk in request.content.iter_chunked(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    return fail(tr("файл больше 512 МБ"))
+                f.write(chunk)
+        if request.headers.get("X-Kind") == "source":
+            result = await ctx.train.add_source(voice, tmp, filename)
+        else:
+            result = dict(item=await ctx.train.add_item(voice, tmp, filename))
+    except ValueError as e:
+        return fail(str(e))
+    finally:
+        os.remove(tmp)
+    return ok(**result, set=ctx.train.public(voice))
+
+
+async def post_train_items(request, ctx, data):
+    """Тексты реплик: {voice, items: [{id, text}]}."""
+    try:
+        ctx.train.update(str(data.get("voice", "")), list(data.get("items") or []))
+    except (ValueError, TypeError, KeyError) as e:
+        return fail(str(e))
+    return ok()
+
+
+async def post_train_items_delete(request, ctx, data):
+    voice = str(data.get("voice", ""))
+    try:
+        ctx.train.delete_items(voice, list(data.get("ids") or []))
+        return ok(set=ctx.train.public(voice))
+    except ValueError as e:
+        return fail(str(e))
+
+
+async def post_train_cut(request, ctx, data):
+    """Реплика из выделения на волне записи: {voice, src, start, end, text?}."""
+    voice = str(data.get("voice", ""))
+    try:
+        item = ctx.train.cut(voice, str(data.get("src", "")), float(data["start"]), float(data["end"]),
+                             str(data.get("text", "")))
+        return ok(item=item, set=ctx.train.public(voice))
+    except ValueError as e:
+        return fail(str(e))
+
+
+async def post_train_source_delete(request, ctx, data):
+    voice = str(data.get("voice", ""))
+    try:
+        ctx.train.delete_source(voice, str(data.get("id", "")))
+        return ok(set=ctx.train.public(voice))
+    except ValueError as e:
+        return fail(str(e))
+
+
+async def post_train_clear(request, ctx, data):
+    try:
+        ctx.train.clear(str(data.get("voice", "")))
+    except ValueError as e:
+        return fail(str(e))
+    return ok()
+
+
+async def post_train_start(request, ctx, data):
+    """{voice, steps? (пусто — по объёму), checkpointing, discard? — сначала выбросить несохранённые результаты}."""
+    try:
+        t = await ctx.train.start(str(data.get("voice", "")), data.get("steps"), bool(data.get("checkpointing")),
+                                  bool(data.get("discard")))
+    except Exception as e:
+        return _train_fail(e)
+    return ok(train=t)
+
+
+async def post_train_stop(request, ctx, data):
+    try:
+        return ok(train=await ctx.train.stop())
+    except Exception as e:
+        return _train_fail(e)
+
+
+async def post_train_save(request, ctx, data):
+    try:
+        r = await ctx.train.save(str(data.get("snapshot", "")))
+    except Exception as e:
+        return _train_fail(e)
+    ctx.voices.changed()
+    return ok(**r)
+
+
+async def post_train_discard(request, ctx, data):
+    try:
+        return ok(train=await ctx.train.discard())
+    except Exception as e:
+        return _train_fail(e)
 
 
 # --- модели в памяти (вкладка «Статистика») ---
@@ -746,6 +954,8 @@ async def post_model_unload(request, ctx, data):
     if what == "tts":
         if not ctx.runtime:   # готовый сервер в тестах
             return fail("no built-in server")
+        if stop := await _restart_guard(ctx, data):   # выгрузка — остановка процесса сервера
+            return stop
         # после текущего запроса к серверу, иначе он оборвётся на середине
         async with ctx.tts.lane.hold(LIVE, tr("выгрузка модели")):
             await ctx.runtime.unload()
@@ -840,6 +1050,15 @@ POSTS = {path: _wrap(fn) for path, fn in {
     "/api/draft/source/delete": post_draft_source_delete,
     "/api/draft/save": post_draft_save,
     "/api/draft/discard": post_draft_discard,
+    "/api/train/items": post_train_items,
+    "/api/train/items/delete": post_train_items_delete,
+    "/api/train/cut": post_train_cut,
+    "/api/train/source/delete": post_train_source_delete,
+    "/api/train/clear": post_train_clear,
+    "/api/train/start": post_train_start,
+    "/api/train/stop": post_train_stop,
+    "/api/train/save": post_train_save,
+    "/api/train/discard": post_train_discard,
     "/api/package/download": post_package_download,
     "/api/package/delete": post_package_delete,
     "/api/cuda/download": post_cuda_download,

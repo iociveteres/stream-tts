@@ -280,6 +280,84 @@
     </form>
   </div>
  </div>
+
+ <!-- Обучение LoRA голоса ESpeech (engines/espeech/train.py, train.js): набор реплик хранит stream-tts, обучение идёт
+      на сервере синтеза. Вход — кнопка «LoRA» у голоса в списке (только у ESpeech с capabilities.train) -->
+ <div id="train" hidden>
+  <div class="card">
+    <div class="row between">
+      <h2 id="tr-title">Обучение голоса</h2>
+      <button type="button" id="tr-close">← К списку голосов</button>
+    </div>
+    <p class="muted small">LoRA дообучает модель ESpeech на репликах голоса: тембр и манера речи становятся ближе к
+      оригиналу, чем по одному образцу. Хватает минуты реплик. Обучение идёт на сервере синтеза, на видеокарте — от
+      нескольких минут (на RTX 3060 Ti около 15 минут на 3000 шагов).</p>
+    <div class="hint small">Пока идёт обучение, видеокарта занята им: озвучка зрителей работает между шагами, но
+      медленнее. Смена модели или устройства, проверка скорости, выгрузка модели и установка наборов голосов в это
+      время недоступны: они перезапускают сервер синтеза. Результат обучения хранится в памяти сервера, пока его не
+      сохранили в голос, — перезапуск сервера или программы его выбросит.</div>
+  </div>
+  <div class="card">
+    <h2>1. Реплики</h2>
+    <p class="muted small">Реплика — от 0,3 до 30 секунд речи только этого голоса, без музыки и чужих голосов. Текст —
+      ровно то, что звучит, как у образца: каждое слово, числа словами, знаки по интонации. Ударения «+» ставить не
+      обязательно — их расставит модель; кнопка «Ударения» покажет, как, неверные поправьте. Рекомендуется от 1 минуты
+      реплик (15–20 штук).</p>
+    <p id="tr-summary" class="small"></p>
+    <div class="row end">
+      <label class="grow">Файлы реплик <input type="file" id="tr-files" accept="audio/*,video/*,.txt,text/plain" multiple></label>
+      <label class="grow">Запись для нарезки <input type="file" id="tr-source-file" accept="audio/*,video/*" multiple></label>
+    </div>
+    <p class="muted small">Пары файлов с одинаковым именем («реплика.wav» и «реплика.txt») — текст подставится сам. Из
+      длинной записи (до 15 минут) реплики вырезаются на волне: выделите отрезок мышью и нажмите «+ Реплика из
+      выделения». Колесо мыши — масштаб, Shift + колесо — прокрутка, щелчок — послушать с этого места.</p>
+    <p id="tr-upload-state" class="small muted"></p>
+    <div id="tr-sources"></div>
+    <div class="row between mt">
+      <h3>Реплики набора</h3>
+      <button type="button" id="tr-clear" class="danger">Удалить набор</button>
+    </div>
+    <div class="table-wrap"><table id="tr-items"></table></div>
+  </div>
+  <div class="card">
+    <h2>2. Обучение</h2>
+    <div id="tr-other" class="hint small" hidden></div>
+    <div class="row end">
+      <label>Шагов <input type="number" id="tr-steps" min="1" max="20000" step="100" class="steps"></label>
+      <label class="check" id="tr-ckpt-label"><input type="checkbox" id="tr-ckpt"> Экономия видеопамяти</label>
+    </div>
+    <p class="muted small">Пустое поле — шаги по объёму набора: 1000 на минуту реплик, от 500 до 3000 (1 мин — 1000, 2 мин — 2000, от 3 мин — 3000). Малый набор
+      от лишних шагов переобучается — тогда появится «пора остановиться».</p>
+    <p id="tr-vram" class="small muted"></p>
+    <div class="row">
+      <button type="button" id="tr-start" class="primary">Начать обучение</button>
+      <button type="button" id="tr-stop" hidden>Остановить</button>
+      <span id="tr-state" class="small"></span>
+    </div>
+    <div id="tr-progress" class="dl mt" hidden>
+      <div class="track"><div class="fill" id="tr-fill"></div></div>
+      <p id="tr-progress-text" class="small"></p>
+    </div>
+    <div id="tr-notes"></div>
+    <div class="grid2 mt" id="tr-charts" hidden>
+      <div><h3>Лосс обучения</h3><div class="chart train" id="tr-loss"></div></div>
+      <div><h3>Проверочный лосс</h3><div class="chart train" id="tr-val"></div></div>
+    </div>
+  </div>
+  <div class="card" id="tr-result">
+    <h2>3. Результат</h2>
+    <p class="muted small">Тестовые фразы с результатом обучения: «лучший» — снимок на минимуме проверочного лосса,
+      «последний» — на последнем шаге; «последний» можно слушать и во время обучения. Сравните с голосом без LoRA и
+      сохраните тот, что звучит лучше. Прежний файл голоса сервер сохранит рядом (.espeech.bak).</p>
+    <div class="table-wrap"><table id="tr-matrix"></table></div>
+    <div class="row mt">
+      <label class="inline">Снимок <select id="tr-snapshot"></select></label>
+      <button type="button" id="tr-save" class="primary">Сохранить в голос</button>
+      <button type="button" id="tr-discard" class="danger">Сбросить результаты</button>
+    </div>
+    <p id="tr-saved" class="small"></p>
+  </div>
+ </div>
 </section>
 
 <!-- ============ Сервер (модель синтеза; встроенный сервер: модель, устройство, наборы голосов) ============ -->
@@ -493,5 +571,6 @@
 <script src="/static/i18n.js"></script>
 <script src="/static/admin.js"></script>
 <script src="/static/editor.js"></script>
+<script src="/static/train.js"></script>
 </body>
 </html>

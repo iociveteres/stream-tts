@@ -21,15 +21,15 @@ pytestmark = pytest.mark.skipif(not (os.path.isfile(os.path.join(MODELS, "espeec
 
 
 class Server:
-    def __init__(self, voices, user_accents=""):
+    def __init__(self, voices, user_accents="", extra=(), log="server.log"):
         s = socket.socket()
         s.bind(("127.0.0.1", 0))
         self.port = s.getsockname()[1]
         s.close()
         self.voices, self.user_accents = voices, user_accents
-        self.log = open(os.path.join(voices, "..", "server.log"), "w", encoding="utf-8")
+        self.log = open(os.path.join(voices, "..", log), "w", encoding="utf-8")
         self.proc = subprocess.Popen([sys.executable, "-m", "espeech", "--models", MODELS, "--voices", voices,
-                                      "--port", str(self.port), "--user-accents", user_accents], cwd=ROOT, stdout=self.log, stderr=subprocess.STDOUT)
+                                      "--port", str(self.port), "--user-accents", user_accents, *extra], cwd=ROOT, stdout=self.log, stderr=subprocess.STDOUT)
         deadline = time.time() + 180
         while time.time() < deadline:
             try:

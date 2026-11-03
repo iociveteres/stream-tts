@@ -7,7 +7,8 @@
 - метаданные (строки): `format` = espeech-voice, `version` = 1, `text` — ровно то, что звучит в образце, с ударениями
   «+» (иначе хвост текста «утекает» в начало синтеза), `tempo` — кадров мела на байт UTF-8 текста, посчитанный по
   полному исходному образцу (короткий кусок бывает быстрее или медленнее средней речи голоса); необязательные
-  `title`, `variant`, `lora_rank`, `lora_alpha`, `lora_steps`.
+  `title`, `variant`, `lora_rank`, `lora_alpha`, `lora_steps`, `lora_data_sec` (секунд реплик в обучении),
+  `lora_date` (когда сохранён адаптер, POST /train/save).
 
 Реестр перечитывает папку при каждом списке голосов (GET /speaker) и при синтезе неизвестным голосом: новые файлы
 подхватываются без перезапуска. Подготовленный голос (мел образца на устройстве) кешируется до изменения файла."""
@@ -80,6 +81,16 @@ def load(path):
     if not md.get("text"):
         raise ValueError(f"{path}: нет текста образца")
     return ref, md, lora
+
+
+def save_adapter(src, dst, tensors, meta):
+    """Голос src с новым адаптером → dst (обучение LoRA: CLI и POST /train/save). Образец, текст, темп и прочие
+    метаданные — из src (читается сейчас: правки голоса во время обучения не теряются), прежние lora_* заменяются."""
+    ref, md, _ = load(src)
+    extra = {k: v for k, v in md.items()
+             if k not in ("format", "version", "text", "tempo") and not k.startswith("lora_")}
+    extra.update(meta)
+    save(dst, ref, md["text"], float(md["tempo"]), extra, tensors)
 
 
 class Voice:

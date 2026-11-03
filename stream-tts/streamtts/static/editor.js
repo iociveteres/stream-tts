@@ -1,7 +1,7 @@
 // Редактор голоса из записи (editor.py, вкладка «Голоса» → «+ Добавить голос»): записи и их волна, варианты
-// образца, тестовые фразы, сохранение. Отдельный файл после admin.js (его помощники — h, T, api, S — общие):
-// записи, волну и матрицу фраз возьмёт и страница дообучения ESpeech. Особенности модели — D.engine из
-// /api/draft (пределы длины, пакеты, ударения), у ESpeech ещё кнопка «Ударения» и карточка «Темп речи».
+// образца, тестовые фразы, сохранение. Отдельный файл после admin.js (его помощники — h, T, api, S — общие).
+// Записи с волной (Waves) и воспроизведение берёт и страница обучения LoRA (train.js). Особенности модели —
+// D.engine из /api/draft (пределы длины, пакеты, ударения), у ESpeech ещё кнопка «Ударения» и карточка «Темп речи».
 // Черновик живёт на сервере; здесь его копия D. Варианты правятся на месте и уходят на сервер целиком с задержкой
 // (edChanged), перед синтезом и сохранением — сразу (edFlush): сервер синтезирует то, что у него записано.
 const pkg = id => (S.packages || []).find(p => p.id === id);
@@ -13,7 +13,7 @@ const edEngine = () => (D && D.engine) || { id: S.cosy.engine, min: 2, max: 30, 
   packages: S.cosy.engine === "cosyvoice" ? ["frontend", "music"] : ["music"] };
 const edPackages = () => edEngine().packages;
 const TEMPO_MAX = 60, SPEED_MAX = 30;   // с и %: отрезок и поправка темпа ESpeech (engines/espeech/editor.py)
-const ed = { bufs: {}, views: {}, sel: null, busy: new Set(), synthAll: false, timer: 0, saving: null };
+const ed = { busy: new Set(), synthAll: false, timer: 0, saving: null };
 let actx = null, edSrc = null, edBtn = null, edPlay = null, edAnim = 0;
 const audioCtx = () => actx || (actx = new AudioContext());
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -22,16 +22,17 @@ const fmtPos = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0"
 const lenClass = (d, e = edEngine()) => d < e.min || d > e.max ? "bad" : d < e.ok[0] || d > e.ok[1] ? "warn" : "good";
 const vLabel = v => T("В{n}", { n: D.variants.indexOf(v) + 1 });
 
+// Воспроизведение: одно на страницу (редактор и обучение); у записи на волне бежит курсор
 function edStop() {
   if (edSrc) { edSrc.onended = null; try { edSrc.stop(); } catch { /* уже остановлен */ } edSrc = null; }
   if (edBtn) { edBtn.textContent = edBtn.dataset.label; edBtn.classList.remove("playing"); edBtn = null; }
-  const src = edPlay && edPlay.src;
+  const p = edPlay;
   edPlay = null;
   cancelAnimationFrame(edAnim);
-  if (src) drawWave(src);
+  if (p) p.waves.draw(p.src);
 }
-/** Играет buf с from до to; src — запись, на волне которой бежит курсор. */
-function edPlayBuffer(buf, btn, from = 0, to = buf.duration, src = null) {
+/** Играет buf с from до to; src — запись виджета waves, на волне которой бежит курсор. */
+function edPlayBuffer(buf, btn, from = 0, to = buf.duration, src = null, waves = null) {
   edStop();
   const ctx = audioCtx();
   edSrc = ctx.createBufferSource();
@@ -40,9 +41,9 @@ function edPlayBuffer(buf, btn, from = 0, to = buf.duration, src = null) {
   edSrc.onended = () => { edSrc = null; edStop(); };
   edSrc.start(0, from, Math.max(0.05, to - from));
   if (btn) { btn.dataset.label ??= btn.textContent; btn.textContent = "■"; btn.classList.add("playing"); edBtn = btn; }
-  if (src) {
-    edPlay = { src, start: ctx.currentTime, from };
-    const tick = () => { drawWave(src); edAnim = requestAnimationFrame(tick); };
+  if (src && waves) {
+    edPlay = { waves, src, start: ctx.currentTime, from };
+    const tick = () => { waves.draw(src); edAnim = requestAnimationFrame(tick); };
     tick();
   }
 }
@@ -58,6 +59,158 @@ async function edPlayUrl(url, btn) {
     edPlayBuffer(buf, btn);
     return true;
   } catch (e) { btn.textContent = btn.dataset.label; toast(e.message, true); return false; }
+}
+
+/** Записи с волной: выделение мышью, колесо — масштаб, Shift + колесо — прокрутка, щелчок — послушать с этого
+ *  места. Общие у редактора и страницы обучения (train.js). o: box — контейнер; url(id) — WAV записи;
+ *  bands(id) — отметки на волне [{a, b, color (переменная CSS), alpha, label, y}] по порядку рисования;
+ *  len(секунды) — класс длины выделения (good / warn / bad); actions(запись) — кнопки под волной;
+ *  remove(запись) — удалить; empty — текст, когда записей нет. */
+class Waves {
+  constructor(o) {
+    this.o = o;
+    this.sources = [];
+    this.reset();
+    addEventListener("resize", () => { if (o.box.offsetParent) this.drawAll(); });
+  }
+  reset() { this.bufs = {}; this.views = {}; this.sel = null; }
+  forget(id) {
+    delete this.bufs[id];
+    delete this.views[id];
+    if (this.sel && this.sel.src === id) this.sel = null;
+  }
+  render(sources) {
+    this.sources = sources;
+    const box = this.o.box;
+    if (!sources.length) { box.replaceChildren(h("p", { class: "muted small" }, this.o.empty)); return; }
+    box.replaceChildren(...sources.map(s => {
+      const canvas = h("canvas", { class: "wave", "data-src": s.id });
+      this.wire(canvas, s);
+      return h("div", { class: "source" },
+        h("div", { class: "row between" },
+          h("div", {}, h("b", {}, s.name), " ", h("span", { class: "muted small" }, fmtPos(s.dur))),
+          h("div", { class: "row" },
+            h("button", { type: "button", class: "icon", title: T("Вся запись"), onclick: () => {
+              delete this.views[s.id]; this.draw(s.id); } }, "⤢"),
+            h("button", { type: "button", class: "icon danger", title: T("Удалить запись"), onclick: () => this.o.remove(s) },
+              "✕"))),
+        canvas,
+        h("div", { class: "row" },
+          h("button", { type: "button", onclick: e => this.playSel(s, e.currentTarget) }, "▶ " + T("Выделение")),
+          ...this.o.actions(s),
+          h("span", { class: "small", "data-sel": s.id })));
+    }));
+    for (const s of sources) {
+      this.showSel(s.id);
+      this.load(s.id).then(() => this.draw(s.id)).catch(e => toast(T("{file}: {e}", { file: s.name, e: e.message }), true));
+    }
+  }
+  async load(id) {
+    if (!this.bufs[id]) {
+      const r = await fetch(this.o.url(id));
+      if (!r.ok) throw new Error(r.statusText);
+      this.bufs[id] = await audioCtx().decodeAudioData(await r.arrayBuffer());
+    }
+    return this.bufs[id];
+  }
+  view(s) { return this.views[s.id] || { a: 0, b: s.dur }; }
+  setView(s, a, b) {
+    const span = clamp(b - a, Math.min(1, s.dur), s.dur);
+    a = clamp(a, 0, s.dur - span);
+    this.views[s.id] = { a, b: a + span };
+  }
+  drawAll() { this.sources.forEach(s => this.draw(s.id)); }
+  draw(sid) {
+    const c = this.o.box.querySelector(`canvas.wave[data-src="${sid}"]`), s = this.sources.find(x => x.id === sid);
+    const buf = this.bufs[sid];
+    if (!c || !s) return;
+    const w = c.clientWidth, hh = c.clientHeight, dpr = devicePixelRatio || 1;
+    if (!w) return;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(hh * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
+    const g = c.getContext("2d"), css = getComputedStyle(document.body), col = n => css.getPropertyValue(n).trim();
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, hh);
+    g.font = "11px Segoe UI, system-ui, sans-serif";
+    const v = this.view(s), X = t => (t - v.a) / (v.b - v.a) * w;
+    const band = (a, b, color, alpha) => { g.globalAlpha = alpha; g.fillStyle = color; g.fillRect(X(a), 0, Math.max(1, X(b) - X(a)), hh); g.globalAlpha = 1; };
+    for (const m of this.o.bands(sid)) {
+      band(m.a, m.b, col(m.color), m.alpha);
+      if (m.label) { g.fillStyle = col(m.color); g.fillText(m.label, X(m.a) + 3, m.y || 12); }
+    }
+    if (this.sel && this.sel.src === sid) band(this.sel.a, this.sel.b, col("--warn"), 0.3);
+    if (!buf) { g.fillStyle = col("--muted"); g.fillText(T("загрузка…"), 8, hh / 2); return; }
+    // Пики по столбцам: на длинной записи в пикселе десятки тысяч отсчётов, хватает каждого ~200-го
+    const data = buf.getChannelData(0), sr = buf.sampleRate, per = (v.b - v.a) * sr / w;
+    const stride = Math.max(1, Math.floor(per / 200)), mid = hh / 2;
+    g.fillStyle = col("--ink-2");
+    for (let x = 0; x < w; x++) {
+      const i0 = Math.floor(v.a * sr + x * per), i1 = Math.min(data.length, Math.floor(v.a * sr + (x + 1) * per));
+      let lo = 0, hi = 0;
+      for (let i = i0; i < i1; i += stride) { const d = data[i]; if (d < lo) lo = d; else if (d > hi) hi = d; }
+      g.fillRect(x, mid - hi * mid, 1, Math.max(1, (hi - lo) * mid));
+    }
+    // Шкала времени
+    g.fillStyle = col("--muted");
+    const span = v.b - v.a, step = [0.5, 1, 2, 5, 10, 30, 60, 120, 300].find(st => span / st <= 10) || 600;
+    for (let t = Math.ceil(v.a / step) * step; t < v.b; t += step) { g.fillRect(X(t), hh - 4, 1, 4); g.fillText(fmtPos(t), X(t) + 2, hh - 5); }
+    if (edPlay && edPlay.waves === this && edPlay.src === sid) {
+      const t = edPlay.from + audioCtx().currentTime - edPlay.start;
+      g.fillStyle = col("--bad");
+      g.fillRect(X(t), 0, 1.5, hh);
+    }
+  }
+  wire(c, s) {
+    let down = null;
+    const tAt = e => { const r = c.getBoundingClientRect(), v = this.view(s); return clamp(v.a + (e.clientX - r.left) / r.width * (v.b - v.a), 0, s.dur); };
+    c.onpointerdown = e => { c.setPointerCapture(e.pointerId); down = { x: e.clientX, t: tAt(e) }; };
+    c.onpointermove = e => {
+      if (!down || Math.abs(e.clientX - down.x) <= 3) return;
+      const t = tAt(e);
+      this.sel = { src: s.id, a: Math.min(down.t, t), b: Math.max(down.t, t) };
+      this.sources.forEach(x => { this.draw(x.id); this.showSel(x.id); });
+    };
+    c.onpointerup = async e => {
+      if (down && Math.abs(e.clientX - down.x) <= 3) {   // щелчок: послушать с этого места
+        const t = down.t;
+        edPlayBuffer(await this.load(s.id), null, t, s.dur, s.id, this);
+      }
+      down = null;
+    };
+    c.onwheel = e => {
+      e.preventDefault();
+      const v = this.view(s), span = v.b - v.a;
+      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        const d = (e.shiftKey ? e.deltaY : e.deltaX) / c.clientWidth * span;
+        this.setView(s, v.a + d, v.b + d);
+      } else {
+        const t = tAt(e), f = (t - v.a) / span, ns = clamp(span * (e.deltaY > 0 ? 1.25 : 0.8), 1, s.dur);
+        this.setView(s, t - f * ns, t - f * ns + ns);
+      }
+      this.draw(s.id);
+    };
+  }
+  showSel(sid) {
+    const el = this.o.box.querySelector(`[data-sel="${sid}"]`);
+    if (!el) return;
+    const sel = this.sel && this.sel.src === sid ? this.sel : null;
+    el.className = "small " + (sel ? this.o.len(sel.b - sel.a) : "muted");
+    el.textContent = sel ? `${fmtPos(sel.a)}–${fmtPos(sel.b)} · ${fmtSec(sel.b - sel.a)}` : T("Выделите отрезок мышью");
+  }
+  async playSel(s, btn) {
+    if (edBtn === btn) { edStop(); return; }
+    const sel = this.sel && this.sel.src === s.id ? this.sel : this.view(s);
+    edPlayBuffer(await this.load(s.id), btn, sel.a, sel.b, s.id, this);
+  }
+  /** Выделить отрезок записи src и показать его на волне с запасом по краям. */
+  focus(src, a, b) {
+    const s = this.sources.find(x => x.id === src);
+    if (!s) return;
+    this.sel = { src, a, b };
+    const pad = Math.max(1, (b - a) * 0.25);
+    this.setView(s, a - pad, b + pad);
+    this.sources.forEach(x => { this.draw(x.id); this.showSel(x.id); });
+    this.o.box.querySelector(`canvas.wave[data-src="${src}"]`).scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 }
 
 async function edLoad() {
@@ -90,7 +243,7 @@ $("#ed-discard").onclick = async () => {
   clearTimeout(ed.timer);
   edStop();
   await api("/api/draft/discard");
-  Object.assign(ed, { bufs: {}, views: {}, sel: null });
+  edWaves.reset();
   await edLoad();
 };
 
@@ -123,7 +276,7 @@ function renderEditor() {
   // подсказки модели: <… data-engine="cosyvoice"> видны только у неё
   for (const el of $("#editor").querySelectorAll("[data-engine]")) el.hidden = el.dataset.engine !== e.id;
   $("#ed-title").textContent = T("Новый голос {engine}", { engine: e.title || S.cosy.title });
-  renderEdSources();
+  edWaves.render(D.sources);
   renderEdVariants();
   renderEdTempo();
   renderMatrix();
@@ -137,43 +290,20 @@ function renderEditor() {
   renderSaveVariants();
 }
 
-// Записи и волна
-function renderEdSources() {
-  const box = $("#ed-sources");
-  if (!D.sources.length) {
-    box.replaceChildren(h("p", { class: "muted small" }, T("Записей пока нет.")));
-    return;
-  }
-  box.replaceChildren(...D.sources.map(s => {
-    const canvas = h("canvas", { class: "wave", "data-src": s.id });
-    wireWave(canvas, s);
-    return h("div", { class: "source" },
-      h("div", { class: "row between" },
-        h("div", {}, h("b", {}, s.name), " ", h("span", { class: "muted small" }, fmtPos(s.dur))),
-        h("div", { class: "row" },
-          h("button", { type: "button", class: "icon", title: T("Вся запись"), onclick: () => {
-            delete ed.views[s.id]; drawWave(s.id); } }, "⤢"),
-          h("button", { type: "button", class: "icon danger", title: T("Удалить запись"), onclick: () => edDeleteSource(s) },
-            "✕"))),
-      canvas,
-      h("div", { class: "row" },
-        h("button", { type: "button", onclick: e => playSel(s, e.currentTarget) }, "▶ " + T("Выделение")),
-        h("button", { type: "button", class: "primary", onclick: () => addVariant(s) }, T("+ Вариант из выделения")),
-        h("span", { class: "small", "data-sel": s.id })));
-  }));
-  for (const s of D.sources) {
-    showSel(s.id);
-    loadSource(s.id).then(() => drawWave(s.id)).catch(e => toast(T("{file}: {e}", { file: s.name, e: e.message }), true));
-  }
-}
-async function loadSource(id) {
-  if (!ed.bufs[id]) {
-    const r = await fetch(`/api/draft/source/${id}.wav`);
-    if (!r.ok) throw new Error(r.statusText);
-    ed.bufs[id] = await audioCtx().decodeAudioData(await r.arrayBuffer());
-  }
-  return ed.bufs[id];
-}
+// Записи и волна: отрезок для темпа ESpeech — под образцом, варианты — поверх
+const edWaves = new Waves({
+  box: $("#ed-sources"),
+  url: id => `/api/draft/source/${id}.wav`,
+  bands: sid => D ? [
+    ...(D.tempo && D.tempo.src === sid && edEngine().id === "espeech"
+      ? [{ a: D.tempo.start, b: D.tempo.end, color: "--good", alpha: 0.1, label: T("темп"), y: 26 }] : []),
+    ...D.variants.filter(x => x.src === sid).map(x => ({ a: x.start, b: x.end, color: "--accent", alpha: 0.16, label: vLabel(x) })),
+  ] : [],
+  len: d => lenClass(d),
+  actions: s => [h("button", { type: "button", class: "primary", onclick: () => addVariant(s) }, T("+ Вариант из выделения"))],
+  remove: s => edDeleteSource(s),
+  empty: T("Записей пока нет."),
+});
 async function edDeleteSource(s) {
   const n = D.variants.filter(v => v.src === s.id).length;
   if (!await ask(n ? T("Удалить запись «{file}» и её варианты ({n})?", { file: s.name, n })
@@ -181,129 +311,26 @@ async function edDeleteSource(s) {
   await edFlush();
   const r = await api("/api/draft/source/delete", { id: s.id });
   if (!r.ok) return;
-  delete ed.bufs[s.id];
-  if (ed.sel && ed.sel.src === s.id) ed.sel = null;
+  edWaves.forget(s.id);
   D = r.draft;
   renderEditor();
 }
-const view = s => ed.views[s.id] || { a: 0, b: s.dur };
-function setView(s, a, b) {
-  const span = clamp(b - a, Math.min(1, s.dur), s.dur);
-  a = clamp(a, 0, s.dur - span);
-  ed.views[s.id] = { a, b: a + span };
-}
-const drawAllWaves = () => D && D.sources.forEach(s => drawWave(s.id));
-addEventListener("resize", () => { if (!$("#editor").hidden) drawAllWaves(); });
-function drawWave(sid) {
-  const c = $(`canvas.wave[data-src="${sid}"]`), s = D.sources.find(x => x.id === sid), buf = ed.bufs[sid];
-  if (!c || !s) return;
-  const w = c.clientWidth, hh = c.clientHeight, dpr = devicePixelRatio || 1;
-  if (!w) return;
-  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(hh * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
-  const g = c.getContext("2d"), css = getComputedStyle(document.body), col = n => css.getPropertyValue(n).trim();
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, w, hh);
-  g.font = "11px Segoe UI, system-ui, sans-serif";
-  const v = view(s), X = t => (t - v.a) / (v.b - v.a) * w;
-  const band = (a, b, color, alpha) => { g.globalAlpha = alpha; g.fillStyle = color; g.fillRect(X(a), 0, Math.max(1, X(b) - X(a)), hh); g.globalAlpha = 1; };
-  const tp = D.tempo;
-  if (tp && tp.src === sid && edEngine().id === "espeech") {
-    band(tp.start, tp.end, col("--good"), 0.1);   // отрезок для темпа ESpeech — под образцами
-    g.fillStyle = col("--good");
-    g.fillText(T("темп"), X(tp.start) + 3, 26);
-  }
-  for (const x of D.variants) if (x.src === sid) {
-    band(x.start, x.end, col("--accent"), 0.16);
-    g.fillStyle = col("--accent");
-    g.fillText(vLabel(x), X(x.start) + 3, 12);
-  }
-  if (ed.sel && ed.sel.src === sid) band(ed.sel.a, ed.sel.b, col("--warn"), 0.3);
-  if (!buf) { g.fillStyle = col("--muted"); g.fillText(T("загрузка…"), 8, hh / 2); return; }
-  // Пики по столбцам: на длинной записи в пикселе десятки тысяч отсчётов, хватает каждого ~200-го
-  const data = buf.getChannelData(0), sr = buf.sampleRate, per = (v.b - v.a) * sr / w;
-  const stride = Math.max(1, Math.floor(per / 200)), mid = hh / 2;
-  g.fillStyle = col("--ink-2");
-  for (let x = 0; x < w; x++) {
-    const i0 = Math.floor(v.a * sr + x * per), i1 = Math.min(data.length, Math.floor(v.a * sr + (x + 1) * per));
-    let lo = 0, hi = 0;
-    for (let i = i0; i < i1; i += stride) { const d = data[i]; if (d < lo) lo = d; else if (d > hi) hi = d; }
-    g.fillRect(x, mid - hi * mid, 1, Math.max(1, (hi - lo) * mid));
-  }
-  // Шкала времени
-  g.fillStyle = col("--muted");
-  const span = v.b - v.a, step = [0.5, 1, 2, 5, 10, 30, 60, 120, 300].find(st => span / st <= 10) || 600;
-  for (let t = Math.ceil(v.a / step) * step; t < v.b; t += step) { g.fillRect(X(t), hh - 4, 1, 4); g.fillText(fmtPos(t), X(t) + 2, hh - 5); }
-  if (edPlay && edPlay.src === sid) {
-    const t = edPlay.from + audioCtx().currentTime - edPlay.start;
-    g.fillStyle = col("--bad");
-    g.fillRect(X(t), 0, 1.5, hh);
-  }
-}
-function wireWave(c, s) {
-  let down = null;
-  const tAt = e => { const r = c.getBoundingClientRect(), v = view(s); return clamp(v.a + (e.clientX - r.left) / r.width * (v.b - v.a), 0, s.dur); };
-  c.onpointerdown = e => { c.setPointerCapture(e.pointerId); down = { x: e.clientX, t: tAt(e) }; };
-  c.onpointermove = e => {
-    if (!down || Math.abs(e.clientX - down.x) <= 3) return;
-    const t = tAt(e);
-    ed.sel = { src: s.id, a: Math.min(down.t, t), b: Math.max(down.t, t) };
-    D.sources.forEach(x => { drawWave(x.id); showSel(x.id); });
-  };
-  c.onpointerup = async e => {
-    if (down && Math.abs(e.clientX - down.x) <= 3) {   // щелчок: послушать с этого места
-      const t = down.t;
-      edPlayBuffer(await loadSource(s.id), null, t, s.dur, s.id);
-    }
-    down = null;
-  };
-  c.onwheel = e => {
-    e.preventDefault();
-    const v = view(s), span = v.b - v.a;
-    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-      const d = (e.shiftKey ? e.deltaY : e.deltaX) / c.clientWidth * span;
-      setView(s, v.a + d, v.b + d);
-    } else {
-      const t = tAt(e), f = (t - v.a) / span, ns = clamp(span * (e.deltaY > 0 ? 1.25 : 0.8), 1, s.dur);
-      setView(s, t - f * ns, t - f * ns + ns);
-    }
-    drawWave(s.id);
-  };
-}
-function showSel(sid) {
-  const el = $(`[data-sel="${sid}"]`);
-  if (!el) return;
-  const sel = ed.sel && ed.sel.src === sid ? ed.sel : null;
-  el.className = "small " + (sel ? lenClass(sel.b - sel.a) : "muted");
-  el.textContent = sel ? `${fmtPos(sel.a)}–${fmtPos(sel.b)} · ${fmtSec(sel.b - sel.a)}` : T("Выделите отрезок мышью");
-}
-async function playSel(s, btn) {
-  if (edBtn === btn) { edStop(); return; }
-  const sel = ed.sel && ed.sel.src === s.id ? ed.sel : view(s);
-  edPlayBuffer(await loadSource(s.id), btn, sel.a, sel.b, s.id);
-}
 const r2 = x => Math.round(x * 100) / 100;
 function addVariant(s) {
-  if (!ed.sel || ed.sel.src !== s.id) { toast(T("Сначала выделите отрезок на волне этой записи"), true); return; }
-  const v = { id: "v" + Date.now().toString(36), src: s.id, start: r2(ed.sel.a), end: r2(ed.sel.b), text: "", denoise: false,
+  const sel = edWaves.sel;
+  if (!sel || sel.src !== s.id) { toast(T("Сначала выделите отрезок на волне этой записи"), true); return; }
+  const v = { id: "v" + Date.now().toString(36), src: s.id, start: r2(sel.a), end: r2(sel.b), text: "", denoise: false,
     music: false, ready: [] };
   D.variants.push(v);
   renderEdVariants();
   renderMatrix();
   renderSaveVariants();
-  drawWave(s.id);
+  edWaves.draw(s.id);
   edChanged();
   $(`.variant[data-id="${v.id}"] textarea`).focus();
 }
 /** Отрезок a–b записи src: выделить, приблизить и прокрутить к нему. */
-function focusRange(src, a, b) {
-  const s = D.sources.find(x => x.id === src);
-  if (!s) return;
-  ed.sel = { src, a, b };
-  const pad = Math.max(1, (b - a) * 0.25);
-  setView(s, a - pad, b + pad);
-  D.sources.forEach(x => { drawWave(x.id); showSel(x.id); });
-  $(`canvas.wave[data-src="${src}"]`).scrollIntoView({ behavior: "smooth", block: "center" });
-}
+const focusRange = (src, a, b) => edWaves.focus(src, a, b);
 
 // Варианты образца
 function renderEdVariants() {
@@ -320,7 +347,7 @@ function renderEdVariants() {
     upd();
     const num = (k, label) => h("label", { class: "inline small" }, label, h("input", { type: "number", class: "num",
       step: 0.1, min: 0, max: src.dur, value: v[k], onchange: e => {
-        v[k] = clamp(+e.target.value || 0, 0, src.dur); upd(); drawWave(v.src); renderSaveVariants(); edChanged(); } }));
+        v[k] = clamp(+e.target.value || 0, 0, src.dur); upd(); edWaves.draw(v.src); renderSaveVariants(); edChanged(); } }));
     const esp = edEngine().id === "espeech";
     const text = h("textarea", { class: "short" + (esp ? " grow" : ""), rows: 2, placeholder: esp
         ? T("Расшифровка отрезка")
@@ -347,7 +374,7 @@ function renderEdVariants() {
         } }, "▶ " + T("Образец")),
         h("button", { type: "button", class: "icon danger", title: T("Удалить вариант"), onclick: () => {
           D.variants = D.variants.filter(x => x !== v);
-          renderEdVariants(); renderMatrix(); renderSaveVariants(); drawAllWaves(); edChanged();
+          renderEdVariants(); renderMatrix(); renderSaveVariants(); edWaves.drawAll(); edChanged();
         } }, "✕")),
       esp ? h("div", { class: "row" }, text, h("button", { type: "button",
         title: T("Автоматическая расстановка ударений моделью"),
@@ -390,7 +417,7 @@ function renderEdTempo() {
           onclick: () => focusRange(t.src, t.start, t.end) }, "⌖"),
         rate, h("span", { class: "grow" }), take,
         h("button", { type: "button", class: "icon danger", title: T("Убрать отрезок"), onclick: () => {
-          D.tempo = null; renderEdTempo(); drawWave(t.src); edChanged(); } }, "✕")),
+          D.tempo = null; renderEdTempo(); edWaves.draw(t.src); edChanged(); } }, "✕")),
       area);
   }
   const speed = D.speed || 0, fmt = x => x > 0 ? `+${x} %` : x < 0 ? `−${-x} %` : "0 %", val = h("b", {}, fmt(speed));
@@ -404,16 +431,16 @@ function renderEdTempo() {
       T("Сбросить")) : null));
 }
 function takeTempo() {
-  const sel = ed.sel;
+  const sel = edWaves.sel;
   if (!sel) { toast(T("Сначала выделите на волне отрезок для темпа"), true); return; }
   if (sel.b - sel.a > TEMPO_MAX) { toast(T("Отрезок для темпа длиннее {n} с", { n: TEMPO_MAX }), true); return; }
   D.tempo = { src: sel.src, start: r2(sel.a), end: r2(sel.b), text: D.tempo ? D.tempo.text : "" };
-  renderEdTempo(); drawAllWaves(); edChanged();
+  renderEdTempo(); edWaves.drawAll(); edChanged();
   $("#ed-tempo textarea").focus();
 }
 async function playTempo(t, btn) {
   if (edBtn === btn) { edStop(); return; }
-  edPlayBuffer(await loadSource(t.src), btn, t.start, t.end, t.src);
+  edPlayBuffer(await edWaves.load(t.src), btn, t.start, t.end, t.src, edWaves);
 }
 
 // Тестовые фразы: строки — фразы, столбцы — варианты и голос для сравнения
@@ -512,6 +539,8 @@ $("#ed-save").onsubmit = async e => {
     out.className = "small good";
     out.textContent = T("Голос {name} сохранён в набор {set}. Пример для списка голосов синтезируется сам.",
       { name: r.name, set: r.set });
+    if (trAvailable()) out.append(" ", h("button", { type: "button", class: "link", onclick: () => trOpen(r.name) },
+      T("Обучить LoRA на репликах этого голоса")));
     toast(T("Голос {name} добавлен", { name: r.name }));
   } finally { btn.disabled = false; }
 };
@@ -533,5 +562,5 @@ $("#ed-file").onchange = async e => {
     } catch (err) { toast(T("Сервер недоступен: {e}", { e: err.message }), true); }
   }
   state.textContent = "";
-  renderEdSources();
+  edWaves.render(D.sources);
 };

@@ -6,7 +6,11 @@
 LoRA в fp32 (samples/espeech-lora-pipe). Голос без LoRA — флаг выключен, цена нулевая.
 
 Адаптер в файле голоса — тензоры `lora.<блок>.<q|k|v|o|ff1|ff2>.<A|B>` (A — rank × in, B — out × rank, fp16) и
-метаданные `lora_rank`, `lora_alpha`; scale = alpha / rank вкладывается в B при загрузке."""
+метаданные `lora_rank`, `lora_alpha`; scale = alpha / rank вкладывается в B при загрузке.
+
+Обучение (train.py) идёт через те же обёртки: на время шага в `fit` кладутся fp32-параметры (A, B, scale), и ветка
+считается без записи на месте (её нужно дифференцировать), с приоритетом над буферами. Вне шага `fit` пуст: синтез
+между шагами обучения идёт как обычно, буферы и `on` обучение не трогает."""
 import torch
 from torch import nn
 
@@ -20,6 +24,7 @@ class LoRALinear(nn.Module):
         self.inf, self.outf = base.in_features, base.out_features
         self.on = False
         self.A = self.B = None
+        self.fit = None   # (A, B, scale) — обучаемый адаптер на время шага обучения (train.py)
 
     def alloc(self, rank):
         w = self.base.weight
@@ -28,6 +33,9 @@ class LoRALinear(nn.Module):
 
     def forward(self, x):
         y = self.base(x)
+        if self.fit is not None:   # обучение: под autocast умножения в fp16, градиент — в fp32-параметры
+            A, B, scale = self.fit
+            return y + (((x @ A.t()) @ B.t()) * scale).to(y.dtype)
         if self.on:   # выход nn.Linear — новый непрерывный тензор: прибавлять на месте безопасно
             y.view(-1, self.outf).addmm_(x.reshape(-1, self.inf) @ self.A.t(), self.B.t())
         return y

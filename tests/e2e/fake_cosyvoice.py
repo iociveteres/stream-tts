@@ -24,7 +24,18 @@ ONNX-фронтенд (FakeCosy(frontend=True)): GET /frontend/model отдаё�
 - fail — подстрока текста, на которой /tts отвечает 500;
 - down — /status отвечает 500 (сервер недоступен);
 - length_factor — во сколько раз звук длиннее расчётного (проверка жёсткой обрезки);
-- fail_save — /speaker/save отвечает 500."""
+- fail_save — /speaker/save отвечает 500.
+
+Обучение LoRA (FakeCosy(engine="espeech", train=True), как espeech/trainjob.py; capabilities.train): POST /train
+(multipart: voice, пары audio + text, steps, checkpointing, seed; реплики — только WAV PCM16 моно 24 кГц: stream-tts
+сам приводит звук, у сервера ffmpeg может не быть), GET /train (ход, limits, gpu), /train/stop, /train/save,
+/train/discard, adapter в /tts (last / best / none) и training в /status. Шаги идут сами по train_rate за тик 10 мс;
+лосс каждые 50 шагов, проверка каждые 100 — при ≥ 30 репликах (5–12 отложенных). Снимок узнаётся по звуку: last —
+частота голоса × 1,1, best — × 1,05; сохранённый снимок звучит у голоса и без adapter. Ручки обучения:
+- train_rate — шагов за тик;
+- train_oom — на первом шаге без экономии видеопамяти ошибка oom (с ней — обучение идёт);
+- train_overfit_at — после этого шага проверочный лосс растёт (признак «пора остановиться»);
+- train_free_mb — свободная видеопамять в gpu (меньше 2800 — checkpointing_advised)."""
 import asyncio, contextlib, io, re, struct, time, wave
 
 import numpy as np
@@ -38,6 +49,10 @@ VOICES = {"alpha": (220.0, 0.05), "bravo": (330.0, 0.3), "charlie": (440.0, 0.6)
 FRONTEND = dict(speech_tokenizer="/models/frontend-onnx/speech_tokenizer_v3.onnx",
                 campplus="/models/frontend-onnx/campplus.onnx")
 EXTRACTED_AMP = 0.2
+ADAPTER_HZ = {"last": 1.1, "best": 1.05}   # частота голоса со снимком обучения: тест узнаёт снимок по звуку
+TRAIN_LIMITS = dict(min_sec=0.3, max_sec=30.0, recommended_min_sec=60, max_steps=20000, val_min_items=30,
+                    vram_need_mb=dict(default=2800, checkpointing=500))
+OOM_TEXT = "Не хватило видеопамяти: закройте игры и программы на видеокарте и запустите обучение снова"
 
 
 def tone(freq, amp, seconds):
@@ -79,8 +94,12 @@ WORD = re.compile(r"[А-Яа-яЁё+]+")
 
 
 class FakeCosy:
-    def __init__(self, frontend=False, engine="cosyvoice", voices=None):
+    def __init__(self, frontend=False, engine="cosyvoice", voices=None, train=False):
         self.engine = engine
+        self.can_train = train and engine == "espeech"
+        self.trained = {}    # голос -> снимок, сохранённый в его файл (/train/save)
+        self.train_task = None
+        self._train_reset()
         self.voices = dict(voices or VOICES)
         self.frontend = dict(FRONTEND) if frontend else None
         self.frontend_loaded = False
@@ -101,6 +120,11 @@ class FakeCosy:
         self.fail_save = False
         self.chunk_delay = 0.0
         self.user_accents = {}   # слово -> разметка: словарь ударений пользователя (espeech)
+        self.train_rate = 10
+        self.train_oom = False
+        self.train_overfit_at = None
+        self.train_free_mb = 6000
+        self.trained = {}
         self.tts = []
         self.calls = []
         self.lists = 0       # сколько раз stream-tts перечитал список голосов (GET /speaker)
@@ -122,8 +146,8 @@ class FakeCosy:
             self.active -= 1
 
     # --- запуск в цикле событий теста ---
-    async def start(self):
-        app = web.Application(client_max_size=64 << 20)
+    async def start(self, port=0):
+        app = web.Application(client_max_size=256 << 20)
         app.router.add_get("/status", self.status)
         app.router.add_get("/frontend/model", self.frontend_paths)
         app.router.add_post("/frontend/model/load", self.frontend_load)
@@ -139,15 +163,23 @@ class FakeCosy:
             app.router.add_get("/accents", self.accents)
             app.router.add_post("/accents", self.accents_put)
             app.router.add_delete("/accents/{word}", self.accents_delete)
+        if self.can_train:
+            app.router.add_post("/train", self.train_start)
+            app.router.add_get("/train", self.train_get)
+            app.router.add_post("/train/stop", self.train_stop)
+            app.router.add_post("/train/save", self.train_save)
+            app.router.add_post("/train/discard", self.train_discard)
         self.runner = web.AppRunner(app, access_log=None)
         await self.runner.setup()
-        site = web.TCPSite(self.runner, "127.0.0.1", 0)
+        site = web.TCPSite(self.runner, "127.0.0.1", port)
         await site.start()
         port = site._server.sockets[0].getsockname()[1]
         self.url = f"http://127.0.0.1:{port}"
         return self
 
     async def close(self):
+        if self.train_task:
+            self.train_task.cancel()
         if self.runner:
             await self.runner.cleanup()
 
@@ -158,8 +190,10 @@ class FakeCosy:
         d = dict(model_loaded=True, model="fake", frontend_available=self.frontend_loaded)
         if self.engine == "espeech":
             d.update(engine="espeech", api_version=1, params=ESPEECH_PARAMS,
-                     capabilities=dict(stream=True, accent=True, extract=True, train=False, voice_formats=["espeech"],
-                                       user_accents=True))
+                     capabilities=dict(stream=True, accent=True, extract=True, train=self.can_train,
+                                       voice_formats=["espeech"], user_accents=True),
+                     training=dict(state=self.tr["state"], voice=self.tr["voice"], step=self.tr["step"],
+                                   steps=self.tr["steps"]))
         return web.json_response(d)
 
     def _accent(self, text):
@@ -312,6 +346,17 @@ class FakeCosy:
             if self.fail and self.fail in text:
                 return web.Response(status=500, text="fake failure")
             freq, amp = self.voices[voice]
+            adapter = body.get("adapter") or None
+            if self.can_train:
+                if adapter not in (None, "none", "last", "best"):
+                    return web.Response(status=400, text="adapter: last, best или none")
+                if adapter in ADAPTER_HZ:
+                    if adapter not in self._snapshots():
+                        return web.json_response(dict(error="no_snapshot", message="нет результата обучения"),
+                                                 status=409)
+                    freq *= ADAPTER_HZ[adapter]
+                elif adapter is None and voice in self.trained:
+                    freq *= ADAPTER_HZ[self.trained[voice]]
             x = tone(freq, amp, len(text) / CHARS_PER_SEC * self.length_factor)
             await self._wait_hold(text)
             if not body.get("stream"):
@@ -335,3 +380,178 @@ class FakeCosy:
         finally:
             rec["done"] = True
             self.active -= 1
+
+    # --- обучение LoRA (espeech/trainjob.py) ---
+    def _train_reset(self):
+        self.tr = dict(state="idle", voice=None, step=0, steps=0, loss=None, s_per_step=None, eta_sec=None,
+                       elapsed_sec=None, seed=1, checkpointing=False, data={}, val_history=[], loss_history=[],
+                       best=None, overfit=False, overfit_step=None, finished=None, saved=None, memory={},
+                       error=None, message=None)
+        self.snaps = set()
+
+    def _snapshots(self):
+        t = self.tr
+        if t["state"] in ("running", "stopping"):
+            return ["last"] + (["best"] if t["best"] else [])
+        return [k for k in ("last", "best") if k in self.snaps]
+
+    def _train_status(self):
+        return dict(self.tr, snapshots=self._snapshots(), limits=TRAIN_LIMITS,
+                    gpu=dict(free_mb=self.train_free_mb, total_mb=8192,
+                             checkpointing_advised=self.train_free_mb < TRAIN_LIMITS["vram_need_mb"]["default"]))
+
+    @staticmethod
+    def _terr(status, code, message):
+        return web.json_response(dict(error=code, message=message), status=status)
+
+    async def train_get(self, request):
+        return web.json_response(self._train_status())
+
+    async def train_start(self, request):
+        t = self.tr
+        if t["state"] in ("running", "stopping"):
+            return self._terr(409, "busy", f"уже идёт обучение голоса {t['voice']}")
+        if t["state"] == "done" and self.snaps and not t["saved"]:
+            return self._terr(409, "unsaved", f"есть несохранённые результаты обучения голоса {t['voice']}")
+        form = await request.post()
+        voice = str(form.get("voice", "")).strip()
+        audios, texts = form.getall("audio", []), [str(x) for x in form.getall("text", [])]
+        rec = dict(call="train", voice=voice, ts=time.time(), items=len(audios), texts=texts, formats=[],
+                   steps=form.get("steps"), checkpointing=form.get("checkpointing"), seed=form.get("seed"))
+        self.calls.append(rec)
+        if not voice:
+            return self._terr(400, "no_voice", "voice обязателен")
+        if voice not in self.voices:
+            return self._terr(404, "unknown_voice", f"нет голоса {voice}")
+        if not audios:
+            return self._terr(400, "empty", "нет реплик")
+        if len(audios) != len(texts):
+            return self._terr(400, "bad_pairs", f"частей audio {len(audios)}, а text {len(texts)}")
+        secs, bad = [], []
+        for i, (f, text) in enumerate(zip(audios, texts), 1):
+            try:
+                with wave.open(io.BytesIO(f.file.read())) as w:
+                    fmt = (w.getframerate(), w.getnchannels(), w.getsampwidth())
+                    sec = w.getnframes() / w.getframerate()
+            except (wave.Error, EOFError, AttributeError) as e:
+                bad.append(f"реплика {i}: не WAV ({e})")
+                continue
+            rec["formats"].append(fmt)
+            if fmt != (SR, 1, 2):   # у сервера без ffmpeg — только WAV PCM16 моно 24 кГц
+                bad.append(f"реплика {i}: нужен WAV PCM16 моно 24000 Гц, а ffmpeg нет")
+            elif not 0.3 <= sec <= 30:
+                bad.append(f"реплика {i}: {sec:.1f} с, нужно 0.3–30 с")
+            elif not text.strip():
+                bad.append(f"реплика {i}: пустой текст")
+            secs.append(sec)
+        if bad:
+            return self._terr(400, "bad_items", "; ".join(bad))
+        n = len(secs)
+        nval = min(12, max(5, n // 10)) if n >= 30 else 0
+        steps = int(form["steps"]) if form.get("steps") else \
+            int(min(3000, max(500, round(1000 * sum(secs[nval:]) / 60, -2))))
+        ckpt = str(form.get("checkpointing", "")) in ("1", "true", "on", "yes")
+        self._train_reset()
+        t = self.tr
+        t.update(state="running", voice=voice, steps=steps, seed=int(form.get("seed") or 1), checkpointing=ckpt,
+                 elapsed_sec=0, data=dict(train_items=n - nval, train_sec=round(sum(secs[nval:]), 1), val_items=nval,
+                                          val_sec=round(sum(secs[:nval]), 1),
+                                          val_note=None if nval else "без проверки: нужно от 30 реплик",
+                                          batches_per_epoch=1, steps_default=not form.get("steps")))
+        if nval:
+            self._val(0)
+        self.train_task = asyncio.ensure_future(self._train_loop())
+        return web.json_response(self._train_status())
+
+    def _val(self, step):
+        t, k, over = self.tr, step // 100, self.train_overfit_at
+        if over is None or step <= over:
+            v = 0.59 - 0.002 * k
+        else:
+            v = 0.59 - 0.002 * (over // 100) + 0.004 * (k - over // 100)
+        t["val_history"].append(dict(step=step, val=round(v, 4)))
+        if t["best"] is None or v < t["best"]["val"]:
+            t["best"] = dict(step=step, val=round(v, 4))
+        if t["overfit_step"] is None:   # как train.overfit: два замера подряд выше минимума на ≥ 0,003
+            best, run = None, 0
+            for x in t["val_history"]:
+                if best is not None and x["val"] >= best + 0.003:
+                    run += 1
+                    if run >= 2:
+                        t["overfit"], t["overfit_step"] = True, x["step"]
+                        break
+                else:
+                    run = 0
+                best = x["val"] if best is None else min(best, x["val"])
+
+    async def _train_loop(self):
+        t, t0 = self.tr, time.monotonic()
+        while t["state"] == "running" and t["step"] < t["steps"]:
+            await asyncio.sleep(0.01)
+            if t["state"] != "running":
+                return
+            if self.train_oom and not t["checkpointing"]:
+                self._train_end("error", error="oom", message=OOM_TEXT + " — или включите экономию видеопамяти")
+                return
+            for _ in range(self.train_rate):
+                if t["step"] >= t["steps"]:
+                    break
+                t["step"] += 1
+                if t["step"] % 50 == 0:
+                    t["loss_history"].append(dict(step=t["step"], loss=round(0.7 - t["step"] / 100000, 4),
+                                                  s_per_step=0.3, peak_mb=3100, reserved_mb=3400))
+                if t["step"] % 100 == 0 and t["data"]["val_items"]:
+                    self._val(t["step"])
+            t.update(loss=0.65, s_per_step=0.3, elapsed_sec=round(time.monotonic() - t0),
+                     eta_sec=round((t["steps"] - t["step"]) * 0.3))
+        if t["state"] == "running":
+            self._train_end("done", finished="steps")
+
+    def _train_end(self, state, **kw):
+        t = self.tr
+        self.snaps = ({"last"} if t["step"] else set()) | ({"best"} if t["best"] else set())
+        t.update(state=state, eta_sec=None, memory=dict(peak_mb=3100, reserved_mb=3400), **kw)
+
+    async def train_stop(self, request):
+        if self.tr["state"] == "running":
+            self.calls.append(dict(call="train_stop", ts=time.time()))
+            self._train_end("done", finished="stopped")
+        return web.json_response(self._train_status())
+
+    async def train_save(self, request):
+        which = str((await request.json()).get("snapshot") or "last")
+        t = self.tr
+        if which not in ("last", "best"):
+            return self._terr(400, "bad_snapshot", "snapshot: last или best")
+        if t["state"] in ("running", "stopping"):
+            return self._terr(409, "busy", "обучение ещё идёт: сначала /train/stop")
+        if which not in self.snaps:
+            return self._terr(409, "no_snapshot", "нет результата обучения")
+        step = t["step"] if which == "last" else t["best"]["step"]
+        path = f"/voices/{t['voice']}.espeech"
+        backup = t["saved"]["backup"] if t["saved"] else path + ".bak"
+        t["saved"] = dict(snapshot=which, step=step, path=path, backup=backup)
+        self.trained[t["voice"]] = which
+        self.calls.append(dict(call="train_save", voice=t["voice"], snapshot=which, step=step, ts=time.time()))
+        return web.json_response(dict(ok=True, **t["saved"]))
+
+    async def train_discard(self, request):
+        if self.train_task:
+            self.train_task.cancel()
+        self.calls.append(dict(call="train_discard", ts=time.time()))
+        self._train_reset()
+        return web.json_response(self._train_status())
+
+
+async def serve(argv):
+    """python -m espeech --port N …: поддельный espeech-server с обучением отдельным процессом (режим managed в
+    test_train.py: stream-tts запускает его вместо настоящего). Скорость шагов — FAKE_TRAIN_RATE."""
+    import argparse, os
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--port", type=int, default=0)
+    args, _ = ap.parse_known_args(argv)
+    fake = FakeCosy(engine="espeech", train=True)
+    fake.train_rate = int(os.environ.get("FAKE_TRAIN_RATE", "10"))
+    await fake.start(args.port)
+    print(f"fake espeech-server: {fake.url}", flush=True)
+    await asyncio.Event().wait()

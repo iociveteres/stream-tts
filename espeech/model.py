@@ -12,6 +12,7 @@ import math, os
 
 import torch
 import torch.nn.functional as F
+from safetensors import safe_open
 from safetensors.torch import load_file
 from torch import nn
 
@@ -322,9 +323,18 @@ class ESpeech:
                 cfm = CFM(len(self.vocab))
         finally:
             torch.set_default_dtype(torch.float32)
-        sd = load_file(os.path.join(weights_dir, "espeech_fp16.safetensors"), device=str(self.device))
-        cfm.load_state_dict({k: v.to(self.dtype) for k, v in sd.items()})
-        del sd
+        # веса — по тензору через CPU: load_file сразу на видеокарту и копия в модель держали там две копии весов (пик
+        # загрузки 1,27 ГБ при 0,71 ГБ у модели, samples/espeech-lora-small); значения те же, что у load_state_dict
+        params = cfm.state_dict()
+        with safe_open(os.path.join(weights_dir, "espeech_fp16.safetensors"), "pt", device="cpu") as f:
+            keys = set(f.keys())
+            if keys != set(params):
+                raise ValueError(f"веса не подходят к модели: нет {sorted(set(params) - keys)[:5]}, "
+                                 f"лишние {sorted(keys - set(params))[:5]}")
+            with torch.no_grad():
+                for k in keys:
+                    params[k].copy_(f.get_tensor(k))
+        del params
         self.dit = cfm.transformer.to(self.dtype).eval().requires_grad_(False)
         # requires_grad_(False): иначе копии адаптеров LoRA в буферы оставляют историю autograd (утечка на смене голоса)
         self.voc = Vocos()

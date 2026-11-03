@@ -55,6 +55,11 @@ async function api(path, body) {
       body: JSON.stringify(body || {}) });
     if (r.status === 401) { location.href = "/login"; return { ok: false }; }
     const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    // перезапуск сервера синтеза выбросит несохранённые результаты обучения LoRA (train.py): спросить и повторить
+    if (j.confirm && !(body && body.force)) {
+      if (await ask(j.error, T("Продолжить"), true)) return api(path, { ...body, force: true });
+      return j;
+    }
     if (!j.ok) toast(j.error || T("Ошибка"), true);
     return j;
   } catch (e) { toast(T("Сервер недоступен: {e}", { e: e.message }), true); return { ok: false }; }
@@ -103,7 +108,7 @@ function renderAll() {
 }
 function renderLive() {
   renderHeader(); renderQueue(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
-  renderStreamNote(); renderServer(); renderReplyNote(); renderPackages(); renderUpdate(); edSync();
+  renderStreamNote(); renderServer(); renderReplyNote(); renderPackages(); renderUpdate(); edSync(); trSync();
 }
 
 // --- подсказки: <… data-hint="id"> закрываются крестиком, «Показать подсказки» в шапке возвращает все.
@@ -142,6 +147,14 @@ function renderHeader() {
   if (t.state === "ok") pills.push(pill("EventSub", t.ws === "connected" ? "good" : "warn", t.ws));
   pills.push(pill(c.ok ? (c.busy ? T("{engine}: синтез", { engine: c.title }) : c.title)
     : T("{engine} недоступен", { engine: c.title }), c.ok ? "good" : "bad", c.ok ? c.url + runtimeInfo(c.runtime) : c.error));
+  const tr = c.training;   // обучение LoRA на сервере (train.js): щелчок — его страница
+  if (tr && tr.state !== "idle" && c.engine === "espeech") {
+    const busy = tr.state === "running" || tr.state === "stopping";
+    pills.push(h("button", { type: "button", class: "pill", title: T("Обучение LoRA голоса {voice}", { voice: tr.voice }),
+      onclick: () => trOpen(tr.voice) }, h("i", { class: "dot " + (busy ? "warn" : tr.state === "error" ? "bad" : "good") }),
+      busy ? T("LoRA {voice}: {pct}%", { voice: tr.voice, pct: tr.steps ? Math.floor(100 * tr.step / tr.steps) : 0 })
+        : T("LoRA {voice}: готово", { voice: tr.voice })));
+  }
   pills.push(pill(!ov.active ? T("оверлей не подключён") : ov.ready ? T("оверлей") : T("оверлей ждёт клика"),
     !ov.active ? "bad" : ov.ready ? "good" : "warn"));
   if (!wsOnline) pills.push(pill(T("нет связи с сервисом"), "bad"));
@@ -551,7 +564,9 @@ function renderVoices() {
         onchange: async e => { v.enabled = e.target.checked; tr.className = v.enabled ? "" : "off";
           await api("/api/voice", { name: v.name, enabled: v.enabled }); renderTestVoices(); } })),
       h("td", {}, v.name, v.post ? h("span", { class: "tag", title: v.post }, T("эффект")) : null,
-        v.demo ? null : h("span", { class: "tag", title: T("Пример ещё не синтезирован") }, T("без примера"))),
+        v.demo ? null : h("span", { class: "tag", title: T("Пример ещё не синтезирован") }, T("без примера")),
+        trAvailable() ? h("button", { type: "button", class: "small lora", title: T("Обучить голос на репликах (LoRA)"),
+          onclick: () => trOpen(v.name) }, "LoRA") : null),
       h("td", {}, h("button", { class: "icon", title: T("Послушать пример с поправкой громкости"),
         onclick: e => preview(v, e.currentTarget) }, "▶")),
       // calib_db — служебное: усиление для стриминга, измеренное по примеру; видно только в подсказке
@@ -821,9 +836,10 @@ async function saveParam(p, v) {
 }
 $("#engine-form").onchange = async e => {
   const engine = (S.cosy.engines.find(x => x.id === e.target.value) || {}).title;
-  if (await ask(T("Сменить модель синтеза на {engine}? Сервер синтеза перезапустится, озвучка подождёт в очереди.",
-    { engine }), T("Сменить"))) api("/api/engine", { engine: e.target.value });
-  else { engineKey = ""; renderEngine(); }
+  if (!await ask(T("Сменить модель синтеза на {engine}? Сервер синтеза перезапустится, озвучка подождёт в очереди.",
+    { engine }), T("Сменить")) || !(await api("/api/engine", { engine: e.target.value })).ok) {
+    engineKey = ""; renderEngine();   // отказ (идёт обучение LoRA и т. п.): выбор — как был
+  }
 };
 
 // CUDA (install.py, cuda_state): есть драйвер NVIDIA, а ggml-cuda.dll рядом с сервером нет — предложить скачать
@@ -924,7 +940,9 @@ $("#bench-all").onclick = async () => {
   if (await ask(T("Сервер синтеза перезапустится на каждом устройстве, на процессоре проверка займёт пару минут. " +
     "Озвучка всё это время ждёт в очереди."), T("Сравнить"))) api("/api/bench", { all: true });
 };
-$("#backend-form").onchange = e => api("/api/backend", { backend: e.target.value });
+$("#backend-form").onchange = async e => {
+  if (!(await api("/api/backend", { backend: e.target.value })).ok) { backendKey = ""; renderServer(); }
+};
 $("#set-import").onclick = async () => {
   const f = $("#set-file").files[0], out = $("#set-result");
   if (!f) { toast(T("Выберите zip с набором"), true); return; }
@@ -933,9 +951,14 @@ $("#set-import").onclick = async () => {
   out.className = "small muted";
   out.textContent = T("Устанавливаю {file}…", { file: f.name });
   try {
-    const r = await fetch("/api/voicesets/import", { method: "POST", body: f,
-      headers: { "Content-Type": "application/zip", "X-Filename": encodeURIComponent(f.name) } });
-    const j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    const send = force => fetch("/api/voicesets/import", { method: "POST", body: f, headers: { "Content-Type": "application/zip",
+      "X-Filename": encodeURIComponent(f.name), ...(force ? { "X-Force": "1" } : {}) } });
+    let r = await send(false), j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    // несохранённые результаты обучения LoRA: установка перезапустит сервер синтеза
+    if (j.confirm && await ask(j.error, T("Продолжить"), true)) {
+      r = await send(true);
+      j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    }
     if (!j.ok) { out.className = "small bad"; out.textContent = j.error || T("Ошибка"); return; }
     out.className = "small good";
     out.textContent = T("Набор «{name}»: установлено голосов {n}", { name: j.name, n: j.added.length }) +

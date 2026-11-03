@@ -18,10 +18,10 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml`; `pin-espeech.py` и `stubs/*.def` — загрузки ESpeech и DLL-заглушки torch | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
 | `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/cosyvoice/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: общий (`pick.py`, `synth.py`, оценки, коллекции для импорта `pack-sets.py`), реплики WC3, прочие источники ([docs/voice-pipeline.md](docs/voice-pipeline.md), [docs/voices-wc3.md](docs/voices-wc3.md)) | да |
-| `tools/espeech/` | папка модели ESpeech из кеша Hugging Face (`prepare.py`, сборка — `espeech/prepare.py`) и голоса `.espeech` (`make-voice.py`) | да |
+| `tools/espeech/` | папка модели ESpeech из кеша Hugging Face (`prepare.py`, сборка — `espeech/prepare.py`) голоса `.espeech` (`make-voice.py`), обучение LoRA (`train.py`) | да |
 | `effects/` | эффекты поверх синтеза (`post`) | да |
 | `tests/e2e/` | e2e-тесты stream-tts на поддельном cosyvoice-server (раздел «Тесты» в `docs/development.md`) | да |
-| `tests/espeech/` | тесты espeech-server: нарезка без модели и сервер с настоящей моделью | да |
+| `tests/espeech/` | тесты espeech-server: нарезка без модели, сервер и обучение LoRA с настоящей моделью | да |
 | `voice-clips/<модель>/<набор>/` | исходные данные голосов: `cosyvoice/` — варианты образцов, синтез, оценки и выбор; `espeech/` — реплики для LoRA, адаптеры и голоса `.espeech` по голосам | нет (тексты реплик из игр) |
 | `voice-refs/cosyvoice/<набор>/` | итоговые образцы CosyVoice и `manifest.json` | нет |
 | `voice-sets/<модель>/<набор>.zip` | коллекции для импорта в stream-tts, по одной на «модель + набор» (`tools/voices/pack-sets.py`) | нет |
@@ -108,6 +108,9 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - Встроенный сервер останавливается, пока ставится или удаляется набор голосов, и перезапускается при выгрузке
   модели, смене модели или устройства и проверке скорости: `import-voices.sh` и `synth.py` в это время получат
   обрыв соединения. Сохранение голоса в редакторе сервер не останавливает.
+- Обучение LoRA ESpeech и его несохранённые результаты живут в процессе espeech-server: новое действие, которое
+  перезапускает или останавливает встроенный сервер, — через `_restart_guard` в `web.py` (во время обучения отказ,
+  с несохранёнными результатами — вопрос `confirm`), иначе оно молча выбросит до 15 минут обучения.
 - Имя голоса у встроенного сервера — имя файла (`voices/<имя>.gguf` или `voices/<набор>/<имя>.gguf`, один уровень
   подпапок); `entrypoint.sh` профиля `server-only` склеивает путь через `_` (`wc3/thrall.gguf` → `wc3_thrall`).
 - `MODEL` закрепляет модель и отключает выбор в админке, поэтому в stream-tts не передаётся; он нужен только
@@ -139,7 +142,10 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   копит память (~2 МБ за запрос). Модель — `requires_grad_(False)`, копии адаптеров LoRA — под `no_grad`, иначе
   история autograd растёт на каждой смене голоса. `model.py` совпадает с f5-tts бит в бит — после правки сверять
   (эталон — облегчённый f5-tts в `samples/espeech-lean`). `RUAccent.load` не вызывать: лезет в сеть и грузит
-  RuleEngine (~1 ГБ, разметке не нужен).
+  RuleEngine (~1 ГБ, разметке не нужен). Обучение LoRA (`espeech/train.py`) — на той же модели: обучающий forward
+  свой (в `model.py` не переносить), fp32-адаптеры — в `LoRALinear.fit` только на время шага, база не размораживается.
+  В сервере (`trainjob.py`) каждый шаг — отдельное задание рабочего потока (синтез — между шагами), результаты — только
+  в памяти процесса; подготовка реплик и запись адаптера — общие с CLI (`pairs.py`, `voices.save_adapter`).
 - Веса ESpeech помечены Apache-2.0, но похожи на дообучение F5-TTS (CC-BY-NC-4.0): в установщик их не класть —
   программа качает их по кнопке пользователя из репозитория авторов (docs/espeech.md, «Лицензии»). Английский ESpeech
   не читает (сильный акцент).

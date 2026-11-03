@@ -171,6 +171,51 @@ def test_espeech_user_accents(esp, report):
     assert api.ok("/api/accent", dict(text=text))["accented"].split()[1] == word
 
 
+def test_espeech_train_lora(esp, report):
+    """Обучение LoRA со страницы обучения (engines/espeech/train.py) с настоящим espeech-server: набор — запись
+    Джайны файлом и кусок из неё на волне, 40 шагов, прослушивание «последний» и «без LoRA», перезапуск сервера с
+    несохранёнными результатами спрашивает подтверждение, сохранение в голос (.bak рядом), голос звучит с адаптером."""
+    api, voice = esp.api, JAINA
+    api.ok("/api/train/clear", dict(voice=voice))
+    data = open(REF + ".wav", "rb").read()
+    hdr = lambda kind: {"Content-Type": "application/octet-stream", "X-Filename": "wc3-jaina.wav", "X-Voice": voice,
+                        "X-Kind": kind}
+    r = api.request("POST", "/api/train/upload", data=data, headers=hdr("item"), timeout=60).json()
+    assert r["ok"], r
+    item = r["item"]["id"]
+    r = api.request("POST", "/api/train/upload", data=data, headers=hdr("source"), timeout=60).json()
+    cut = api.ok("/api/train/cut", dict(voice=voice, src=r["source"]["id"], start=PIECE[0], end=PIECE[1]))["item"]["id"]
+    api.ok("/api/train/items", dict(voice=voice, items=[dict(id=item, text=open(REF + ".txt", encoding="utf-8").read()),
+                                                        dict(id=cut, text=PIECE[2])]))
+    t0 = time.monotonic()
+    t = api.ok("/api/train/start", dict(voice=voice, steps=40, checkpointing=True))["train"]
+    assert t["state"] == "running" and t["steps"] == 40 and t["checkpointing"]
+    t = wait_for(lambda: (lambda t: t if t["state"] in ("done", "error") else None)(
+        api.get("/api/train/status").json()["train"]), 300, f"конца обучения\n{esp.server.tail()}", step=1)
+    assert t["state"] == "done" and t["step"] == 40 and t["snapshots"] == ["last"], t
+    report(f"обучение LoRA: 40 шагов за {time.monotonic() - t0:.1f} с, {t['s_per_step']} с/шаг, "
+           f"видеопамять обучения {t['memory'].get('reserved_mb')} МБ")
+    phrase = api.state()["settings"]["test_phrases"][0]
+    for adapter in ("none", "last"):
+        r = api.get(f"/api/train/synth?voice={voice}&adapter={adapter}&phrase=0", timeout=300)
+        assert r.status == 200, r.text
+        esp.check_speech(decode(r.body), phrase, report, f"обучение, снимок {adapter}")
+    r = api.post("/api/backend", dict(backend="cpu"))   # перезапуск выбросил бы результаты: вопрос
+    assert r.status == 409 and r.json()["confirm"], r.text
+    s = api.ok("/api/train/save", dict(snapshot="last"))
+    path = os.path.join(esp.server.dir, "voices", "wc3", JAINA + ".espeech")
+    assert s["step"] == 40 and os.path.isfile(path + ".bak")
+    with open(path, "rb") as f:
+        n = int.from_bytes(f.read(8), "little")
+        md = json.loads(f.read(n))["__metadata__"]
+    assert md["lora_steps"] == "40" and md["lora_rank"] == "16"
+    esp.idle()
+    x, _ = esp.speak(PHRASE, report, "голос с LoRA", voice=JAINA)
+    esp.check_speech(x, PHRASE, report, "голос с LoRA")
+    api.ok("/api/train/discard")
+    api.ok("/api/train/clear", dict(voice=voice))
+
+
 def test_switch_model(esp, report):
     """Смена модели: перезапуск сервера другого движка на том же порту, голоса — свои у каждой.
     Последним: сервер перезапускается."""

@@ -6,6 +6,7 @@ from aiohttp import web
 from . import bench, config, editor, engines, filters, i18n, install, paths, stats, store, updates, web as webapp
 from .i18n import tr
 from .engine import Engine
+from .engines.espeech import train as lora
 from .twitch import Twitch
 from .voices import Voices
 
@@ -126,6 +127,7 @@ def main():
     ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set,
                                     launchers.get("cosyvoice"), launchers.get("espeech")) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.tts, ctx.voices, ctx.runtime)
+    ctx.train = lora.Training(ctx.settings, ctx.tts, ctx.voices, ctx.editor)   # обучение LoRA голоса ESpeech
     ctx.bench = bench.Bench(ctx.settings, ctx.tts, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
     ctx.updates = updates.Updates(ctx.settings, ctx.engine.dirty.set)
 

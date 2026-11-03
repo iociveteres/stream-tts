@@ -178,6 +178,13 @@ class Editor:
                 with contextlib.suppress(OSError):
                     os.remove(f)
 
+    def forget_ref(self, voice):
+        """Сравнение с голосом voice — заново: его файл изменился (обучение LoRA сохранило адаптер)."""
+        for m in self.makers.values():
+            for f in glob.glob(os.path.join(self.dir, "cache", glob.escape(m.ref_name(voice)) + "-*.mp3")):
+                with contextlib.suppress(OSError):
+                    os.remove(f)
+
     async def add_source(self, tmp, filename):
         d = self._load()
         if len(d["sources"]) >= MAX_SOURCES:
