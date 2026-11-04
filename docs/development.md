@@ -30,19 +30,27 @@
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   ├── ui-edit.py         # режим правки строк интерфейса (в разработке): админка на поддельном сервере, :8099
 │   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер: процесс, перезапуски),
+│                          # engine.py (очередь: приём, синтез, воспроизведение), rules.py (доступ, кулдауны,
+│                          # ответы об отказе), commands.py (команды чата !tts*), overlay.py (оверлеи без aiohttp),
+│                          # web/ (HTTP: __init__.py — make_app, пароль, страницы и сокеты; common.py — ответы,
+│                          # обёртка POST, _restart_guard; роуты по модулям — state.py, admin.py, model.py,
+│                          # server.py, editor.py, train.py),
 │                          # engines/ (модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент
 │                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск, клиент модели и
 │                          # особенности редактора голоса в editor.py; espeech/train.py — обучение LoRA голоса:
-│                          # набор реплик и запросы /train к серверу, интерфейс — static/train.js; espeech/download.py — загрузка рантайма
-│                          # и модели ESpeech программой для Windows), partzip.py (часть zip по HTTP диапазонами),
-│                          # install.py (модель и наборы голосов из админки), editor.py (новый голос из записи;
-│                          # интерфейс — static/editor.js),
+│                          # набор реплик и запросы /train к серверу, интерфейс — static/train.js;
+│                          # espeech/download.py — загрузка рантайма и модели ESpeech программой для Windows),
+│                          # partzip.py (часть zip по HTTP диапазонами), install.py (задачи загрузок из админки),
+│                          # downloads.py (downloads.json: CUDA, кванты, пакеты, примеры), fetch.py (файл по HTTP
+│                          # с докачкой и sha256), voicesets.py (наборы голосов из zip), editor.py (новый голос из
+│                          # записи; интерфейс — static/editor.js),
 │                          # bench.py (скорость устройств),
 │                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
 │                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
 │                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
 │                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp, кванты
-│                          # модели, рантайм и модель ESpeech), static/ (static/en.json — английский словарь, static/i18n.js — перевод
+│                          # модели, рантайм и модель ESpeech), static/ (admin.js — общее админки, admin-<вкладка>.js — вкладки,
+│                          # admin-start.js — старт после всех вкладок; static/en.json — английский словарь, static/i18n.js — перевод
 │                          # страниц, static/ui-edit.js и .css — режим правки строк, static/quants/ — примеры звука квантов для вкладки «Сервер»)
 ├── packaging/
 │   ├── pin-espeech.py     # загрузки ESpeech в downloads.json для обеих систем и списки заглушек библиотек CUDA:
