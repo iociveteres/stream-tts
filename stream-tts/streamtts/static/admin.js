@@ -1197,7 +1197,7 @@ async function loadStats() {
   bars("#top-viewers", st.viewers.map(x => [x.login, x.n]));
   const SOURCE_NAMES = { reward: T("награда"), command: T("команда"), chat: T("чат"), test: T("тест") };
   bars("#top-sources", st.sources.map(x => [SOURCE_NAMES[x.source] || x.source, x.n]));
-  bars("#reasons", st.reasons.map(x => [T(x.reason), x.n]));   // причины в базе по-русски (engine.R_*)
+  bars("#reasons", st.reasons.map(x => [T(x.reason), x.n]));   // причины в базе по-русски (rules.R_*)
 }
 $("#period").onchange = loadStats;
 $("#with-test").onchange = loadStats;

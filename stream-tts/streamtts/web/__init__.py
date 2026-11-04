@@ -2,11 +2,11 @@
 
 Роуты API — в модулях пакета (MODULES): у модуля таблицы GETS, POSTS (тело — JSON, обёртка common.json_post) и RAW
 (файл сырым телом, допустимые типы — в UPLOADS). Здесь — сборка приложения, пароль и защита POST, страницы."""
-import asyncio, hashlib, hmac, os, secrets
+import asyncio, hashlib, hmac, json, os, secrets
 
-from aiohttp import web
+from aiohttp import WSMsgType, web
 
-from .. import config, i18n
+from .. import config, i18n, overlay
 from ..i18n import tr
 from . import admin, editor, model, server, state, train
 from .common import json_post
@@ -114,7 +114,20 @@ async def logout(request):
 
 # --- открытые страницы ---
 async def overlay_ws(request):
-    return await request.app["ctx"].engine.overlay.handle(request)
+    """Сокет оверлея OBS: здесь транспорт, кто играет и что сыграно — overlay.Overlay."""
+    ov = request.app["ctx"].engine.overlay
+    ws = web.WebSocketResponse(heartbeat=15)
+    await ws.prepare(request)
+    c = overlay.Client(ws)
+    await ov.connect(c)
+    try:
+        async for msg in ws:
+            if msg.type != WSMsgType.TEXT:
+                continue
+            await ov.message(c, json.loads(msg.data))
+    finally:
+        await ov.disconnect(c)
+    return ws
 
 
 async def voices_page(request):

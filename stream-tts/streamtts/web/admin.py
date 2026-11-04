@@ -5,7 +5,7 @@ import re, secrets
 from aiohttp import web
 
 from .. import editor, i18n, stats, updates
-from ..engine import SERVICE_COMMANDS
+from ..commands import SERVICE_COMMANDS
 from ..i18n import tr
 from ..twitch import TwitchError, explain
 from .common import fail, ok

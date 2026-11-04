@@ -1,33 +1,17 @@
-"""Очередь озвучки: приём активаций, синтез (одна фраза вперёд), воспроизведение через оверлей, команды чата."""
-import asyncio, collections, contextlib, json, logging, math, time
+"""Очередь озвучки: приём активаций, итог (воспроизведено или возврат баллов), синтез (одна фраза вперёд),
+воспроизведение через оверлей. Правила приёма — rules.py, команды чата — commands.py, оверлеи — overlay.py."""
+import asyncio, collections, contextlib, logging, time
 
 import numpy as np
-from aiohttp import WSMsgType, web
 
-from . import audio, filters
+from . import audio, commands, filters, rules
 from .config import SR, TARGET_LUFS, CHARS_PER_SEC, MAX_LEN_FACTOR, MAX_SECONDS, MIN_SECONDS
 from .engines.client import LIVE
 from .i18n import tr
+from .overlay import Overlay
+from .rules import R_ACCESS, R_BAN, R_CLEAR, R_COOLDOWN, R_EMPTY, R_FULL, R_NOVOICE, R_OFF, R_REMOVED, R_SKIP, R_SYNTH
 
 log = logging.getLogger("engine")
-
-MODS = {"broadcaster", "moderator", "lead_moderator"}
-ACCESS = {"all": None, "mods": MODS, "vip": MODS | {"vip"}, "subs": MODS | {"vip", "subscriber", "founder"}}
-
-# Причины возврата баллов (в статистике и интерфейсе): в базе по-русски, перевод при показе
-R_OFF, R_BAN, R_ACCESS, R_EMPTY, R_FULL = "озвучка выключена", "бан", "уровень доступа", "пустой текст", "очередь полна"
-R_NOVOICE, R_SYNTH, R_SKIP, R_CLEAR, R_RESTART = ("нет голосов", "ошибка синтеза", "!ttsskip", "!ttsclear",
-                                                  "остались после перезапуска")
-R_COOLDOWN = "кулдаун"
-R_REMOVED = "удалено модером"
-# Ответ зрителю при отказе (настройка reply): бан не объясняется, ошибки синтеза и пропуски — не отказ при приёме
-REPLIES = {R_OFF: "озвучка сейчас выключена", R_ACCESS: "озвучка доступна только {who}",
-           R_EMPTY: "после фильтров озвучивать нечего", R_FULL: "очередь озвучки заполнена, попробуйте позже",
-           R_NOVOICE: "нет доступных голосов", R_COOLDOWN: "озвучка снова будет доступна через {n} с"}
-ACCESS_WHO = {"subs": "сабам, VIP и модерам", "vip": "VIP и модерам", "mods": "модерам"}
-REPLY_EVERY = 30   # с: не чаще одного ответа зрителю, иначе спам командой во время кулдауна превращается в спам ответами
-# Команды сервиса: имя команды озвучки не может с ними совпадать
-SERVICE_COMMANDS = ("!ttssf", "!ttsskip", "!ttsclear", "!ttsban", "!ttsunban", "!ttson", "!ttsoff")
 
 
 def max_samples(text):
@@ -69,66 +53,6 @@ class Item:
                     audio=round(self.samples / SR, 1))
 
 
-class Client:
-    def __init__(self, ws):
-        self.ws, self.ready, self.since = ws, False, time.time()
-
-    async def send(self, data):
-        if isinstance(data, bytes):
-            await self.ws.send_bytes(data)
-        else:
-            await self.ws.send_str(json.dumps(data, ensure_ascii=False))
-
-
-class Overlay:
-    """Подключённые оверлеи. Играет последний подключившийся, остальные показывают «неактивен»."""
-
-    def __init__(self, engine):
-        self.engine = engine
-        self.clients = []
-
-    @property
-    def active(self):
-        return self.clients[-1] if self.clients else None
-
-    def ready(self):
-        return bool(self.active and self.active.ready)
-
-    def public(self):
-        a = self.active
-        return dict(count=len(self.clients), active=bool(a), ready=bool(a and a.ready))
-
-    async def handle(self, request):
-        ws = web.WebSocketResponse(heartbeat=15)
-        await ws.prepare(request)
-        c = Client(ws)
-        prev = self.active
-        self.clients.append(c)
-        with contextlib.suppress(Exception):
-            if prev:
-                await prev.send({"type": "inactive"})
-            await c.send({"type": "active"})
-        await self.engine.poke()
-        try:
-            async for msg in ws:
-                if msg.type != WSMsgType.TEXT:
-                    continue
-                data = json.loads(msg.data)
-                if data.get("type") == "ready":
-                    c.ready = bool(data.get("ready", True))
-                elif data.get("type") == "ended":
-                    self.engine.ended.add(data.get("id"))
-                await self.engine.poke()
-        finally:
-            was_active = c is self.active
-            self.clients.remove(c)
-            if was_active and self.active:
-                with contextlib.suppress(Exception):
-                    await self.active.send({"type": "active"})
-            await self.engine.poke()
-        return ws
-
-
 class Engine:
     def __init__(self, settings, db, tts, voices, profanity):
         self.s, self.db, self.tts, self.voices, self.profanity = settings, db, tts, voices, profanity
@@ -167,27 +91,6 @@ class Engine:
                     rtf=round(sum(self.rtf) / len(self.rtf), 2) if self.rtf else None)
 
     # --- приём активаций ---
-    def src(self, item):
-        return self.s["sources"].get(item.source, {})
-
-    def privileged(self, item):
-        """Стример, модеры и ники из списка способа: мимо уровня доступа и кулдаунов."""
-        return bool(item.login in self.src(item).get("allow", [])
-                    or (self.twitch and item.user_id == self.twitch.channel_id)
-                    or self.db.badges(item.user_id) & MODS)
-
-    def access_ok(self, item):
-        need = ACCESS.get(self.src(item).get("access", "all"))
-        return need is None or self.privileged(item) or bool(self.db.badges(item.user_id) & need)
-
-    def cooldown_left(self, item):
-        """Секунд до конца кулдауна команды (на зрителя и общего); 0 — можно."""
-        if item.source != "command" or self.privileged(item):
-            return 0
-        c, now = self.src(item), time.time()
-        left = max(self.cd_user.get(item.user_id, 0) + int(c.get("user_cd") or 0),
-                   self.cd_global + int(c.get("global_cd") or 0)) - now
-        return max(0, math.ceil(left))
 
     def voice_for(self, user_id, login):
         u = self.db.user(user_id)
@@ -238,13 +141,13 @@ class Engine:
     async def _accept(self, item):
         user_id = item.user_id
         reason, wait = None, 0
-        if not self.s["enabled"] or (not item.test and not self.src(item).get("on")):
+        if not self.s["enabled"] or (not item.test and not rules.src(self, item).get("on")):
             reason = R_OFF
         elif self.db.banned(item.login):
             reason = R_BAN
-        elif not item.test and not self.access_ok(item):
+        elif not item.test and not rules.access_ok(self, item):
             reason = R_ACCESS
-        elif wait := self.cooldown_left(item):
+        elif wait := rules.cooldown_left(self, item):
             reason = R_COOLDOWN
         else:
             spoken = self.clean(item.raw)   # мат помечен filters.BEEP: там будет писк
@@ -259,7 +162,7 @@ class Engine:
                     reason = R_NOVOICE
         if reason:
             if item.source != "chat":
-                self.reply(item, reason, wait)
+                rules.reply(self, item, reason, wait)
             if item.chat:  # чат и команда не засоряют историю: баллов нет, возвращать нечего
                 if reason == R_FULL or item.source == "command":
                     self.note(tr("{who}: сообщение чата не озвучено ({reason})", who=item.display, reason=tr(reason)))
@@ -293,23 +196,6 @@ class Engine:
                     wait_ms=wait, synth_ms=item.synth_ms, audio_ms=round(item.samples / SR * 1000) or None,
                     test=int(item.test), chat=int(item.chat), source=item.source)
         await self.poke()
-
-    def reply(self, item, reason, wait=0):
-        """Зрителю — почему не озвучено (настройка reply: chat — ответом в чате, off — молча)."""
-        mode = self.s["reply"]
-        if mode == "off" or item.test or reason not in REPLIES or not self.twitch or self.twitch.state != "ok":
-            return
-        now = time.time()
-        if now - self.replied.get(item.user_id, 0) < REPLY_EVERY:
-            return
-        self.replied[item.user_id] = now
-        if item.source == "command" and reason == R_EMPTY and not item.raw.strip():
-            text = tr("напишите текст после команды: {cmd} привет", cmd=self.src(item)["name"])
-        else:
-            text = tr(REPLIES[reason], n=wait, who=tr(ACCESS_WHO.get(self.src(item).get("access"), "")))
-        if item.source == "reward":
-            text += tr(", баллы вернутся")
-        asyncio.create_task(self.twitch.tell(item.display, text, item.msg_id))
 
     # --- управление ---
     async def cancel(self, item, reason):
@@ -363,49 +249,8 @@ class Engine:
         await self.poke()
 
     async def chat(self, ev):
-        """Сообщение чата (EventSub channel.chat.message): бейджи для уровня доступа и команды."""
-        text = (ev.get("message") or {}).get("text", "").strip()
-        uid, login = ev["chatter_user_id"], ev["chatter_user_login"].lower()
-        badges = {b["set_id"] for b in ev.get("badges") or []}
-        self.db.touch_user(uid, login, badges)
-        src = self.s["sources"]
-        if not text.startswith("!"):
-            # Сообщение, отправленное вместе с нашей наградой, уже озвучивается как активация
-            if src["chat"]["on"] and text and (not self.twitch or
-                                               ev.get("channel_points_custom_reward_id") != self.s["reward"]["id"]):
-                await self.chat_message(ev)
-            return
-        parts = text.split()
-        cmd, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
-        if src["command"]["on"] and cmd == src["command"]["name"]:
-            await self.chat_message(ev, "command", cmd)
-            return
-        if not cmd.startswith("!tts"):
-            return   # команды других ботов не читаются
-        if cmd == "!ttssf":
-            v = self.voices.find(arg)
-            if v:  # неизвестный или выключенный голос молча игнорируется
-                self.db.set_voice(uid, login, v)
-                self.note(tr("{who} выбрал голос {voice}", who=login, voice=v))
-            return
-        if not (badges & MODS or uid == ev.get("broadcaster_user_id")):
-            return
-        who = ev.get("chatter_user_name") or login
-        if cmd == "!ttsskip":
-            await self.skip(who)
-        elif cmd == "!ttsclear":
-            await self.clear(who)
-        elif cmd in ("!ttsban", "!ttsunban") and arg:
-            nick = arg.lstrip("@").lower()
-            self.db.ban(nick, cmd == "!ttsban")
-            self.note(tr("{by}: бан {who}" if cmd == "!ttsban" else "{by}: разбан {who}", by=who, who=nick))
-            if cmd == "!ttsban":
-                for item in [it for it in self.queue if it.login == nick and it is not self.current]:
-                    await self.cancel(item, R_BAN)
-        elif cmd == "!ttson":
-            await self.set_enabled(True, who)
-        elif cmd == "!ttsoff":
-            await self.set_enabled(False, who)
+        """Сообщение чата (EventSub channel.chat.message; его зовут twitch.py и chat_irc.py) — commands.py."""
+        await commands.chat(self, ev)
 
     # --- синтез ---
     def _next_synth(self):
@@ -540,7 +385,7 @@ class Engine:
         await ov.send({"type": "start", "id": item.id, "sr": SR})
         await self.poke()
         sent = 0
-        lost = lambda: ov is not self.overlay.active or ov.ws.closed
+        lost = lambda: ov is not self.overlay.active or ov.closed
         while True:
             while sent < len(item.chunks):
                 await ov.send(item.chunks[sent])
