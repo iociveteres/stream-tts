@@ -72,7 +72,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
   пайплайне — 24 кГц моно.
 - stream-tts без Docker: `stream-tts/.venv` (3.14), конфигурация `stream-tts` (порт 8092, данные в
   `stream-tts-data/native/`).
-- espeech-server: `espeech/.venv` (3.11, `espeech/requirements.txt`), конфигурация `espeech` —
+- espeech-server: `espeech/.venv` (3.14, `espeech/requirements.txt`), конфигурация `espeech` —
   `python -m espeech --models models/espeech --voices voices`; папка модели — `tools/espeech/prepare.py`. Занимает
   ~0,8 ГБ видеопамяти рядом с cosyvoice-server: видеокарта общая, замеры скорости — чередующимися прогонами.
 - Shell-скрипты — bash (Git Bash), из PowerShell не запускаются.
