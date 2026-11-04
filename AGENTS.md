@@ -39,8 +39,8 @@
   поставку, хотя из `espeech/.venv` всё работает. (Без теста: нужен рантайм; docs/espeech.md, «Поставка».)
 - Строки интерфейса — `tr("…")` в Python, `T("…")` в `admin.js`, перевод — `static/en.json`; строки разметки
   переводятся сами (абзац со ссылкой или `<code>` — с `data-t`), логи (`log.*`) не переводятся.
-  (`test_invariants.py`: `check-i18n.py`; разметка —
-  `[...I18N_MISSING]` в консоли админки на `stream-tts-en`.)
+  (`test_invariants.py`: `check-i18n.py`; разметка — `test_admin_smoke.py`, админка на английском в headless
+  браузере.)
 - Nuitka не видит импорты эффектов: их зависимости — в `--include-module` в `build-exe.py`. (Без теста: сборка exe;
   docs/stream-tts-windows.md, «Сборка».)
 - Версия программы — только `__version__` в `streamtts/__init__.py`; релиз — аннотированный тег `v<версия>`.

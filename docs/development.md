@@ -78,11 +78,14 @@
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
 │                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
-│                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py),
+│                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py, роуты —
+│                          # test_routes.py, скрипты админки и она сама в браузере — test_admin_scripts.py,
+│                          # test_admin_smoke.py),
 │                          # test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
 │   └── espeech/           # espeech-server в espeech/.venv: test_text.py (нарезка, нормализатор, словарь),
+│                          # test_normalize_corpus.py (эталонный корпус нормализатора),
 │                          # test_server.py (сервер с настоящей моделью), test_train.py (обучение LoRA),
 │                          # test_train_api.py (обучение через API сервера)
 ├── docs/                  # index.md (задача → файлы, для ИИ-агентов), development.md (этот файл),
@@ -310,8 +313,13 @@ stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpe
 всех `.py` из git, `check-i18n.py`, `docker compose config -q` (без docker — пропуск), флаги GPU у встроенного
 сервера, в `Dockerfile` и `docker-compose.gpu.yml`, `KEEPALIVE` < 5 с, `__version__` только в
 `streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. `test_index.py` — таблица `docs/index.md`: строки на все
-эталонные вопросы, пути из git (сейчас и на базе), разбор `scripts/measure-docs.py`. Twitch с приложением (вход, награда, EventSub) и админка в
-браузере пока не покрыты.
+эталонные вопросы, пути из git (сейчас и на базе), разбор `scripts/measure-docs.py`. `test_routes.py` — снимок
+всех пар «метод + путь» из `web.make_app`: URL — публичные имена. `test_admin_scripts.py` — скрипты из
+`admin.html` есть, верхнего уровня объявления не повторяются между файлами (классические скрипты с общей
+областью), `node --check` (без node — пропуск). `test_admin_smoke.py` — админка в headless Edge или Chrome по
+CDP (без браузера — пропуск): английский интерфейс, все вкладки у CosyVoice и ESpeech, падает на ошибках JS, ошибках
+загрузки и строках без перевода (`[...I18N_MISSING]`). Twitch с приложением (вход, награда, EventSub) пока не
+покрыт.
 
 **С настоящей моделью** (`test_real.py`, маркер `real`, без него тесты пропускаются):
 
@@ -345,7 +353,8 @@ Q5_K_M — смена модели туда и обратно со своими 
 espeech/.venv/Scripts/python -m pytest tests/espeech
 ```
 
-`test_text.py` — нарезка фразы, длительность кусков, нормализатор, без модели. `test_server.py` — сервер отдельным
+`test_text.py` — нарезка фразы, длительность кусков, нормализатор, без модели; `test_normalize_corpus.py` —
+эталонный корпус нормализатора (фраза чата → ожидаемый текст), без модели. `test_server.py` — сервер отдельным
 процессом на свободном порту с голосами во временной папке и настоящей моделью из `models/espeech` (пропускается без
 неё или без образца `voice-refs/cosyvoice/wc3/wc3-jaina.wav`): голос создаётся через API, из него — голоса с нулевым и
 случайным адаптером LoRA (нулевой должен дать звук бит в бит как без адаптера); сохранение по пути от папки
