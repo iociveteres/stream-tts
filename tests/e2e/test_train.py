@@ -6,14 +6,14 @@
 частоте синтеза (last — голос × 1,1, best — × 1,05). Сначала — готовый сервер (STREAM_TTS_TEST_SERVERS) в процессе
 теста, его ручки меняются на ходу. Перезапуски — у встроенного сервера: stream-tts запускает тот же поддельный сервер отдельным
 процессом как «python -m espeech» (пакет-заглушка и venv во временной папке), Docker-версию это не трогает."""
-import os, site, subprocess, urllib.parse, venv
+import os, site, subprocess, sys, urllib.parse, venv, warnings
 
 import numpy as np
 import pytest
 
 from conftest import FAST_ENV, Ctx
 from fake_cosyvoice import ADAPTER_HZ, VOICES, FakeCosy
-from harness import SR, StreamTTS, decode, dominant_hz, make_wav, read_wav, sine, wait_for
+from harness import SR, STREAM_TTS, StreamTTS, decode, dominant_hz, make_wav, read_wav, sine, wait_for
 
 E2E = os.path.dirname(os.path.abspath(__file__))
 VOICE = "alpha"
@@ -340,3 +340,76 @@ def test_restart_guard(managed):
     assert t["lost"] == VOICE and t["state"] == "idle"
     api.ok("/api/train/discard")
     assert status(api)["lost"] is None
+
+
+# Каждый POST /api/* — в одной из групп; новый роут без группы роняет test_every_route_guarded.
+# Перезапускают или останавливают встроенный сервер: во время обучения — 409 от _restart_guard (тело — такое, с
+# которым действие дошло бы до перезапуска).
+RESTARTS = {"/api/backend": dict(backend="cpu"), "/api/engine": dict(engine="espeech"),
+            "/api/models/unload": dict(id="tts"), "/api/bench": dict(all=True),
+            "/api/voicesets/delete": dict(name="wc3"), "/api/voicesets/import": None,   # None — пустой zip сырым телом
+            "/api/cuda/download": {}, "/api/espeech/delete": {}, "/api/package/delete": "restart"}
+# Сервер не трогают: после всех запросов (тело — {} или указанное) тот же процесс сервера и обучение идёт.
+KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/rebuild": {},
+         "/api/twitch/client_id": {}, "/api/twitch/mode": {}, "/api/twitch/logout": {}, "/api/reward": {},
+         "/api/reward/delete": {}, "/api/enabled": dict(on=True), "/api/skip": {}, "/api/clear": {}, "/api/remove": {},
+         "/api/test": {}, "/api/ban": {}, "/api/profanity": {}, "/api/model/cancel": {},
+         "/api/model/use": {},       # перезапуск — только когда выбрана CosyVoice, а обучение — у ESpeech
+         "/api/models/load": dict(id="tts"), "/api/accent": {}, "/api/accents": {}, "/api/accents/delete": {},
+         "/api/draft": {}, "/api/draft/accent": {}, "/api/draft/source/delete": {}, "/api/draft/save": {},
+         "/api/draft/discard": {}, "/api/draft/upload": None, "/api/update/dismiss": {}}
+# Не проверяются здесь: свои ручки обучения (/api/train/*, выше) и запросы в сеть. Загрузка модели и пакетов
+# перезапускает сервер только у CosyVoice; загрузка ESpeech — после скачивания, без сети её здесь не дойти.
+SKIPS = ("/api/train/", "/api/ui-edit", "/api/twitch/login", "/api/update/check", "/api/model/download",
+         "/api/package/download", "/api/espeech/download")
+
+
+def post_routes():
+    """POST /api/* приложения stream-tts — из самого приложения (web.make_app), а не списком в тесте."""
+    sys.path.insert(0, STREAM_TTS)
+    from streamtts import web
+    secret, web._secret = web._secret, lambda: "test"   # make_app пишет секрет в папку данных — тут не нужен
+    try:
+        with warnings.catch_warnings():   # приложение без запуска: предупреждения aiohttp о ключах — не о тесте
+            warnings.simplefilter("ignore")
+            app = web.make_app(None)
+    finally:
+        web._secret = secret
+    return web, sorted({r.resource.canonical for r in app.router.routes()
+                        if r.method == "POST" and r.resource.canonical.startswith("/api/")})
+
+
+def send(api, web, path, body):
+    if path in web.UPLOADS:
+        return api.request("POST", path, data=b"", headers={"Content-Type": web.UPLOADS[path][-1]})
+    return api.post(path, body)
+
+
+def test_every_route_guarded(managed):
+    """Ни один роут админки не перезапускает встроенный сервер во время обучения LoRA молча: обучение и его
+    результаты живут в процессе сервера (AGENTS.md, _restart_guard в web.py). Роуты берутся из приложения, так что
+    разрезание web.py или новый роут без проверки этот тест заметит."""
+    web, routes = post_routes()
+    unknown = [p for p in routes if p not in RESTARTS and p not in KEEPS and not p.startswith(SKIPS)]
+    assert not unknown, (f"новые роуты: {unknown} — в RESTARTS (перезапускают сервер: нужен _restart_guard), "
+                         "в KEEPS (не трогают его) или в SKIPS (запрос в сеть)")
+    gone = [p for p in (*RESTARTS, *KEEPS) if p not in routes]
+    assert not gone, f"роутов больше нет: {gone}"
+    restart_pkg = next(pid for pid, p in web.install.PACKAGES.items() if p.get("restart"))
+
+    api = managed.api
+    add_items(api, 2)
+    api.ok("/api/train/start", dict(voice=VOICE, steps=20000))
+    t = until(api, lambda t: t["state"] == "running" and t["step"] > 0, "хода обучения")
+    pid = api.state()["cosy"]["runtime"]["pid"]
+    for path, body in RESTARTS.items():
+        r = send(api, web, path, dict(id=restart_pkg) if body == "restart" else body)
+        assert r.status == 409 and r.json()["error"].startswith("Идёт обучение LoRA"), (path, r.status, r.text)
+    for path, body in KEEPS.items():
+        r = send(api, web, path, body)
+        assert r.status < 500, (path, r.status, r.text)
+    step = t["step"]
+    t = until(api, lambda t: t["step"] > step + 5, "хода обучения после запросов")   # и отложенные (смена модели)
+    assert t["state"] == "running" and api.state()["cosy"]["runtime"]["pid"] == pid
+    api.ok("/api/train/stop")
+    api.ok("/api/train/discard")

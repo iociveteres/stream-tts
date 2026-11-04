@@ -76,7 +76,8 @@
 │                          # Twitch), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
-│                          # обучение LoRA — test_train.py),
+│                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
+│                          # test_invariants.py),
 │                          # test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
@@ -185,7 +186,7 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 корне проекта ([stream-tts-deploy.md](stream-tts-deploy.md)) с моделью из `models/` и голосами из `voices/`.
 Конфигурация `stream-tts` в `.claude/launch.json` — на порту 8092 и с данными в `stream-tts-data/native/`, чтобы не
 мешать Docker-версии. Английский интерфейс — конфигурация `stream-tts-en` (порт 8093, без модели) и
-проверка словаря `python stream-tts/check-i18n.py`. Свои варианты строк интерфейса —
+проверка словаря `python stream-tts/check-i18n.py` (её же запускает `tests/e2e/test_invariants.py`). Свои варианты строк интерфейса —
 `stream-tts-ui-edit` (порт 8099, [stream-tts.md](stream-tts.md), «Правка текста интерфейса»). ESpeech со своими данными — `stream-tts-espeech` (порт 8095,
 данные, голоса и словарь ударений в `stream-tts-data/espeech-test/`, модель из `models/`; ESpeech выбирается на
 вкладке «Сервер»): редактор голоса и словарь проверяются, не трогая `voices/` проекта. Загрузку ESpeech, как у
@@ -269,7 +270,13 @@ stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpe
 «пора остановиться»; несохранённые результаты (`unsaved`, старт с `discard`), `oom` и затем экономия видеопамяти; в
 режиме managed (поддельный сервер отдельным процессом как `python -m espeech` из venv во временной папке) — отказ
 действий с перезапуском сервера во время обучения, вопрос с несохранёнными результатами, `force`, «результаты
-пропали» после падения сервера. Twitch с приложением (вход, награда, EventSub) и админка в браузере пока не покрыты.
+пропали» после падения сервера; `test_every_route_guarded` обходит все POST `/api/*` из `web.make_app`: каждый — в
+группе `RESTARTS` (во время обучения 409), `KEEPS` (сервер тот же, обучение идёт) или `SKIPS` (ручки обучения и
+запросы в сеть), новый роут без группы — ошибка. `test_invariants.py` — без процесса stream-tts, секунды: компиляция
+всех `.py` из git, `check-i18n.py`, `docker compose config -q` (без docker — пропуск), флаги GPU у встроенного
+сервера, в `Dockerfile` и `docker-compose.gpu.yml`, `KEEPALIVE` < 5 с, `__version__` только в
+`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. Twitch с приложением (вход, награда, EventSub) и админка в
+браузере пока не покрыты.
 
 **С настоящей моделью** (`test_real.py`, маркер `real`, без него тесты пропускаются):
 
