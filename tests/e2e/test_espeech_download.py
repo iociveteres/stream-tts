@@ -215,14 +215,14 @@ def test_runtime_state(tmp_path, monkeypatch):
     """Рантайм: нет — missing, версия другого закрепления — outdated, своя — ok; модель — по файлам папки."""
     monkeypatch.setattr(launch, "RUNTIME", str(tmp_path / "rt"))
     monkeypatch.setattr(paths, "MODELS", str(tmp_path / "models"))
-    assert download.runtime_state() == "missing"
+    assert launch.runtime_state() == "missing"
     os.makedirs(os.path.dirname(launch.runtime_python()))
     with open(launch.runtime_python(), "wb") as f:
         f.write(b"MZ")
     (tmp_path / "rt" / "version.txt").write_text("old")
-    assert download.runtime_state() == "outdated"
-    (tmp_path / "rt" / "version.txt").write_text(download.runtime_version())
-    assert download.runtime_state() == "ok"
+    assert launch.runtime_state() == "outdated"
+    (tmp_path / "rt" / "version.txt").write_text(launch.runtime_version())
+    assert launch.runtime_state() == "ok"
     assert not download.model_ready()
     for f in launch.MODEL_FILES:
         p = tmp_path / "models" / "espeech" / f
@@ -280,6 +280,6 @@ def test_pinned_downloads():
             stub = (os.path.join(packaging, "windows", "stubs", lib[:-4] + ".def") if system == "windows" else
                     os.path.join(packaging, "linux", "stubs", *sub, lib + ".map"))
             assert os.path.isfile(stub), stub
-    assert tuple(e["runtime"][download.SYSTEM]["cublas"]) == launch.CUBLAS
+    assert tuple(e["runtime"][launch.SYSTEM]["cublas"]) == launch.CUBLAS
     assert e["runtime"]["linux"]["python"]["url"].endswith(".tar.gz") and e["runtime"]["linux"]["python"]["exclude"]
     assert all(f["path"].count("/") >= 2 for f in m["files"])   # <владелец>/<репозиторий>/<путь>

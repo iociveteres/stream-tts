@@ -24,7 +24,6 @@ import asyncio, contextlib, fnmatch, glob, logging, os, shutil, tarfile, time, z
 import aiohttp
 
 from . import launch
-from .launch import SYSTEM, runtime_spec, runtime_state, runtime_version, spec
 from ... import fetch, partzip, paths
 from ...i18n import tr
 from ...runtime import spawn_kwargs
@@ -58,16 +57,16 @@ def model_ready():
 
 def runtime_disk():
     """Рантайм на диске: torch и ~RUNTIME_EXTRA на Python, пакеты и байткод."""
-    return runtime_spec()["torch"]["unpacked"] + RUNTIME_EXTRA
+    return launch.runtime_spec()["torch"]["unpacked"] + RUNTIME_EXTRA
 
 
 def runtime_size():
-    r = runtime_spec()
+    r = launch.runtime_spec()
     return r["python"]["size"] + sum(w["size"] for w in r["wheels"]) + r["torch"]["download"]
 
 
 def model_size():
-    m = spec()["model"]
+    m = launch.spec()["model"]
     return sum(f["size"] for f in m["files"]) + m["checkpoint"]["download"]
 
 
@@ -80,7 +79,7 @@ def state(cuda):
     """Для вкладки «Сервер». cuda — состояние CUDA cosyvoice-server (install.cuda_state)."""
     if not offered():
         return dict(offer=False)
-    rt, model = runtime_state(), model_ready()
+    rt, model = launch.runtime_state(), model_ready()
     need_cuda = bool(cuda.get("offer"))
     size = (0 if rt == "ok" else runtime_size()) + (0 if model else model_size()) + (cuda["size"] if need_cuda else 0)
     disk = runtime_disk() + MODEL_DISK
@@ -159,7 +158,7 @@ class Steps:
     # --- рантайм ---
     async def runtime(self, on_ready):
         """Скачать и собрать рантайм; on_ready(готовая папка) переносит её на место (сервер ESpeech остановлен)."""
-        r = runtime_spec()
+        r = launch.runtime_spec()
         dl_dir = launch.RUNTIME + ".dl"
         os.makedirs(dl_dir, exist_ok=True)
         py = os.path.join(dl_dir, _name(r["python"]["url"]))
@@ -189,7 +188,7 @@ class Steps:
         self.label(tr("ESpeech: проверка"))
         await self.run([python, "-c", SMOKE], tmp)
         with open(os.path.join(tmp, "version.txt"), "w", encoding="utf-8") as f:
-            f.write(runtime_version())
+            f.write(launch.runtime_version())
         await on_ready(tmp)
         shutil.rmtree(dl_dir, ignore_errors=True)
 
@@ -220,7 +219,7 @@ class Steps:
 
     # --- модель ---
     async def model(self):
-        m = spec()["model"]
+        m = launch.spec()["model"]
         out = os.path.abspath(model_dir())   # сборка идёт в папке рантайма
         src = os.path.abspath(os.path.join(paths.MODELS, "." + SRC_DIR))
         for f in m["files"]:
@@ -245,11 +244,11 @@ class Steps:
 def bytes_present():
     """Сколько уже скачано (для прогресса после обрыва): файлы целиком и .part."""
     n = 0
-    if runtime_state() != "ok":
+    if launch.runtime_state() != "ok":
         n += sum(_size(p) for p in glob.glob(os.path.join(launch.RUNTIME + ".dl", "*")))
     if not model_ready():
         src = os.path.join(paths.MODELS, "." + SRC_DIR)
-        ck = spec()["model"]["checkpoint"]
+        ck = launch.spec()["model"]["checkpoint"]
         slim = os.path.join(src, *ck["path"].split("/"))
         for root, _, files in os.walk(src):
             n += sum(_size(os.path.join(root, f)) for f in files if os.path.join(root, f) != slim)

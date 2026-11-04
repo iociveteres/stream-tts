@@ -31,7 +31,7 @@ from . import fetch, paths, voicesets
 from .downloads import (BASE, CUDA, CUDA_VERSION_FILE, DEFAULT_QUANT, PACKAGES, QUANTS, SAMPLE_PHRASE, SAMPLES,
                         cuda_archives, package_files)
 from .engines import cosyvoice
-from .engines.espeech import download as espeech_download
+from .engines.espeech import download as espeech_download, launch as espeech_launch
 from .fetch import CHUNK
 from .i18n import tr
 
@@ -177,7 +177,7 @@ class Installer:
         """Собранный рантайм — на место прежнего (сервер ESpeech держит его файлы, если запущен)."""
         busy = self.runtime.launcher is self.espeech
         async with self.runtime.paused() if busy else contextlib.nullcontext():
-            await asyncio.to_thread(_replace_dir, tmp, espeech_download.launch.RUNTIME)
+            await asyncio.to_thread(_replace_dir, tmp, espeech_launch.RUNTIME)
 
     async def delete_espeech(self):
         if not self.espeech_state()["offer"]:
