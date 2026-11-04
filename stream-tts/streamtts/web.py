@@ -760,7 +760,10 @@ async def post_cuda_download(request, ctx, data):
 
 
 async def post_espeech_download(request, ctx, data):
-    _install(ctx).start_espeech()
+    inst = _install(ctx)
+    if stop := await _restart_guard(ctx, data):   # замена рантайма и перезапуск ESpeech после скачивания
+        return stop
+    inst.start_espeech()
     return ok()
 
 

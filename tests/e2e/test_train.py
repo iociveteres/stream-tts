@@ -348,7 +348,8 @@ def test_restart_guard(managed):
 RESTARTS = {"/api/backend": dict(backend="cpu"), "/api/engine": dict(engine="espeech"),
             "/api/models/unload": dict(id="tts"), "/api/bench": dict(all=True),
             "/api/voicesets/delete": dict(name="wc3"), "/api/voicesets/import": None,   # None — пустой zip сырым телом
-            "/api/cuda/download": {}, "/api/espeech/delete": {}, "/api/package/delete": "restart"}
+            "/api/cuda/download": {}, "/api/espeech/download": {}, "/api/espeech/delete": {},
+            "/api/package/delete": "restart"}
 # Сервер не трогают: после всех запросов (тело — {} или указанное) тот же процесс сервера и обучение идёт.
 KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/rebuild": {},
          "/api/twitch/client_id": {}, "/api/twitch/mode": {}, "/api/twitch/logout": {}, "/api/reward": {},
@@ -359,9 +360,9 @@ KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/r
          "/api/draft": {}, "/api/draft/accent": {}, "/api/draft/source/delete": {}, "/api/draft/save": {},
          "/api/draft/discard": {}, "/api/draft/upload": None, "/api/update/dismiss": {}}
 # Не проверяются здесь: свои ручки обучения (/api/train/*, выше) и запросы в сеть. Загрузка модели и пакетов
-# перезапускает сервер только у CosyVoice; загрузка ESpeech — после скачивания, без сети её здесь не дойти.
+# перезапускает сервер только у CosyVoice.
 SKIPS = ("/api/train/", "/api/ui-edit", "/api/twitch/login", "/api/update/check", "/api/model/download",
-         "/api/package/download", "/api/espeech/download")
+         "/api/package/download")
 
 
 def post_routes():
