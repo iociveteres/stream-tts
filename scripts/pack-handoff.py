@@ -17,9 +17,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "handoff")
 # Защита от случайной утечки данных: даже если файл попал в git, такие пути в архив не кладём.
 FORBIDDEN = ("models/", "voices/", "voice-clips/", "voice-refs/", "voice-sets/", "voice-origs/",
-             "samples/", "stream-tts-data/", "runtime/", ".venv/", "packaging/windows/build/",
+             "samples/", "stream-tts-data/", "runtime/", "espeech-runtime/", "packaging/windows/build/",
              "packaging/windows/dist/", "packaging/windows/.inno/", "handoff/")
 MAX_FILE = 4 * 1024 * 1024  # крупнее — почти наверняка данные, а не код
+
+
+def forbidden(name):
+    """Запрещённая папка, в которой лежит файл, или None.
+
+    Окружения Python — на любой глубине и под любым именем (.venv, .venv311): .gitignore знает только
+    .venv/, а незакоммиченный espeech/.venv311 (~19 тыс. файлов) иначе ушёл бы в zip как «новые файлы»."""
+    parts = name.split("/")
+    for i, part in enumerate(parts[:-1]):
+        if part.startswith(".venv"):
+            return "/".join(parts[:i + 1]) + "/"
+    return next((bad for bad in FORBIDDEN if name.startswith(bad)), None)
 
 
 def git(*args):
@@ -33,13 +45,14 @@ def file_list():
     files, skipped = [], []
     for name in dict.fromkeys(tracked + fresh):
         path = name.replace("/", os.sep)
-        if any(name.startswith(bad) for bad in FORBIDDEN):
-            skipped.append(name)
+        bad = forbidden(name)
+        if bad:
+            skipped.append(bad)
             continue
         if not os.path.isfile(os.path.join(ROOT, path)):
             continue
         if os.path.getsize(os.path.join(ROOT, path)) > MAX_FILE:
-            skipped.append(name)
+            skipped.append(name + " (больше 4 МБ)")
             continue
         files.append(name)
     return files, skipped
@@ -71,10 +84,18 @@ def main():
                    f"задание: docs/refactor-brief.md\n")
 
     print(f"коммит {sha}: {len(files)} файлов, {total / 1024:.0f} КБ без сжатия")
-    for name in skipped:
-        print(f"  пропущен: {name}")
+    # Пропущенное — по запрещённым папкам: в окружении Python тысячи файлов
+    groups = {}
+    for key in skipped:
+        groups[key] = groups.get(key, 0) + 1
+    for key, n in sorted(groups.items()):
+        print(f"  пропущен: {key}" + (f" ({n} файлов)" if n > 1 else ""))
     for path in (bundle, zip_path):
-        print(f"{os.path.getsize(path) / 1024 / 1024:.2f} МБ  {os.path.relpath(path, ROOT)}")
+        try:
+            shown = os.path.relpath(path, ROOT)
+        except ValueError:  # --out на другом диске Windows
+            shown = path
+        print(f"{os.path.getsize(path) / 1024 / 1024:.2f} МБ  {shown}")
 
 
 if __name__ == "__main__":
