@@ -37,7 +37,7 @@
   `RUAccent.load` не вызывать. (`test_invariants.py`.)
 - torch у программы и в Docker — без cuDNN, cuFFT и др. (заглушки): новая операция torch в espeech-server ломает
   поставку, хотя из `espeech/.venv` всё работает. (Без теста: нужен рантайм; docs/espeech.md, «Поставка».)
-- Строки интерфейса — `tr("…")` в Python, `T("…")` в `admin.js`, перевод — `static/en.json`; строки разметки
+- Строки интерфейса — `tr("…")` в Python, `T("…")` в `static/*.js`, перевод — `static/en.json`; строки разметки
   переводятся сами (абзац со ссылкой или `<code>` — с `data-t`), логи (`log.*`) не переводятся.
   (`test_invariants.py`: `check-i18n.py`; разметка — `test_admin_smoke.py`, админка на английском в headless
   браузере.)

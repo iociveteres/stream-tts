@@ -1,6 +1,6 @@
 // Обучение LoRA голоса ESpeech (engines/espeech/train.py, вкладка «Голоса» → «LoRA» у голоса): набор реплик, ход
 // обучения на сервере синтеза, прослушивание снимков и сохранение в голос. Отдельный файл после editor.js: записи с
-// волной (Waves) и воспроизведение (edPlayUrl, edStop) — оттуда, помощники h, T, api, ask, S — из admin.js.
+// волной (Waves) и воспроизведение (edPlayUrl, edStop) — оттуда, помощники h, api, ask, S — из admin.js, T — из i18n.js.
 // Набор живёт на сервере stream-tts, здесь его копия TR.set; тексты реплик уходят туда с задержкой (trChanged).
 // Ход обучения — опросом /api/train/status: раз в секунду, пока оно идёт, иначе раз в 4 с.
 const TR = { voice: "", set: null, t: null, error: "", poll: 0, timer: 0, texts: {}, matrixKey: "", saving: null };

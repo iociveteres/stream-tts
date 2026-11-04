@@ -41,7 +41,9 @@ def declared(src):
 
 def test_scripts_exist():
     names = scripts()
-    assert "admin.js" in names and names[0] == "i18n.js", names   # T() и перевод разметки — до остальных
+    assert names[:2] == ["i18n.js", "admin.js"], names   # T() и перевод разметки, затем общее админки — до вкладок
+    admin = [n for n in names if n.startswith("admin")]
+    assert admin[-1] == "admin-start.js", admin   # старт — после всех вкладок: их функции рисуют состояние
     missing = [n for n in names if not os.path.isfile(os.path.join(STATIC, n))]
     assert not missing, missing
 
