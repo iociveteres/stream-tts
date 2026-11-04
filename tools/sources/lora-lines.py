@@ -37,12 +37,15 @@ voice-clips/espeech/<набор>/manifest.json — {голос: {title, clips, m
 у варианта {title, base, ref}; steps — по правилу пользователя (от 4 мин — 3000, ~2 мин — 2000, ~1 мин — 1000,
 меньше — 500). Кеш распознавания — voice-clips/espeech/<набор>/asr.json. Нужен ffmpeg в PATH.
 """
-import argparse, glob, importlib.util, json, os, random, re, site, subprocess, wave
+import argparse, glob, importlib.util, json, os, random, re, site, wave
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
 SR = 24000
 MAX_SEC = 30.0  # train.py пропускает реплики длиннее
 REF_SEC = (5.0, 7.5)
@@ -87,13 +90,6 @@ VOICES = {
 JUNK = re.compile(r"субтитр|продолжение следует|dimatorzok|спасибо за просмотр|подписывайтесь|редактор", re.I)
 
 
-def load(name, rel):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, rel))
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-
 def steps_for(minutes):
     """Правило пользователя: меньше 1 мин — 500, ~1 мин — 1000, ~2 мин — 2000, от 4 мин — 3000 (как wc3/lora-clips.py)."""
     s = 1000 * minutes if minutes <= 2 else 2000 + 500 * (minutes - 2)
@@ -102,23 +98,11 @@ def steps_for(minutes):
 
 # ---------- звук ----------
 
-def decode(path):
-    p = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
-                       capture_output=True)
-    return np.frombuffer(p.stdout, np.float32).copy() if p.returncode == 0 and p.stdout else None
-
-
-def frames_db(x, hop=SR // 100):
-    n = len(x) // hop
-    rms = np.sqrt((x[:n * hop].reshape(n, hop) ** 2).mean(1) + 1e-12)
-    return 20 * np.log10(rms / rms.max())
-
-
 def trim(x, db=40.0, pad=0.06):
     hop = SR // 100
     if len(x) < 3 * hop:
         return x
-    loud = np.nonzero(frames_db(x) > -db)[0]
+    loud = np.nonzero(common.frames_db(x) > -db)[0]
     a = max(0, loud[0] * hop - int(pad * SR))
     b = min(len(x), (loud[-1] + 1) * hop + int(pad * SR))
     return x[a:b]
@@ -127,7 +111,7 @@ def trim(x, db=40.0, pad=0.06):
 def split_at_pause(x, db=40.0):
     """Длинная запись → две половины по самой длинной паузе в средней трети."""
     hop = SR // 100
-    quiet = frames_db(x) < -db
+    quiet = common.frames_db(x) < -db
     n = len(quiet)
     best, run, start = None, 0, 0
     for i in range(n // 3, 2 * n // 3):
@@ -359,7 +343,7 @@ def build(name, cfg, a, cam, emb, emo, kana):
 
     clips = []
     for key, path, text, order in srcs:
-        x = decode(path)
+        x = common.decode(path)
         if x is None or not len(x):
             clips.append(dict(file=key, sec=0, reject="файл не читается"))
             continue
@@ -377,7 +361,7 @@ def build(name, cfg, a, cam, emb, emo, kana):
     # центр голоса: эталоны (или все реплики), затем дважды — 20 самых похожих
     have = [c for c in clips if c.get("_e") is not None]
     if cfg.get("center"):
-        center = cam.unit(np.mean([cam.unit(emb.session.run(None, {"input": cam.fbank(to16k(trim(decode(
+        center = cam.unit(np.mean([cam.unit(emb.session.run(None, {"input": cam.fbank(to16k(trim(common.decode(
             os.path.join(a.root, f)))))[None]})[0][0]) for f in cfg["center"]], 0))
     else:
         center = cam.unit(np.mean([c["_e"] for c in have], 0))
@@ -567,7 +551,7 @@ def variant(name, cfg, base, a):
     """Вариант: свой образец (пример JeetBot с его текстом), адаптер — базового голоса."""
     out = os.path.join(a.root, "voice-clips", "espeech", base["set"])
     lines = {x["file"]: x["text"] for x in json.load(open(os.path.join(a.root, JB, "lines.json"), encoding="utf-8"))}
-    x = trim(decode(os.path.join(a.root, cfg["ref"])))
+    x = trim(common.decode(os.path.join(a.root, cfg["ref"])))
     text = lines[os.path.basename(cfg["ref"])]
     vdir = os.path.join(out, name)
     os.makedirs(vdir, exist_ok=True)
@@ -595,10 +579,10 @@ def main():
             print(f"{c['set']}/{n}: {c['title']}, текст {c['text']}, {[s if isinstance(s, str) else s['dir'] for s in c['src']]}")
         return
     names = a.voices or list(VOICES)
-    cam = load("campplus", "tools/voices/campplus.py")
+    cam = common.load("tools/voices/campplus.py")
     cam.ROOT = a.root  # модель CAM++ — в <root>/models/frontend-onnx
     emb = cam.Embedder(cache=None)
-    emo = load("emotions", "tools/voices/emotions.py").Emotions(cache=None)
+    emo = common.load("tools/voices/emotions.py").Emotions(cache=None)
     kana = Kana() if any(VOICES[n].get("lang") == "ja" for n in names) else None
     for name in names:
         cfg = VOICES[name]

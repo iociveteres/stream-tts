@@ -29,7 +29,10 @@ usage: train.py <реплики> <голос.espeech> [--out <другой.espee
 import argparse, glob, importlib.util, json, os, signal, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
 sys.path.insert(0, ROOT)
 from espeech import pairs as P, voices as V   # noqa: E402
 
@@ -63,10 +66,7 @@ def read_pairs(folder, accentor):
 
 def make_voice(path, a):
     """Новый голос из записи — make-voice.py (тот же кусок, ударения и темп)."""
-    spec = importlib.util.spec_from_file_location("make_voice", os.path.join(HERE, "make-voice.py"))
-    mv = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mv)
-    mv.make(path, a.wav, a.text, a.start, a.end)
+    common.load("tools/espeech/make-voice.py").make(path, a.wav, a.text, a.start, a.end)
 
 
 def main():

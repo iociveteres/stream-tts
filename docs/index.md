@@ -63,8 +63,9 @@
 
 ## Связи, которые легко порвать
 
-- **`tools/`** считают корень как `ROOT = dirname(dirname(HERE))` и грузят соседние модули по пути
-  (`spec_from_file_location`): перед переносом или переименованием — `grep spec_from_file_location`.
+- **`tools/`** грузят по пути `tools/common.py`, а соседние модули — через `common.load("tools/<группа>/<файл>.py")`
+  (корень — `common.ROOT`): перед переносом или переименованием — `grep -r 'common.load(' tools`. Свои копии функций
+  `common.py` в `tools/` ловит `tests/e2e/test_tools_common.py`.
 - **Имя набора** — имя папки источника в `voice-clips/<модель>/`, `voice-refs/cosyvoice/`,
   `voice-sets/<модель>/<набор>.zip` и установленного набора `voices/<набор>/`; по нему stream-tts группирует страницу
   голосов (GROUPS в `stream-tts/streamtts/voices.py`). Голоса обеих моделей одного набора лежат в одной папке

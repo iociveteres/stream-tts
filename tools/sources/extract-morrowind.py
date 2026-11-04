@@ -36,12 +36,15 @@ make-voice.py или train.py --wav/--text), clips.json — все реплик�
 Голоса: mw-<раса>-<m|f> (argonian, breton, dunmer, altmer, imperial, khajiit, nord, orc, redguard, bosmer) и
 mw-dagoth-ur. --root — корень проекта с models/frontend-onnx (по умолчанию — этот; из worktree — основная копия).
 """
-import argparse, glob, importlib.util, json, os, random, re, site, struct, subprocess, wave
+import argparse, glob, importlib.util, json, os, random, re, site, struct, wave
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
 SR = 24000
 
 RACES = {"a": ("argonian", "Аргонианин"), "b": ("breton", "Бретонец"), "d": ("dunmer", "Данмер"),
@@ -63,13 +66,6 @@ NAMES_EN = ("Nerevar Dagoth Ur Morrowind Vvardenfell Vivec Almalexia Sotha Sil A
 # Английская версия: ESM в cp1252, голоса — с суффиксом -en в том же наборе, свой кеш распознавания
 LANGS = {"ru": dict(enc="cp1251", names=NAMES, suffix="", title="", cache="asr.json"),
          "en": dict(enc="cp1252", names=NAMES_EN, suffix="-en", title=" (англ.)", cache="asr-en.json")}
-
-
-def load(name, rel):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, rel))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 # ---------- ESM ----------
@@ -137,25 +133,12 @@ def sentences(text):
 
 # ---------- звук ----------
 
-def decode(path):
-    """→ float32 24 кГц моно или None: в игре есть битые файлы (i/m/srv_im032.mp3 обрезан)."""
-    p = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
-                       capture_output=True)
-    return np.frombuffer(p.stdout, np.float32).copy() if p.returncode == 0 and p.stdout else None
-
-
-def frames_db(x, hop=SR // 100):
-    n = len(x) // hop
-    rms = np.sqrt((x[:n * hop].reshape(n, hop) ** 2).mean(1) + 1e-12)
-    return 20 * np.log10(rms / rms.max())
-
-
 def trim(x, db=40.0, pad=0.06):
     """Обрезать тишину по краям: кадры 10 мс тише пика на db — тишина, запас pad с."""
     hop = SR // 100
     if len(x) < 3 * hop:
         return x
-    loud = np.nonzero(frames_db(x) > -db)[0]
+    loud = np.nonzero(common.frames_db(x) > -db)[0]
     a = max(0, loud[0] * hop - int(pad * SR))
     b = min(len(x), (loud[-1] + 1) * hop + int(pad * SR))
     return x[a:b]
@@ -164,7 +147,7 @@ def trim(x, db=40.0, pad=0.06):
 def split_at_pause(x, db=40.0):
     """Длинная запись → две половины по самой длинной паузе в средней трети."""
     hop = SR // 100
-    quiet = frames_db(x) < -db
+    quiet = common.frames_db(x) < -db
     n = len(quiet)
     best, run, start = None, 0, 0
     for i in range(n // 3, 2 * n // 3):
@@ -317,10 +300,10 @@ def main():
     allv = voices(vo, L["suffix"], L["title"])
     names = a.voices.split(",") if a.voices else list(allv)
 
-    cam = load("campplus", "tools/voices/campplus.py")
+    cam = common.load("tools/voices/campplus.py")
     cam.ROOT = a.root  # модель CAM++ — в <root>/models/frontend-onnx
     emb = cam.Embedder(cache=None)
-    emo = load("emotions", "tools/voices/emotions.py").Emotions(cache=None)
+    emo = common.load("tools/voices/emotions.py").Emotions(cache=None)
     asr = ASR(os.path.join(a.out, L["cache"]), a.lang, L["names"])
     mpath = os.path.join(a.out, "manifest.json")
     manifest = json.load(open(mpath, encoding="utf-8")) if os.path.exists(mpath) else {}
@@ -330,7 +313,7 @@ def main():
         print(f"== {name} ({title}): {len(files)} файлов", flush=True)
         clips = []
         for rel in files:
-            x = decode(os.path.join(vo, rel))
+            x = common.decode(os.path.join(vo, rel))
             if x is None:
                 print(f"   не читается: {rel}")
                 clips.append(dict(file=rel, kind=kind(rel), sec=0, game=texts.get(rel, []), cands=[],

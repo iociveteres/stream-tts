@@ -23,28 +23,18 @@ import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
-spec = importlib.util.spec_from_file_location("pick", os.path.join(ROOT, "tools", "voices", "pick.py"))
-pick = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pick)
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
+pick = common.load("tools/voices/pick.py")
 
 GAP = pick.GAP
 MIN_LETTERS = 12          # реплики короче («Ага», «Э-э») почти не дают голосу текста
-
-
-def ffmpeg(*args):
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
-
-
-def duration(path):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                        "-of", "csv=p=0", path], capture_output=True, text=True, check=True)
-    return float(r.stdout)
 
 
 def letters(text):
@@ -58,7 +48,7 @@ def sentence(text):
 
 def trimmed(src, tmp):
     dst = os.path.join(tmp, os.path.basename(src) + ".wav")
-    ffmpeg("-i", src, "-af",
+    common.ffmpeg("-i", src, "-af",
            "silenceremove=start_periods=1:start_threshold=-50dB,areverse,"
            "silenceremove=start_periods=1:start_threshold=-50dB,areverse",
            "-ac", "1", "-ar", "24000", dst)
@@ -97,7 +87,7 @@ def main():
         chosen = [lines[int(i)] for i in a.pick.split(",")]
         for ln in chosen:
             ln["wav"] = trimmed(os.path.join(a.src, ln["file"]), tmp)
-            ln["dur"] = duration(ln["wav"])
+            ln["dur"] = common.duration(ln["wav"])
     else:
         pool = [ln for ln in lines if len(letters(ln["text"])) >= MIN_LETTERS and not ln.get("bad")
                 and not (a.exclude and re.search(a.exclude, ln["file"], re.I))
@@ -110,7 +100,7 @@ def main():
             if key in seen:
                 continue
             ln["wav"] = trimmed(os.path.join(a.src, ln["file"]), tmp)
-            ln["dur"] = duration(ln["wav"])
+            ln["dur"] = common.duration(ln["wav"])
             if ln["dur"] > hi or total + GAP + ln["dur"] > hi:
                 continue
             chosen.append(ln)

@@ -36,10 +36,11 @@ from http.server import ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
-spec = importlib.util.spec_from_file_location("review", os.path.join(ROOT, "tools", "wc3", "review.py"))
-review = importlib.util.module_from_spec(spec)  # http-обработчик с выдачей файлов и защитой путей
-spec.loader.exec_module(review)
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
+review = common.load("tools/wc3/review.py")  # http-обработчик с выдачей файлов и защитой путей
 
 # Данные — <модель>/<источник>/: наборы этого инструмента — модели CosyVoice; кеш эмоций общий, в корне voice-clips/
 CLIPS = os.path.join(ROOT, "voice-clips", "cosyvoice")
@@ -57,23 +58,13 @@ KINDS = {"S": "образец на момент нарезки", "D": "диал�
 PY = next((p for p in (os.path.join(ROOT, ".venv", "Scripts", "python.exe"), os.path.join(ROOT, ".venv", "bin", "python"))
            if os.path.exists(p)), sys.executable)   # synth.py нужен venv проекта
 
-load = review.cc.load_json
+load = common.read_json
 job = {"proc": None, "text": "", "log": []}
 
 
 def save(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    review.cc.save_json(path, data)
-
-
-def ffmpeg(*args):
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
-
-
-def duration(path):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
-                       capture_output=True, text=True, check=True)
-    return float(r.stdout)
+    common.write_json(path, data)
 
 
 def rel(path):
@@ -218,7 +209,7 @@ def cards(s, emo=None):
             install = meta.get("install", voice)
             rows.append(dict(id=aid, label=meta.get("label", aid), install=install, main=install == voice,
                              file=meta.get("file", f"{voice}/{aid}"), ab=meta.get("ab", f"ab/{voice}.{aid}"),
-                             kind=meta.get("kind", ""), dur=meta.get("dur") or round(duration(wav), 1),
+                             kind=meta.get("kind", ""), dur=meta.get("dur") or round(common.duration(wav), 1),
                              text=open(txt, encoding="utf-8").read().strip(), check=bool(meta.get("check")),
                              current=s.installed(voice, aid, meta, man), post=" ".join(meta.get("post", [])),
                              psim=smp.get("psim"), sims=sims, cers=cers, sim=mean(sims), cer=mean(cers),
@@ -288,7 +279,7 @@ def add(set_name, voice, aid, sources, text, label=None, install=None, title=Non
     parts = []
     for i, src in enumerate(sources):
         dst = os.path.join(tmp, f"{i}.wav")
-        ffmpeg("-i", src, "-af", "silenceremove=start_periods=1:start_threshold=-50dB,areverse,"
+        common.ffmpeg("-i", src, "-af", "silenceremove=start_periods=1:start_threshold=-50dB,areverse,"
                "silenceremove=start_periods=1:start_threshold=-50dB,areverse", "-ac", "1", "-ar", "24000", dst)
         parts.append(dst)
     inputs, filt = [], []
@@ -296,7 +287,7 @@ def add(set_name, voice, aid, sources, text, label=None, install=None, title=Non
         inputs += ["-i", p]
         filt.append(f"[{i}:a]{'anull' if i == len(parts) - 1 else f'apad=pad_dur={GAP}'}[a{i}]")
     filt.append("".join(f"[a{i}]" for i in range(len(parts))) + f"concat=n={len(parts)}:v=0:a=1[out]")
-    ffmpeg(*inputs, "-filter_complex", ";".join(filt), "-map", "[out]", "-ac", "1", "-ar", "24000", wav)
+    common.ffmpeg(*inputs, "-filter_complex", ";".join(filt), "-map", "[out]", "-ac", "1", "-ar", "24000", wav)
     shutil.rmtree(tmp, ignore_errors=True)
     with open(txt, "w", encoding="utf-8") as f:
         f.write(text.strip() + "\n")
@@ -312,7 +303,7 @@ def add(set_name, voice, aid, sources, text, label=None, install=None, title=Non
         g["alts"][aid] = meta
         save(s.alts_path, alts)
     drop_synth(s, voice, aid, meta, len(s.phrases(g)))
-    print(f"{rel(wav)}  {duration(wav):.1f} с")
+    print(f"{rel(wav)}  {common.duration(wav):.1f} с")
 
 
 def add_batch(set_name, batch):
@@ -396,7 +387,8 @@ def install(names):
                         shutil.move(dst + ext, os.path.join(old, target + ext))
                 shutil.copy(wav, dst + ".wav")
                 shutil.copy(txt, dst + ".txt")
-                man[target] = dict(title=g.get("title", voice), duration=round(duration(wav), 2), installed=stamp_day,
+                man[target] = dict(title=g.get("title", voice), duration=round(common.duration(wav), 2),
+                                   installed=stamp_day,
                                    candidate=f"{name}/{voice}.{aid}", picked=how, source=meta.get("source", []),
                                    text=open(txt, encoding="utf-8").read().strip())
                 if meta.get("post"):  # голос звучит как надо только с этим эффектом поверх синтеза

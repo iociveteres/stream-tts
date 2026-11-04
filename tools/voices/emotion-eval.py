@@ -27,10 +27,11 @@ from http.server import ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
-spec = importlib.util.spec_from_file_location("pick", os.path.join(HERE, "pick.py"))
-pick = importlib.util.module_from_spec(spec)  # load/save, duration и http-обработчик review.py
-spec.loader.exec_module(pick)
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
+pick = common.load("tools/voices/pick.py")  # load/save и http-обработчик review.py
 review = pick.review
 
 DATA = os.path.join(ROOT, "voice-clips", "emotion-eval.json")
@@ -106,7 +107,7 @@ def extend(data, n=BATCH):
         if r in have:
             continue
         try:
-            if not DUR[0] <= pick.duration(os.path.join(ROOT, r)) <= DUR[1]:
+            if not DUR[0] <= common.duration(os.path.join(ROOT, r)) <= DUR[1]:
                 continue
         except (subprocess.CalledProcessError, ValueError):
             continue
@@ -231,9 +232,7 @@ def print_report():
 # --- прогон моделей (venv) ---
 def score():
     import numpy as np  # noqa: F401 — проверка, что запущено из venv проекта
-    spec = importlib.util.spec_from_file_location("emotions", os.path.join(HERE, "emotions.py"))
-    emotions = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(emotions)
+    emotions = common.load("tools/voices/emotions.py")
     import torch
     data = load()
     paths = [r for r, x in data["ratings"].items() if not x.get("bad")]

@@ -41,7 +41,10 @@ import argparse, difflib, importlib.util, json, os, re, shutil, sys, tempfile, w
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
 
 MAX_DUR = 30.0          # train.py пропускает реплики длиннее
 REF_DUR = (5.5, 7.5)    # образец ESpeech: 6–7 с (docs/espeech.md, «Образец голоса»)
@@ -55,13 +58,6 @@ GAP = 0.25              # пауза между репликами склеен�
 # (faster-whisper, word_timestamps) + TAIL_AFTER — не речь; от TAIL_MIN с реплика режется в провале громкости
 # до 0,4 с после слова (не раньше 0,08 с), а без провала — через TAIL_KEEP с, с затуханием TAIL_FADE.
 TAIL_DB, TAIL_AFTER, TAIL_MIN, TAIL_KEEP, TAIL_FADE = 35, 0.2, 0.25, 0.15, 0.03
-
-
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def cc_read(path):
@@ -100,12 +96,12 @@ def main():
     root = os.path.abspath(a.root)
     out = os.path.abspath(a.out or os.path.join(root, "voice-clips", "espeech", "wc3"))
 
-    cc = load("cut_clips", os.path.join(HERE, "cut-clips.py"))
+    cc = common.load("tools/wc3/cut-clips.py")
     cc.ROOT = root
     cc.ORIGS = os.path.join(root, "voice-origs", "Warcraft III (RU)")
     cc.REFS = os.path.join(root, "voice-refs", "cosyvoice", "wc3")
     cc.CLIPS = os.path.join(root, "voice-clips", "cosyvoice", "wc3")
-    em = load("emotions", os.path.join(ROOT, "tools", "voices", "emotions.py"))
+    em = common.load("tools/voices/emotions.py")
     em.ROOT = root  # ключи кеша — пути от корня
     emo = em.Emotions(cache=os.path.join(root, "voice-clips", "emotions.json"))
     refs = json.load(open(os.path.join(cc.REFS, "manifest.json"), encoding="utf-8"))
@@ -182,8 +178,8 @@ def main():
         if tail < TAIL_MIN or keep >= len(x) / 24000 - TAIL_FADE:
             return 0.0
         dst = os.path.join(tmp, "clean_" + rel.replace("/", "_") + ".wav")
-        cc.ffmpeg("-i", cut_wav(rel), "-af", f"atrim=end={keep:.3f},afade=t=out:st={keep - TAIL_FADE:.3f}:d={TAIL_FADE}",
-                  dst)
+        common.ffmpeg("-i", cut_wav(rel), "-af",
+                      f"atrim=end={keep:.3f},afade=t=out:st={keep - TAIL_FADE:.3f}:d={TAIL_FADE}", dst)
         clean[rel] = dst
         cut = it["dur"] - keep
         it["dur"] = round(keep, 3)

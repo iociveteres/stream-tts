@@ -15,10 +15,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
-spec = importlib.util.spec_from_file_location("cut_clips", os.path.join(HERE, "cut-clips.py"))
-cc = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(cc)
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
+cc = common.load("tools/wc3/cut-clips.py")
 
 lock = threading.Lock()
 
@@ -56,11 +57,11 @@ class Batch:
         self.tags_path = os.path.join(cc.CLIPS, "phrase-tags.json")
 
     def state(self):
-        clips = cc.load_json(self.clips_path, {})
+        clips = common.read_json(self.clips_path, {})
         ratings = {cid: dict(zip(("score", "emotion", "comment"), v))
                    for cid, v in cc.parse_ratings(self.dir).items()}
         return dict(batch=self.name, clips=clips, ratings=ratings,
-                    tags=cc.load_json(self.tags_path, {}))
+                    tags=common.read_json(self.tags_path, {}))
 
     def _adopt_clip_emotion(self, clip, text, tags):
         """Эмоция, введённая для клипа целиком, становится меткой его фраз без своих меток."""
@@ -73,7 +74,7 @@ class Batch:
                 t["emotions"] = emotions[:]
 
     def _save_tags(self, clips, tags, values=None):
-        cc.save_json(self.tags_path, {r: t for r, t in tags.items() if t.get("emotions") or t.get("bad")})
+        common.write_json(self.tags_path, {r: t for r, t in tags.items() if t.get("emotions") or t.get("bad")})
         values = cc.parse_ratings(self.dir) if values is None else values
         for cid, clip in clips.items():
             score, _, comment = values.get(cid, ("", "", ""))
@@ -84,8 +85,8 @@ class Batch:
     def migrate(self):
         """Эмоции клипов из старого ratings.txt переносятся на фразы (один раз, при запуске)."""
         with lock:
-            clips = cc.load_json(self.clips_path, {})
-            tags = cc.load_json(self.tags_path, {})
+            clips = common.read_json(self.clips_path, {})
+            tags = common.read_json(self.tags_path, {})
             values = cc.parse_ratings(self.dir)
             for cid, (_, emotion, _) in values.items():
                 if cid in clips:
@@ -94,10 +95,10 @@ class Batch:
 
     def rate(self, cid, score, comment, emotion=None):
         with lock:
-            clips = cc.load_json(self.clips_path, {})
+            clips = common.read_json(self.clips_path, {})
             if cid not in clips:
                 raise KeyError(cid)
-            tags = cc.load_json(self.tags_path, {})
+            tags = common.read_json(self.tags_path, {})
             if emotion:  # старая страница без меток фраз
                 self._adopt_clip_emotion(clips[cid], clean(emotion), tags)
             values = cc.parse_ratings(self.dir)
@@ -109,8 +110,8 @@ class Batch:
         """Метки фраз: добавить или убрать эмоцию, отметить «не брать». Общие для всех партий."""
         add, remove = clean(add).lower(), clean(remove).lower()
         with lock:
-            clips = cc.load_json(self.clips_path, {})
-            tags = cc.load_json(self.tags_path, {})
+            clips = common.read_json(self.clips_path, {})
+            tags = common.read_json(self.tags_path, {})
             for rel in rels:
                 t = tags.setdefault(rel, {})
                 emotions = t.setdefault("emotions", [])
@@ -131,10 +132,10 @@ class Batch:
         if not text:
             raise ValueError("пустой текст")
         with lock:
-            fixes = cc.load_json(self.fixes_path, {})
+            fixes = common.read_json(self.fixes_path, {})
             fixes[rel] = text
-            cc.save_json(self.fixes_path, fixes)
-            clips = cc.load_json(self.clips_path, {})
+            common.write_json(self.fixes_path, fixes)
+            clips = common.read_json(self.clips_path, {})
             changed = {}
             for cid, r in clips.items():
                 hit = False
@@ -145,7 +146,7 @@ class Batch:
                 if hit:
                     cc.write_text(os.path.join(self.dir, r["voice"], cid + ".txt"), r["parts"])
                     changed[cid] = r
-            cc.save_json(self.clips_path, clips)
+            common.write_json(self.clips_path, clips)
             cc.write_ratings(self.dir, clips)
         return changed
 

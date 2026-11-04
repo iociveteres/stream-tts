@@ -9,6 +9,7 @@
 """
 import argparse
 import glob
+import importlib.util
 import json
 import os
 import site
@@ -16,9 +17,10 @@ import subprocess
 import sys
 import tempfile
 
-
-def ffmpeg(*args):
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
+HERE = os.path.dirname(os.path.abspath(__file__))
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
 
 
 def seconds(t):
@@ -72,7 +74,7 @@ def main():
         cut = os.path.join(tmp, "cut.wav")
         rng = (["-ss", str(seconds(a.start))] if a.start else []) + \
               (["-to", str(seconds(a.end))] if a.end else [])
-        ffmpeg(*rng, "-i", src, "-ac", "1", "-ar", "44100", cut)
+        common.ffmpeg(*rng, "-i", src, "-ac", "1", "-ar", "44100", cut)
         work = vocals(cut, tmp) if a.demucs else cut
         segs, _ = model.transcribe(work, language=a.lang, beam_size=5, vad_filter=True,
                                    condition_on_previous_text=False)
@@ -82,7 +84,7 @@ def main():
             if not (a.min <= dur <= a.max) or s.no_speech_prob > 0.5:
                 continue
             fn = f"{len(lines):03d}.wav"
-            ffmpeg("-ss", f"{max(0, s.start - 0.05):.2f}", "-to", f"{s.end + 0.1:.2f}", "-i", work,
+            common.ffmpeg("-ss", f"{max(0, s.start - 0.05):.2f}", "-to", f"{s.end + 0.1:.2f}", "-i", work,
                    "-ac", "1", "-ar", "24000", os.path.join(a.out, fn))
             lines.append(dict(file=fn, text=s.text.strip(), src=os.path.basename(src),
                               start=round(offset + s.start, 2), end=round(offset + s.end, 2),

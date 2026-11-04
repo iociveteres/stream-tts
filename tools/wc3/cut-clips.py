@@ -35,10 +35,13 @@ wikiquote.json (ru.wikiquote.org/wiki/Warcraft_III:_Reign_of_Chaos). При ра
 Нужен faster-whisper (GPU: ещё nvidia-cublas-cu12 и nvidia-cudnn-cu12) и ffmpeg в PATH, для C и A — torch и
 transformers (venv проекта).
 """
-import datetime, difflib, glob, importlib.util, json, os, random, re, shutil, site, subprocess, sys, tempfile
+import datetime, difflib, glob, importlib.util, os, random, re, shutil, site, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT  # свой: lora-clips.py подменяет cc.ROOT
 ORIGS = os.path.join(ROOT, "voice-origs", "Warcraft III (RU)")
 REFS = os.path.join(ROOT, "voice-refs", "cosyvoice", "wc3")
 CLIPS = os.path.join(ROOT, "voice-clips", "cosyvoice", "wc3")
@@ -149,42 +152,23 @@ SUB_MIN, SUB_CHECK = 0.5, 0.85
 QUOTE_MIN, QUOTE_SAME = 0.75, 0.97
 
 
-def load_json(path, default):
-    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else default
-
-
-def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=1, sort_keys=True)
-
-
-def ffmpeg(*args):
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
-
-
-def duration(path):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                        "-of", "csv=p=0", path], capture_output=True, text=True, check=True)
-    return float(r.stdout)
-
-
 class Pieces:
     """Исходные реплики: обрезка тишины, длительность, расшифровка (с кешем)."""
 
     def __init__(self, tmp):
         self.tmp = tmp
-        self.asr = load_json(os.path.join(CLIPS, "asr.json"), {})
-        self.fixes = load_json(os.path.join(CLIPS, "text-fixes.json"), {})
-        self.drafts = load_json(os.path.join(CLIPS, "text-fixes-draft.json"), {})
-        self.subs = load_json(os.path.join(CLIPS, "subtitles.json"), {})
-        self.quotes = load_json(os.path.join(CLIPS, "wikiquote.json"), [])
-        self.tags = load_json(os.path.join(CLIPS, "phrase-tags.json"), {})  # метки из review.py
+        self.asr = common.read_json(os.path.join(CLIPS, "asr.json"), {})
+        self.fixes = common.read_json(os.path.join(CLIPS, "text-fixes.json"), {})
+        self.drafts = common.read_json(os.path.join(CLIPS, "text-fixes-draft.json"), {})
+        self.subs = common.read_json(os.path.join(CLIPS, "subtitles.json"), {})
+        self.quotes = common.read_json(os.path.join(CLIPS, "wikiquote.json"), [])
+        self.tags = common.read_json(os.path.join(CLIPS, "phrase-tags.json"), {})  # метки из review.py
         self.model = None
 
     def wav(self, rel):
         dst = os.path.join(self.tmp, rel.replace("/", "_") + ".wav")
         if not os.path.exists(dst):
-            ffmpeg("-i", os.path.join(ORIGS, rel), "-af",
+            common.ffmpeg("-i", os.path.join(ORIGS, rel), "-af",
                    "silenceremove=start_periods=1:start_threshold=-50dB,areverse,"
                    "silenceremove=start_periods=1:start_threshold=-50dB,areverse",
                    "-ac", "1", "-ar", "24000", dst)
@@ -197,7 +181,7 @@ class Pieces:
                                                   condition_on_previous_text=False,
                                                   initial_prompt=ASR_PROMPT)[0])
             self.asr[rel] = dict(
-                dur=round(duration(wav), 3),
+                dur=round(common.duration(wav), 3),
                 text=re.sub(r"[«»\"]", "", " ".join(s.text.strip() for s in segs)).strip(),
                 lp=round(sum(s.avg_logprob for s in segs) / len(segs), 3) if segs else -9,
                 nsp=round(max((s.no_speech_prob for s in segs), default=1), 3),
@@ -257,7 +241,7 @@ class Pieces:
         return self.model
 
     def save(self):
-        save_json(os.path.join(CLIPS, "asr.json"), self.asr)
+        common.write_json(os.path.join(CLIPS, "asr.json"), self.asr)
 
 
 def words(text):
@@ -396,12 +380,12 @@ def write_pools(pieces, voices):
     """pools.json: реплики «голоса в целом» для sim в tools/voices/synth.py, пути от корня проекта.
     Та же случайная выборка POOL реплик, что считал прежний synth-ab.py, поэтому оценки партий сравнимы."""
     path = os.path.join(CLIPS, "pools.json")
-    pools = load_json(path, {})
+    pools = common.read_json(path, {})
     origs = os.path.relpath(ORIGS, ROOT).replace("\\", "/")
     for vid in voices:
         pool = voice_pool(pieces, vid)
         pools[vid] = [f"{origs}/{rel}" for rel in random.Random(vid).sample(pool, min(POOL, len(pool)))]
-    save_json(path, pools)
+    common.write_json(path, pools)
 
 
 def mood(emo, items):
@@ -477,7 +461,7 @@ def write_clip(pieces, items, dst):
         pad = "anull" if i == len(items) - 1 else f"apad=pad_dur={GAP}"
         filt.append(f"[{i}:a]{pad}[a{i}]")
     filt.append("".join(f"[a{i}]" for i in range(len(items))) + f"concat=n={len(items)}:v=0:a=1[out]")
-    ffmpeg(*inputs, "-filter_complex", ";".join(filt), "-map", "[out]",
+    common.ffmpeg(*inputs, "-filter_complex", ";".join(filt), "-map", "[out]",
            "-ac", "1", "-ar", "24000", dst + ".wav")
     parts = [dict(rel=p["rel"], text=p["text"], src=p["src"], alt=p["alt"]) for p in items]
     write_text(dst + ".txt", parts)
@@ -486,10 +470,7 @@ def write_clip(pieces, items, dst):
 
 def emotions():
     """Оценщик подачи из tools/voices/emotions.py (нужны torch и transformers)."""
-    spec = importlib.util.spec_from_file_location("emotions", os.path.join(ROOT, "tools", "voices", "emotions.py"))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.Emotions()
+    return common.load("tools/voices/emotions.py").Emotions()
 
 
 def main():
@@ -529,7 +510,7 @@ def main():
         voices.remove(vid)
     tmp = tempfile.mkdtemp()
     pieces = Pieces(tmp)
-    rows = load_json(os.path.join(out, "clips.json"), {})
+    rows = common.read_json(os.path.join(out, "clips.json"), {})
     try:
         for vid in voices:
             vdir = os.path.join(out, vid)
@@ -559,7 +540,7 @@ def main():
                 shutil.copy(ref + ".wav", os.path.join(vdir, cid + ".wav"))
                 write_text(os.path.join(vdir, cid + ".txt"), parts)
                 rows[cid] = dict(voice=vid, title=title, kind="S", tag="current",
-                                 dur=round(duration(ref + ".wav"), 2), lp=None, parts=parts)
+                                 dur=round(common.duration(ref + ".wav"), 2), lp=None, parts=parts)
             numbers = {}
             for c in found:
                 numbers[c["kind"]] = numbers.get(c["kind"], 0) + 1
@@ -579,8 +560,8 @@ def main():
         shutil.rmtree(tmp, ignore_errors=True)
 
     rows = dict(sorted(rows.items()))
-    save_json(os.path.join(out, "clips.json"), rows)
-    save_json(os.path.join(out, "batch.json"), dict(
+    common.write_json(os.path.join(out, "clips.json"), rows)
+    common.write_json(os.path.join(out, "batch.json"), dict(
         created=datetime.date.today().isoformat(), dialogue=DIALOGUE, unit=UNIT, gap=GAP,
         scene_gap=SCENE_GAP, dialogue_per_voice=N_DLG, kinds="".join(kinds),
         mood_diff=MOOD_DIFF, mood_spread=MOOD_SPREAD, mood_loud=MOOD_LOUD))

@@ -21,19 +21,13 @@ synth.py нельзя запускать одновременно с scripts/imp
 import glob, importlib.util, json, os, re, site, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
-
-
-def module(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-pick = module("pick", os.path.join(HERE, "pick.py"))
-campplus = module("campplus", os.path.join(HERE, "campplus.py"))
-emotions = module("emotions", os.path.join(HERE, "emotions.py"))
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
+pick = common.load("tools/voices/pick.py")
+campplus = common.load("tools/voices/campplus.py")
+emotions = common.load("tools/voices/emotions.py")
 
 API = "http://127.0.0.1:8080"   # не localhost: из Python на Windows он сначала пробует IPv6 (+2 с на запрос)
 SEED = 7

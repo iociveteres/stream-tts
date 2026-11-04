@@ -68,6 +68,8 @@
 │   ├── pack-handoff.py    # архив кода без данных для внешнего исполнителя (handoff/, git bundle и zip)
 │   └── measure-docs.py    # замер навигации: файлы и токены задач docs/index.md сейчас и на базе, стоимость входа
 ├── tools/                 # подбор образцов голосов (docs/voice-pipeline.md), запуск из корня проекта
+│   ├── common.py          # общее для инструментов: ROOT, load (сосед по пути), ffmpeg, duration, decode, frames_db,
+│   │                      # read_json/write_json; грузится по пути, при импорте — только stdlib
 │   ├── voices/            # общее: страница выбора, синтез и оценки, модель эмоций и её сверка на слух, CAM++;
 │   │                      # pack-sets.py — коллекции для импорта voice-sets/<модель>/<набор>.zip
 │   ├── wc3/               # реплики Warcraft III: нарезка кандидатов, проверка текстов (docs/voices-wc3.md)
@@ -90,7 +92,7 @@
 │                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
 │                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py, роуты —
 │                          # test_routes.py, скрипты админки и она сама в браузере — test_admin_scripts.py,
-│                          # test_admin_smoke.py),
+│                          # test_admin_smoke.py, общий код tools/ — test_tools_common.py),
 │                          # test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
@@ -322,7 +324,8 @@ stream-tts (`voicesets.py` напрямую): коллекции CosyVoice и ES
 запросы в сеть), новый роут без группы — ошибка. `test_invariants.py` — без процесса stream-tts, секунды: компиляция
 всех `.py` из git, `check-i18n.py`, `docker compose config -q` (без docker — пропуск), флаги GPU у встроенного
 сервера, в `Dockerfile` и `docker-compose.gpu.yml`, `KEEPALIVE` < 5 с, `__version__` только в
-`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. `test_index.py` — таблица `docs/index.md`: строки на все
+`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. `test_tools_common.py` — в `tools/` нет своих копий
+функций `tools/common.py` и загрузчиков по пути, у `common.py` импорты верхнего уровня только из stdlib. `test_index.py` — таблица `docs/index.md`: строки на все
 эталонные вопросы, пути из git (сейчас и на базе), разбор `scripts/measure-docs.py`. `test_routes.py` — снимок
 всех пар «метод + путь» из `web.make_app`: URL — публичные имена. `test_admin_scripts.py` — скрипты из
 `admin.html` есть, верхнего уровня объявления не повторяются между файлами (классические скрипты с общей

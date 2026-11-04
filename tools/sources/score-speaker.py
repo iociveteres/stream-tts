@@ -18,10 +18,11 @@ import os
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(os.path.dirname(HERE))  # tools/<группа>/ -> корень проекта
-spec = importlib.util.spec_from_file_location("campplus", os.path.join(ROOT, "tools", "voices", "campplus.py"))
-campplus = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(campplus)
+spec = importlib.util.spec_from_file_location("common", os.path.join(os.path.dirname(HERE), "common.py"))
+common = importlib.util.module_from_spec(spec)  # ROOT, load, ffmpeg, звук, JSON
+spec.loader.exec_module(common)
+ROOT = common.ROOT
+campplus = common.load("tools/voices/campplus.py")
 
 
 def main():
