@@ -17,6 +17,7 @@ services:
     volumes:
       - ./stream-tts-data:/data                       # настройки, токены, SQLite, примеры голосов
       - ./models:/models                              # модели и пакеты; админка качает их сюда
+      - ./espeech-runtime:/espeech-runtime            # Python с torch для ESpeech (~1,3 ГБ), качает админка
       - ./voices:/voices                              # голоса .gguf и наборы в подпапках
       - ./voice-refs:/project/voice-refs:ro           # manifest.json с эффектами post
       - ./effects:/project/effects:ro                 # скрипты эффектов (post); режим cut звуков жителя не читает

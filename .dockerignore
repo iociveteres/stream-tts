@@ -4,5 +4,9 @@
 !cosyvoice/entrypoint.sh
 !stream-tts/requirements.txt
 !stream-tts/streamtts/
+# ESpeech: код сервера (без .venv) и списки символов для заглушек
+!espeech/*.py
+!espeech/THIRD-PARTY.txt
+!packaging/linux/
 **/__pycache__
 **/*.pyc

@@ -43,6 +43,15 @@ RUN set -eux; \
     ls /opt/cosyvoice/libggml-cpu-*.so >/dev/null; \
     chmod +x /opt/cosyvoice/cosyvoice-server /opt/cosyvoice/cosyvoice-cli /opt/cosyvoice/quantize
 
+# --- Заглушки библиотек CUDA для ESpeech: gcc нужен только здесь ---
+# torch ESpeech качается кнопкой в админке без пакетов nvidia-* (~3 ГБ): библиотеки, которые он загружает, а синтез и
+# обучение LoRA не вызывают, заменяются заглушками по спискам символов packaging/linux/stubs (pin-espeech.py);
+# cudart и cuBLAS — настоящие из /opt/cosyvoice (GPU=cuda) или тоже заглушки (docs/espeech.md, «Поставка»)
+FROM ${UBUNTU} AS espeech-stubs
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+COPY packaging/linux/ /src/
+RUN sh /src/build-stubs.sh /src/stubs /out/stubs
+
 # --- Общая основа: рантайм-библиотеки сервера ---
 FROM ${UBUNTU} AS base
 
@@ -86,11 +95,17 @@ WORKDIR /app
 COPY stream-tts/requirements.txt .
 # --only-binary: без компилятора в образе сборка из исходников всё равно не удалась бы, пусть падает сразу
 RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+# ESpeech (вторая модель): в образе только код espeech-server и заглушки (сотни КБ), Python 3.14 с torch и модель
+# stream-tts качает по кнопке на вкладке «Сервер» в тома ESPEECH_RUNTIME и /models (engines/espeech/download.py);
+# /opt/cosyvoice — это paths.RUNTIME, код — в его espeech/, как у программы для Windows
+COPY --from=espeech-stubs /out/stubs /opt/cosyvoice/espeech/stubs
+COPY espeech/*.py espeech/THIRD-PARTY.txt /opt/cosyvoice/espeech/espeech/
 COPY stream-tts/streamtts ./streamtts
 
 # LD_LIBRARY_PATH не задаётся: в /opt/cosyvoice свой libonnxruntime.so (1.30), он перебил бы onnxruntime из venv;
 # серверу путь добавляет engines/cosyvoice/launch.py. Сервер запускает stream-tts; COSYVOICE_HOST=0.0.0.0 открывает
-# его для порта 8080 контейнера (WebUI и инструменты), stream-tts ходит к нему по 127.0.0.1.
+# его для порта 8080 контейнера (WebUI и инструменты), stream-tts ходит к нему по 127.0.0.1. ESPEECH_RUNTIME —
+# внутри тома (/espeech-runtime): рантайм собирается рядом, в python.tmp, и переименовывается.
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     STREAM_TTS_DATA=/data \
@@ -101,6 +116,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     STREAM_TTS_LISTEN_HOST=0.0.0.0 \
     STREAM_TTS_LISTEN_PORT=8090 \
     COSYVOICE_HOST=0.0.0.0 \
-    COSYVOICE_PORT=8080
+    COSYVOICE_PORT=8080 \
+    ESPEECH_RUNTIME=/espeech-runtime/python
 EXPOSE 8090 8080
 CMD ["python", "-m", "streamtts"]

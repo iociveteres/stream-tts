@@ -7,6 +7,8 @@
 # коллекции голосов для импорта (tools/voices/pack-sets.py)
 /voice-sets/
 /runtime/
+# Python с torch для ESpeech в Docker (том /espeech-runtime, engines/espeech/download.py)
+/espeech-runtime/
 /packaging/windows/build/
 /packaging/windows/dist/
 /packaging/windows/.inno/
