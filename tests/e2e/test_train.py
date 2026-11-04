@@ -388,8 +388,8 @@ def test_every_route_guarded(managed):
                          "в KEEPS (не трогают его) или в SKIPS (запрос в сеть)")
     gone = [p for p in (*RESTARTS, *KEEPS) if p not in routes]
     assert not gone, f"роутов больше нет: {gone}"
-    from streamtts import install   # sys.path — из make_app
-    restart_pkg = next(pid for pid, p in install.PACKAGES.items() if p.get("restart"))
+    from streamtts import downloads   # sys.path — из make_app
+    restart_pkg = next(pid for pid, p in downloads.PACKAGES.items() if p.get("restart"))
 
     api = managed.api
     add_items(api, 2)

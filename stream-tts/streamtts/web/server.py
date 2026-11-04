@@ -3,7 +3,7 @@
 сервер, — через _restart_guard (common.py): обучение LoRA живёт в процессе сервера."""
 import logging, os, tempfile, urllib.parse
 
-from .. import install
+from .. import downloads
 from ..engines.client import LIVE
 from ..engines.espeech import train as lora
 from ..i18n import tr
@@ -23,7 +23,7 @@ def _install(ctx):
 
 
 async def post_model_download(request, ctx, data):
-    _install(ctx).start_download(str(data.get("quant") or install.DEFAULT_QUANT), bool(data.get("frontend")))
+    _install(ctx).start_download(str(data.get("quant") or downloads.DEFAULT_QUANT), bool(data.get("frontend")))
     return ok()
 
 
@@ -111,7 +111,7 @@ async def post_package_download(request, ctx, data):
 
 async def post_package_delete(request, ctx, data):
     inst = _install(ctx)
-    if (install.PACKAGES.get(str(data["id"])) or {}).get("restart") and (stop := await _restart_guard(ctx, data)):
+    if (downloads.PACKAGES.get(str(data["id"])) or {}).get("restart") and (stop := await _restart_guard(ctx, data)):
         return stop   # сервер останавливается, пока удаляются файлы фронтенда
     await inst.delete_package(str(data["id"]))
     return ok()

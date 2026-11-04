@@ -29,7 +29,7 @@ import asyncio, contextlib, glob, hashlib, io, json, logging, math, os, re, secr
 
 import numpy as np
 
-from . import audio, config, engines, install, paths, separate, store
+from . import audio, config, engines, paths, separate, store, voicesets
 from .config import SR
 from .engines.client import PREVIEW
 from .i18n import tr
@@ -125,7 +125,7 @@ class Editor:
         return d
 
     def sets(self):
-        names = set(self.voices._read_manifests()[2].values()) | {s["name"] for s in install.list_sets()}
+        names = set(self.voices._read_manifests()[2].values()) | {s["name"] for s in voicesets.list_sets()}
         return sorted(n for n in names if n)
 
     def update(self, data):
@@ -364,7 +364,7 @@ class Editor:
 
     def _set_of(self, name):
         """Где уже лежит голос name любой модели: набор, "" — корень папки голосов, None — нигде."""
-        for ext in install.VOICE_EXTS:
+        for ext in voicesets.VOICE_EXTS:
             if os.path.isfile(os.path.join(paths.VOICES, name + ext)):
                 return ""
             hit = glob.glob(os.path.join(paths.VOICES, "*", name + ext))
@@ -377,7 +377,7 @@ class Editor:
         self._check(v)
         if not NAME.fullmatch(name):
             raise ValueError(tr("имя голоса: латиница, цифры, «-», «_» и «.», до 64 символов"))
-        set_name = install.SET_NAME.sub("-", set_name.lower()).strip("-_")
+        set_name = voicesets.SET_NAME.sub("-", set_name.lower()).strip("-_")
         if not set_name:
             raise ValueError(tr("укажите набор: латиница, цифры, «-» и «_»"))
         m = self.maker

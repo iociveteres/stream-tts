@@ -107,7 +107,7 @@ ESpeech заново не качает. Удаление программы сп
 Закреплённые загрузки — `stream-tts/streamtts/downloads.json`: CUDA (версия, нужные файлы и их размер, архивы
 llama.cpp — адрес, размер, распакованный размер, sha256 и какие файлы из него берутся) и кванты модели (адрес
 Hugging Face на конкретной ревизии, размеры, sha256), а ещё ESpeech (раздел `espeech`: рантаймы Windows и Linux и модель, его пишет
-`packaging/pin-espeech.py`). Его читают `install.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
+`packaging/pin-espeech.py`). Его читают `downloads.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
 ESpeech) и `build-exe.py` (передаёт значения в `StreamTTS.iss` через `/D`). Переход на другую сборку
 llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая запись `cuda` здесь (`build-runtime.py` не
 соберётся, если CUDA не из сборки ядра). Файлы — в `packaging/windows/`:

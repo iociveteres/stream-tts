@@ -1,4 +1,4 @@
-"""Наборы голосов из zip (install.py): коллекция «модель + источник» (voice-sets/<модель>/<источник>.zip). Голоса
+"""Наборы голосов из zip (voicesets.py): коллекция «модель + источник» (voice-sets/<модель>/<источник>.zip). Голоса
 обеих моделей одного источника лежат в одной папке набора; установка и удаление голосов одной модели не трогают
 голоса другой, manifest.json набора — общий. Без процесса stream-tts: установка доступна только со встроенным
 сервером, поэтому функции, которые зовёт /api/voicesets/*, вызываются напрямую с папкой голосов во
@@ -10,7 +10,7 @@ import pytest
 from harness import STREAM_TTS
 
 sys.path.insert(0, STREAM_TTS)
-from streamtts import install, paths  # noqa: E402
+from streamtts import paths, voicesets  # noqa: E402
 
 GGUF = b"GGUF" + bytes(60)
 _head = json.dumps({"__metadata__": {"format": "espeech-voice"}}).encode()
@@ -34,7 +34,7 @@ def make_zip(tmp_path, name, files):
 
 
 def put(path):
-    return install._install_set(path, install._check_zip(path, os.path.basename(path)))
+    return voicesets._install_set(path, voicesets._check_zip(path, os.path.basename(path)))
 
 
 def listing(d):
@@ -57,7 +57,7 @@ def test_collections_per_model(voices, tmp_path):
     assert (r["name"], r["models"], r["added"]) == ("wc3", ["espeech"], ["alpha", "charlie"])
     wc3 = voices / "wc3"
     assert listing(wc3) == ["alpha.espeech", "alpha.gguf", "bravo.gguf", "charlie.espeech", "manifest.json"]
-    assert [(s["name"], s["model"], s["title"], s["voices"]) for s in install.list_sets()] == [
+    assert [(s["name"], s["model"], s["title"], s["voices"]) for s in voicesets.list_sets()] == [
         ("wc3", "cosyvoice", "CosyVoice3", ["alpha", "bravo"]), ("wc3", "espeech", "ESpeech", ["alpha", "charlie"])]
     assert set(manifest(wc3)) == {"alpha", "bravo", "charlie"}
 
@@ -66,10 +66,10 @@ def test_collections_per_model(voices, tmp_path):
     assert listing(wc3) == ["alpha.espeech", "alpha.gguf", "charlie.espeech", "manifest.json"]
     assert set(manifest(wc3)) == {"alpha", "charlie"}
 
-    install._delete_set("wc3", "espeech")
+    voicesets._delete_set("wc3", "espeech")
     assert listing(wc3) == ["alpha.gguf", "manifest.json"]
     assert set(manifest(wc3)) == {"alpha"}
-    install._delete_set("wc3", "cosyvoice")   # голосов не осталось — папки нет
+    voicesets._delete_set("wc3", "cosyvoice")   # голосов не осталось — папки нет
     assert not wc3.exists()
 
 
@@ -100,8 +100,8 @@ def test_taken_voice_per_model(voices, tmp_path):
 
 def test_bad_archives(voices, tmp_path):
     with pytest.raises(ValueError, match="не голос ESpeech"):
-        install._check_zip(make_zip(tmp_path, "a.zip", {"a.espeech": GGUF}), "a.zip")
+        voicesets._check_zip(make_zip(tmp_path, "a.zip", {"a.espeech": GGUF}), "a.zip")
     with pytest.raises(ValueError, match="не голос CosyVoice3"):
-        install._check_zip(make_zip(tmp_path, "b.zip", {"b.gguf": ESPEECH}), "b.zip")
+        voicesets._check_zip(make_zip(tmp_path, "b.zip", {"b.gguf": ESPEECH}), "b.zip")
     with pytest.raises(ValueError, match="нет голосов"):
-        install._check_zip(make_zip(tmp_path, "c.zip", {"readme.txt": b"hi"}), "c.zip")
+        voicesets._check_zip(make_zip(tmp_path, "c.zip", {"readme.txt": b"hi"}), "c.zip")

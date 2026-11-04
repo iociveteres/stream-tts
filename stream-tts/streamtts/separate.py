@@ -1,6 +1,6 @@
 """Голос без музыки для образца в редакторе: htdemucs (Demucs v4) в ONNX через onnxruntime, на процессоре.
 
-Модель — дополнительный пакет «music» (install.PACKAGES): htdemucs_int8.onnx из HRSadeghi/demucs-onnx, граф без
+Модель — дополнительный пакет «music» (downloads.PACKAGES): htdemucs_int8.onnx из HRSadeghi/demucs-onnx, граф без
 STFT и ISTFT — ONNX их не выражает (ISTFT нет вовсе). Спектрограмма считается здесь на numpy так же, как
 HTDemucs._spec/_ispec, а нарезка на сегменты с треугольным перекрытием и нормировка — как demucs.apply_model
 (перенесено из stft.py и separator.py demucs-onnx, MIT). Вход и выход — 24 кГц моно; модель работает на 44,1 кГц

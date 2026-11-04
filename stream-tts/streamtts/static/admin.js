@@ -644,7 +644,7 @@ function dlProgress(d) {
     (d.speed > 0 ? " · " + T("{n} МБ/с", { n: fmtNum(d.speed / 1048576) }) : "") + left;
 }
 
-// Дополнительные пакеты (install.PACKAGES): блок в настройках и нужные пакеты в редакторе голоса
+// Дополнительные пакеты (downloads.PACKAGES): блок в настройках и нужные пакеты в редакторе голоса
 let packagesKey = "";
 function renderPackages() {
   const d = S.setup && S.setup.download, key = JSON.stringify([S.packages, d, S.setup ? 1 : 0, edPackages()]);
@@ -753,7 +753,7 @@ function renderServer() {
   renderCuda(st, d);
   renderEspeech(st, d);
   // Наборы голосов
-  // Набор — по записи на модель: коллекция «модель + источник» ставится и удаляется отдельно (install.py)
+  // Набор — по записи на модель: коллекция «модель + источник» ставится и удаляется отдельно (voicesets.py)
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
     h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted" }, " · " + s.title),
       h("span", { class: "muted small" }, T(" — голосов: {n}: {voices}", { n: s.voices.length,

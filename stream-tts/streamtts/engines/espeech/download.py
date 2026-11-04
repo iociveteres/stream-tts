@@ -24,7 +24,7 @@ import asyncio, contextlib, fnmatch, glob, hashlib, json, logging, os, shutil, t
 import aiohttp
 
 from . import launch
-from ... import partzip, paths
+from ... import fetch, partzip, paths
 from ...i18n import tr
 from ...runtime import spawn_kwargs
 
@@ -49,7 +49,7 @@ SMOKE = ("import espeech, torch, numpy, safetensors, onnxruntime, tokenizers, ra
 
 
 def spec():
-    from ...install import DOWNLOADS
+    from ...downloads import DOWNLOADS
     return DOWNLOADS["espeech"]
 
 
@@ -117,7 +117,7 @@ def state(cuda):
 
 # --- загрузка ---
 class Steps:
-    """Шаги загрузки ESpeech для Installer: inst — его _fetch, dl и _push."""
+    """Шаги загрузки ESpeech для Installer: inst — его dl и _push (прогресс, fetch.fetch)."""
 
     def __init__(self, inst, session):
         self.inst, self.session = inst, session
@@ -129,7 +129,7 @@ class Steps:
     async def fetch(self, url, name, dst, size, sha):
         if os.path.isfile(dst) and os.path.getsize(dst) == size:
             return
-        await self.inst._fetch(self.session, url, name, dst, size, sha)
+        await fetch.fetch(self.inst, self.session, url, name, dst, size, sha)
 
     async def ranges(self, url, name, part, ranges):
         """Диапазоны архива подряд в part, с места обрыва (по размеру part)."""
