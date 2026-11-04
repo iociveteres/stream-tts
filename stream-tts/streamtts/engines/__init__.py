@@ -41,7 +41,7 @@ class Tts:
     def __getattr__(self, name):
         return getattr(self.__dict__["client"], name)
 
-    # поля, которые пишут снаружи (web.py, __main__.py), — у клиента
+    # поля, которые пишут снаружи (web/, __main__.py), — у клиента
     ok = property(lambda self: self.client.ok, lambda self, v: setattr(self.client, "ok", v))
     error = property(lambda self: self.client.error, lambda self, v: setattr(self.client, "error", v))
 

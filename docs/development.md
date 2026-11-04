@@ -12,11 +12,16 @@
 ├── .dockerignore          # контекст сборки — весь проект, в него пускаются только нужные образам файлы
 ├── docker-compose.yml     # stream-tts; cosyvoice — в профиле server-only
 ├── docker-compose.gpu.yml # надстройка для видеокарты NVIDIA
+├── README.md              # для пользователя: установка и работа
 ├── AGENTS.md              # заметки для ИИ-агентов (CLAUDE.md ссылается на него)
+├── .gitattributes         # LF для shell-скриптов, Dockerfile и *.yml; .gitignore — данные не в git
+├── .claude/launch.json    # конфигурации preview (раздел «Запуск»)
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
+├── REFACTOR-REPORT.md     # итоги структурного рефакторинга: этапы, замеры, находки (docs/refactor-plan.md)
 ├── cosyvoice/
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
-├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): server.py (HTTP API
+├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): __init__.py (папки
+│                          # библиотек CUDA до torch), __main__.py (python -m espeech), server.py (HTTP API
 │                          # как у cosyvoice-server: обработчик и роуты), engine.py (модель в рабочем потоке),
 │                          # wire.py (multipart, WAV), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
 │                          # RUAccent и словарь ударений пользователя), normalize.py (текст чата: конвейер; числа —
@@ -29,29 +34,51 @@
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
 │   ├── ui-edit.py         # режим правки строк интерфейса (в разработке): админка на поддельном сервере, :8099
-│   └── streamtts/         # пакет: paths.py (пути), runtime.py (встроенный сервер: процесс, перезапуски),
-│                          # engine.py (очередь: приём, синтез, воспроизведение), rules.py (доступ, кулдауны,
-│                          # ответы об отказе), commands.py (команды чата !tts*), overlay.py (оверлеи без aiohttp),
-│                          # web/ (HTTP: __init__.py — make_app, пароль, страницы и сокеты; common.py — ответы,
-│                          # обёртка POST, приём файла сырым телом (upload), _restart_guard; роуты по модулям —
-│                          # state.py, admin.py, model.py, server.py, editor.py, train.py),
-│                          # engines/ (модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент
-│                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск, клиент модели и
-│                          # особенности редактора голоса в editor.py; espeech/train.py — обучение LoRA голоса:
-│                          # набор реплик и запросы /train к серверу, интерфейс — static/train.js;
-│                          # espeech/download.py — загрузка рантайма и модели ESpeech программой для Windows),
-│                          # partzip.py (часть zip по HTTP диапазонами), install.py (задачи загрузок из админки),
-│                          # downloads.py (downloads.json: CUDA, кванты, пакеты, примеры), fetch.py (файл по HTTP
-│                          # с докачкой и sha256), voicesets.py (наборы голосов из zip), editor.py (новый голос из
-│                          # записи; интерфейс — static/editor.js),
-│                          # bench.py (скорость устройств),
-│                          # separate.py (очистка образца от музыки: htdemucs в ONNX),
-│                          # desktop.py (точка входа программы для Windows), updates.py (проверка новой версии),
-│                          # i18n.py (язык интерфейса), chat_irc.py (режим «Только чтение чата»: анонимный IRC),
-│                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp, кванты
-│                          # модели, рантайм и модель ESpeech), static/ (admin.js — общее админки, admin-<вкладка>.js — вкладки,
-│                          # admin-start.js — старт после всех вкладок; static/en.json — английский словарь, static/i18n.js — перевод
-│                          # страниц, static/ui-edit.js и .css — режим правки строк, static/quants/ — примеры звука квантов для вкладки «Сервер»)
+│   ├── requirements.txt   # окружение stream-tts/.venv и образа
+│   └── streamtts/         # пакет; слои — docs/index.md, «Связи» (держит tests/e2e/test_layers.py)
+│       ├── __main__.py    # точка входа python -m streamtts: сборка частей, веб-сервер, остановка
+│       ├── __init__.py    # __version__ — единственное место версии
+│       ├── paths.py       # пути по способу запуска (исходники, Docker, exe); config.py — переменные окружения
+│       ├── engine.py      # очередь: приём, итог, синтез, воспроизведение
+│       ├── rules.py       # доступ, кулдауны, ответ зрителю об отказе (R_*, REPLIES, ACCESS_WHO)
+│       ├── commands.py    # команды чата !tts*, SERVICE_COMMANDS
+│       ├── overlay.py     # оверлеи без aiohttp: отправку и проверку «закрыт» передаёт web/
+│       ├── filters.py     # фильтры текста: ссылки, мат (profanity.txt — словарь)
+│       ├── audio.py       # громкость (LUFS), ограничитель пиков, перекодирование ffmpeg
+│       ├── voices.py      # голоса: список с сервера, группы наборов, эффекты post, примеры, страница голосов
+│       ├── store.py       # settings.json и SQLite (зрители, баны, история); read_json/write_json
+│       ├── stats.py       # статистика активаций и загрузка машины
+│       ├── twitch.py      # вход Device Code Flow, Helix, EventSub
+│       ├── chat_irc.py    # режим «Только чтение чата»: анонимный IRC
+│       ├── i18n.py        # язык интерфейса, tr()
+│       ├── runtime.py     # встроенный сервер: процесс, порт, перезапуски, paused, выгрузка
+│       ├── web/           # HTTP: __init__.py — make_app, пароль, Origin, страницы и сокеты, сводный POSTS;
+│       │                  # common.py — ответы, обёртка POST, приём файла сырым телом (upload), _restart_guard;
+│       │                  # роуты по модулям, у каждого своя таблица POSTS: state.py (состояние админки),
+│       │                  # admin.py (настройки, голоса, очередь, баны, Twitch), model.py (модель, «как
+│       │                  # прочитает», ударения), server.py (встроенный сервер, наборы, пакеты, CUDA, ESpeech),
+│       │                  # editor.py (/api/draft*), train.py (/api/train*)
+│       ├── engines/       # модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент и
+│       │                  # очередь к серверу; cosyvoice/ и espeech/ — описание (__init__.py), запуск
+│       │                  # (launch.py), клиент (client.py), особенности редактора голоса (editor.py);
+│       │                  # espeech/train.py — обучение LoRA голоса: набор реплик и запросы /train;
+│       │                  # espeech/download.py — загрузка рантайма и модели ESpeech по кнопке
+│       ├── install.py     # Installer: задачи загрузок из админки и их состояние
+│       ├── downloads.py   # downloads.json: CUDA, кванты, пакеты (PACKAGES), примеры (SAMPLES)
+│       ├── downloads.json # закреплённые загрузки: CUDA из llama.cpp, кванты модели, рантайм и модель ESpeech
+│       ├── fetch.py       # файл по HTTP с докачкой, повторами и sha256
+│       ├── partzip.py     # часть zip по HTTP диапазонами
+│       ├── voicesets.py   # наборы голосов из zip: проверка, установка, удаление по модели
+│       ├── editor.py      # редактор: новый голос из записи
+│       ├── separate.py    # очистка образца от музыки: htdemucs в ONNX
+│       ├── bench.py       # скорость устройств
+│       ├── desktop.py     # точка входа программы для Windows; updates.py — проверка новой версии
+│       └── static/        # admin.html, admin.css, common.css; admin.js — общее админки, вкладки —
+│                          # admin-queue.js, admin-twitch.js, admin-voices.js, admin-server.js,
+│                          # admin-settings.js, admin-stats.js; admin-start.js — старт после всех вкладок;
+│                          # editor.js, train.js — редактор и обучение; overlay.html, voices.html, login.html;
+│                          # en.json — английский словарь, i18n.js — перевод страниц; ui-edit.js и ui-edit.css —
+│                          # режим правки строк; quants/ — примеры звука квантов для вкладки «Сервер»
 ├── packaging/
 │   ├── pin-espeech.py     # загрузки ESpeech в downloads.json для обеих систем и списки заглушек библиотек CUDA:
 │                          # windows/stubs/*.def, linux/stubs/**/*.map
@@ -60,7 +87,9 @@
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
 │                          # espeech-server и DLL-заглушки из stubs/*.def), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
 │                          # ничего не качает: модель и CUDA — в админке),
-│                          # release.py (latest.json релиза), THIRD-PARTY*.txt (сторонние лицензии);
+│                          # StreamTTS.py (главный модуль Nuitka: зовёт streamtts.desktop), requirements.txt
+│                          # (окружение сборки), release.py (latest.json релиза), THIRD-PARTY.txt и
+│                          # THIRD-PARTY.en.txt (сторонние лицензии);
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой
@@ -82,7 +111,8 @@
 │                          # espeech/prepare.py),
 │                          # make-voice.py (голос .espeech из образца или по manifest.json набора),
 │                          # train.py (обучение LoRA на парах wav+txt → адаптер в файле голоса)
-├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts
+├── effects/               # эффекты поверх синтеза (post в manifest.json), их запускает и stream-tts:
+│                          # villager-fx.py — «житель Minecraft»
 ├── tests/                 # автотесты (раздел «Тесты»); requirements.txt — pytest для stream-tts/.venv
 │   └── e2e/               # e2e stream-tts: fake_cosyvoice.py (поддельный сервер cosyvoice или espeech),
 │                          # fake_irc.py (поддельный IRC

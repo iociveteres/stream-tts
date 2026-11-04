@@ -3,7 +3,9 @@
 - в таблице есть строки на все 9 эталонных вопросов (В1–В9), у каждой задачи — файлы и тест;
 - каждая строка таблицы разбирается (scripts/measure-docs.py считает по ней файлы и токены);
 - все пути таблицы — файлы из git, пути колонки «На базе» — файлы базового коммита;
-- остальные пути документа (с «/», в папках из git) существуют: переименовал модуль — поправь индекс."""
+- остальные пути документа (с «/», в папках из git) существуют: переименовал модуль — поправь индекс;
+- docs/development.md называет каждый файл из git по имени (новый или перенесённый файл — в дерево, AGENTS.md,
+  «Соглашения»), кроме tools/ (их описывает docs/voice-pipeline.md) и примеров звука static/quants/."""
 import importlib.util, os, re, subprocess
 
 import pytest
@@ -81,3 +83,14 @@ def test_other_paths(index, tracked):
         if token not in tracked and token.rstrip("/") + "/" not in dirs:
             bad.append(token)
     assert not bad, bad
+
+
+# Что дерево development.md описывает группой, а не по файлу
+TREE_SKIP = ("tools/", "stream-tts/streamtts/static/quants/", "packaging/windows/stubs/", "packaging/linux/stubs/")
+
+
+def test_development_tree(tracked):
+    with open(os.path.join(ROOT, "docs", "development.md"), encoding="utf-8") as f:
+        text = f.read()
+    missing = sorted(p for p in tracked if not p.startswith(TREE_SKIP) and os.path.basename(p) not in text)
+    assert not missing, "нет в docs/development.md:\n" + "\n".join(missing)
