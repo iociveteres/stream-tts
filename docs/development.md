@@ -33,8 +33,8 @@
 │                          # engine.py (очередь: приём, синтез, воспроизведение), rules.py (доступ, кулдауны,
 │                          # ответы об отказе), commands.py (команды чата !tts*), overlay.py (оверлеи без aiohttp),
 │                          # web/ (HTTP: __init__.py — make_app, пароль, страницы и сокеты; common.py — ответы,
-│                          # обёртка POST, _restart_guard; роуты по модулям — state.py, admin.py, model.py,
-│                          # server.py, editor.py, train.py),
+│                          # обёртка POST, приём файла сырым телом (upload), _restart_guard; роуты по модулям —
+│                          # state.py, admin.py, model.py, server.py, editor.py, train.py),
 │                          # engines/ (модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент
 │                          # и очередь к серверу, cosyvoice/ и espeech/ — описание, запуск, клиент модели и
 │                          # особенности редактора голоса в editor.py; espeech/train.py — обучение LoRA голоса:
