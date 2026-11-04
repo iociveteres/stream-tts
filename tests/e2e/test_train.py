@@ -6,14 +6,14 @@
 частоте синтеза (last — голос × 1,1, best — × 1,05). Сначала — готовый сервер (STREAM_TTS_TEST_SERVERS) в процессе
 теста, его ручки меняются на ходу. Перезапуски — у встроенного сервера: stream-tts запускает тот же поддельный сервер отдельным
 процессом как «python -m espeech» (пакет-заглушка и venv во временной папке), Docker-версию это не трогает."""
-import os, site, subprocess, sys, urllib.parse, venv, warnings
+import os, site, subprocess, sys, urllib.parse, venv
 
 import numpy as np
 import pytest
 
 from conftest import FAST_ENV, Ctx
 from fake_cosyvoice import ADAPTER_HZ, VOICES, FakeCosy
-from harness import SR, STREAM_TTS, StreamTTS, decode, dominant_hz, make_wav, read_wav, sine, wait_for
+from harness import SR, StreamTTS, decode, dominant_hz, make_app, make_wav, read_wav, sine, wait_for
 
 E2E = os.path.dirname(os.path.abspath(__file__))
 VOICE = "alpha"
@@ -367,15 +367,7 @@ SKIPS = ("/api/train/", "/api/ui-edit", "/api/twitch/login", "/api/update/check"
 
 def post_routes():
     """POST /api/* приложения stream-tts — из самого приложения (web.make_app), а не списком в тесте."""
-    sys.path.insert(0, STREAM_TTS)
-    from streamtts import web
-    secret, web._secret = web._secret, lambda: "test"   # make_app пишет секрет в папку данных — тут не нужен
-    try:
-        with warnings.catch_warnings():   # приложение без запуска: предупреждения aiohttp о ключах — не о тесте
-            warnings.simplefilter("ignore")
-            app = web.make_app(None)
-    finally:
-        web._secret = secret
+    web, app = make_app()
     return web, sorted({r.resource.canonical for r in app.router.routes()
                         if r.method == "POST" and r.resource.canonical.startswith("/api/")})
 

@@ -4,7 +4,7 @@
 потока (Loop), тест зовёт его через Loop.run. stream-tts — отдельный процесс со своими портом и папками данных,
 моделей и голосов во временной папке: Docker-версию на 8090 и stream-tts-data/ он не трогает."""
 import asyncio, http.cookiejar, io, json, os, socket, sqlite3, subprocess, sys, threading, time, urllib.error, \
-    urllib.parse, urllib.request, wave
+    urllib.parse, urllib.request, warnings, wave
 
 import aiohttp
 import numpy as np
@@ -12,6 +12,21 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STREAM_TTS = os.path.join(ROOT, "stream-tts")
 SR = 24000
+
+
+def make_app():
+    """Приложение stream-tts (web.make_app) без запуска — для тестов, которые берут роуты из самого приложения.
+    → (модуль streamtts.web, приложение)."""
+    if STREAM_TTS not in sys.path:
+        sys.path.insert(0, STREAM_TTS)
+    from streamtts import web
+    secret, web._secret = web._secret, lambda: "test"   # make_app пишет секрет в папку данных — тут не нужен
+    try:
+        with warnings.catch_warnings():   # приложение без запуска: предупреждения aiohttp о ключах — не о тесте
+            warnings.simplefilter("ignore")
+            return web, web.make_app(None)
+    finally:
+        web._secret = secret
 
 
 def wait_for(fn, timeout=10.0, what="условие", step=0.05):
