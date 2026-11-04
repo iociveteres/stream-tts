@@ -9,6 +9,8 @@ import asyncio, http.cookiejar, io, json, os, socket, sqlite3, subprocess, sys, 
 import aiohttp
 import numpy as np
 
+from fake_cosyvoice import VOICES
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STREAM_TTS = os.path.join(ROOT, "stream-tts")
 SR = 24000
@@ -371,6 +373,12 @@ def sine(hz, seconds, amp=0.3, sr=SR):
 def dominant_hz(x):
     spec = np.abs(np.fft.rfft(x * np.hanning(len(x))))
     return float(np.fft.rfftfreq(len(x), 1 / SR)[np.argmax(spec)])
+
+
+def voice_of(it):
+    """Голос сыгранной фразы — по частоте синуса поддельного cosyvoice (fake_cosyvoice.VOICES)."""
+    hz = dominant_hz(it.audio)
+    return next(n for n, (f, _) in VOICES.items() if abs(f - hz) < 3)
 
 
 def band_share(x, hz, width=30):

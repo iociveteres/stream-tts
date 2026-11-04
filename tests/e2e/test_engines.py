@@ -8,17 +8,12 @@ import pytest
 
 from conftest import FAST_ENV, Ctx
 from fake_cosyvoice import VOICES, FakeCosy
-from harness import STREAM_TTS, StreamTTS, dominant_hz, wait_for
+from harness import STREAM_TTS, StreamTTS, voice_of, wait_for
 
 sys.path.insert(0, STREAM_TTS)
 from streamtts.engines.espeech import launch  # noqa: E402
 
 ESPEECH_VOICES = {k: VOICES[k] for k in ("alpha", "charlie")}
-
-
-def voice_of(it):
-    hz = dominant_hz(it.audio)
-    return next(n for n, (f, _) in VOICES.items() if abs(f - hz) < 3)
 
 
 class Two(Ctx):

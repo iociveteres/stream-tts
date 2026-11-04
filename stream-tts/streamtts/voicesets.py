@@ -9,7 +9,7 @@ title, post…) в корне или в одной папке. Имя набор
 cosyvoice-server держит открытые .gguf), потом запускается с новым списком голосов."""
 import contextlib, json, os, re, shutil, zipfile
 
-from . import paths
+from . import paths, store
 from .engines import ENGINES, cosyvoice
 from .i18n import tr
 
@@ -126,17 +126,13 @@ def _prune_manifest(d, add=None, keep=()):
     новая версия коллекции может убрать поле."""
     path = os.path.join(d, "manifest.json")
     have = {v for vs in _voice_files(d).values() for v in vs}
-    try:
-        with open(path, encoding="utf-8") as f:
-            meta = json.load(f)
-    except (OSError, ValueError):
-        meta = {}
+    meta = store.read_json(path, {})
     meta = {k: v for k, v in (meta if isinstance(meta, dict) else {}).items() if k in have}
     for k, v in (add or {}).items():
         if k in have:
             old = meta.get(k)
             meta[k] = {**old, **v} if k in keep and isinstance(old, dict) and isinstance(v, dict) else v
-    if meta:
+    if meta:   # на месте, без .tmp, как и было: не store.write_json
         with open(path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=1)
     else:

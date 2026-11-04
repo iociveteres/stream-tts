@@ -7,7 +7,7 @@ import hashlib, io, json, os, re, shutil, sys, threading, zipfile
 import pytest
 
 from fake_cosyvoice import VOICES
-from harness import STREAM_TTS, band_share, decode, dominant_hz, wait_for
+from harness import STREAM_TTS, band_share, decode, dominant_hz, voice_of, wait_for
 
 sys.path.insert(0, STREAM_TTS)
 from streamtts import audio  # noqa: E402
@@ -21,11 +21,6 @@ def by_hash(login, pool):
     """Как voices.by_hash: голос зрителя, который ещё не выбирал голос."""
     pool = sorted(pool)
     return pool[int.from_bytes(hashlib.sha1(login.lower().encode()).digest()[:8], "big") % len(pool)]
-
-
-def voice_of(it):
-    hz = dominant_hz(it.audio)
-    return next(n for n, (f, _) in VOICES.items() if abs(f - hz) < 3)
 
 
 def voices(tts):
