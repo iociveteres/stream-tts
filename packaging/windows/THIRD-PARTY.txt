@@ -78,11 +78,11 @@ CUDA для видеокарт NVIDIA: ggml-cuda.dll — MIT (llama.cpp); CUDA R
   https://huggingface.co/charactr/vocos-mel-24khz
   ударения RUAccent 1.5.8.3 — Apache-2.0, его модели
   (ruaccent/accentuator) — MIT, https://github.com/Den4ikAI/ruaccent
-  встраиваемый Python 3.11.9 — PSF License 2.0
+  встраиваемый Python 3.14.7 — PSF License 2.0
   PyTorch 2.14.1 — BSD-3-Clause и другие, библиотеки CUDA в нём —
   NVIDIA CUDA Toolkit EULA
   пакеты Python: numpy — BSD-3-Clause и другие;
-  psutil, protobuf — BSD-3-Clause; onnxruntime,
+  psutil, protobuf, sympy, mpmath — BSD-3-Clause; onnxruntime,
   razdel — MIT; safetensors, tokenizers, onnx, ml_dtypes — Apache-2.0;
   typing_extensions — PSF-2.0. Тексты лицензий — в
   espeech-runtime\Lib\site-packages\*.dist-info

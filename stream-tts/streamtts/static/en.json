@@ -699,6 +699,7 @@
  "Её собирает <code>tools/espeech/prepare.py</code> из файлов Hugging Face.": "It is built by <code>tools/espeech/prepare.py</code> from the Hugging Face files.",
  "ESpeech здесь не скачивается": "ESpeech is not downloaded here",
  "ESpeech не скачан. Скачать — на вкладке «Сервер»": "ESpeech is not downloaded. Download it on the Server tab",
+ "рантайм ESpeech повреждён: нет библиотеки Python в {dir}": "the ESpeech runtime is damaged: no Python library in {dir}",
  "ESpeech уже скачан": "ESpeech is already downloaded",
  "ESpeech: подготовка Python": "ESpeech: preparing Python",
  "ESpeech: проверка": "ESpeech: checking",

@@ -4,7 +4,7 @@ usage: python packaging/windows/pin-espeech.py [--torch-wheel PATH] [--checkpoin
 
 Программа качает ESpeech сама по кнопке на вкладке «Сервер» (engines/espeech/download.py), всё из первоисточников и
 только закреплённое здесь:
-- рантайм: встраиваемый Python (python.org), колёса PACKAGES (PyPI: файлы под cp311 win_amd64 / abi3 / py3) и
+- рантайм: встраиваемый Python (python.org), колёса PACKAGES (PyPI: файлы под cp314 win_amd64 / abi3 / py3) и
   нужные файлы колеса torch (download.pytorch.org) — без cuDNN, cuSPARSE, cuSOLVER, NVRTC, cuFFT и cuBLAS
   (TORCH_EXCLUDE, исследование samples/espeech-lean, docs/espeech.md, «Поставка»): torch_cuda.dll импортирует их
   статически, поэтому вместо них — DLL-заглушки (STUBS), а cuBLAS берётся из CUDA cosyvoice-server (архив llama.cpp);
@@ -39,13 +39,19 @@ def _load(name, path):
 prepare = _load("espeech_prepare", os.path.join(ROOT, "espeech", "prepare.py"))
 partzip = _load("partzip", os.path.join(ROOT, "stream-tts", "streamtts", "partzip.py"))
 
-PYTHON = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
-TORCH = "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp311-cp311-win_amd64.whl"
+# Python 3.14 — как у stream-tts и в образе Docker (Ubuntu 26.04): одна версия на всех системах; под cp314 у всех
+# PACKAGES и у torch есть колёса и win_amd64, и manylinux x86_64 (для будущей поставки ESpeech в Docker)
+PY = (3, 14)
+PYTHON = "https://www.python.org/ftp/python/3.14.7/python-3.14.7-embed-amd64.zip"
+TORCH = "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-win_amd64.whl"
 # Пакеты espeech-server (espeech/requirements.txt) и сборки модели (prepare.py: onnx с protobuf и ml_dtypes); что
-# нужно torch при импорте — typing_extensions. Ставятся распаковкой колеса, без pip и без зависимостей.
+# нужно torch при импорте — typing_extensions; обучению LoRA — sympy с mpmath: torch.optim (add_param_group, step и
+# др. под torch._disable_dynamo) при первом вызове импортирует torch._dynamo, а тот — sympy (+81 МБ uss, ~1 с, только
+# на обучении). Остальные зависимости torch (networkx, jinja2, filelock, fsspec, setuptools) на этом пути не
+# импортируются. Ставятся распаковкой колеса, без pip и без зависимостей.
 PACKAGES = ["numpy==2.4.6", "safetensors==0.8.0", "onnxruntime==1.31.0", "tokenizers==0.23.3", "razdel==0.5.0",
             "psutil==7.2.2", "ruaccent==1.5.8.3", "typing_extensions==4.16.0", "onnx==1.23.2", "protobuf==7.36.2",
-            "ml_dtypes==0.6.0"]
+            "ml_dtypes==0.6.0", "sympy==1.14.0", "mpmath==1.3.0"]
 L = "torch/lib/"
 STUBS = ["cudnn64_9.dll", "cusparse64_12.dll", "cusolver64_12.dll", "nvrtc64_130_0.dll", "cufft64_12.dll"]
 CUBLAS = ["cublas64_13.dll", "cublasLt64_13.dll"]   # заглушки только без CUDA; с CUDA — настоящие из рантайма
@@ -87,17 +93,18 @@ def download(url, cache):
 
 
 def wheel(req):
-    """Колесо пакета под Python 3.11 win_amd64: {url, size, sha256}."""
+    """Колесо пакета под Python PY win_amd64: {url, size, sha256}."""
     name, version = req.split("==")
     d = json.loads(get(f"https://pypi.org/pypi/{name}/{version}/json"))
     files = [u for u in d["urls"] if u["packagetype"] == "bdist_wheel"]
-    for tag in ("-cp311-cp311-win_amd64.whl", "-abi3-win_amd64.whl", "-py3-none-any.whl", "-py2.py3-none-any.whl"):
-        hit = [u for u in files if u["filename"].endswith(tag) and (tag != "-abi3-win_amd64.whl" or   # cp3X-abi3: X <= 11
-                                                                   int(re.search(r"-cp3(\d+)-abi3", u["filename"])[1]) <= 11)]
+    cp = f"cp{PY[0]}{PY[1]}"
+    for tag in (f"-{cp}-{cp}-win_amd64.whl", "-abi3-win_amd64.whl", "-py3-none-any.whl", "-py2.py3-none-any.whl"):
+        hit = [u for u in files if u["filename"].endswith(tag) and (tag != "-abi3-win_amd64.whl" or   # cp3X-abi3: X <= PY
+                                                                   int(re.search(r"-cp3(\d+)-abi3", u["filename"])[1]) <= PY[1])]
         if hit:
             u = hit[0]
             return dict(url=u["url"], size=u["size"], sha256=u["digests"]["sha256"])
-    sys.exit(f"{req}: нет колеса под Python 3.11 win_amd64")
+    sys.exit(f"{req}: нет колеса под Python {PY[0]}.{PY[1]} win_amd64")
 
 
 def partial(path, url, spec):

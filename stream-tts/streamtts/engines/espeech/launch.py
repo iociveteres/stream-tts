@@ -5,7 +5,7 @@
   интерпретатора (первая папка, где лежит espeech/server.py) и попадает в PYTHONPATH;
 - программа для Windows: код (пакет и DLL-заглушки) ставит установщик в CODE (runtime/espeech), а встраиваемый
   Python с torch и пакетами качается по кнопке на вкладке «Сервер» в RUNTIME (download.py; ESPEECH_RUNTIME —
-  другая папка). Путь к пакету задаёт python311._pth (write_pth: PYTHONPATH встраиваемый Python не читает), torch
+  другая папка). Путь к пакету задаёт python3XX._pth (write_pth: PYTHONPATH встраиваемый Python не читает), torch
   находит заглушки и cuBLAS по ESPEECH_DLL_DIRS (espeech/__init__.py): cuBLAS — настоящий из CUDA cosyvoice-server
   (paths.RUNTIME), а без неё — заглушки, и тогда синтез только на процессоре;
 - из исходников — espeech/.venv проекта.
@@ -72,14 +72,19 @@ def cublas_dir():
 
 
 def write_pth(runtime_dir):
-    """sys.path встраиваемого Python: его библиотека, site-packages и папка с пакетом espeech (относительно: папку
-    программы можно перенести)."""
+    """sys.path встраиваемого Python (python3XX._pth): его библиотека, site-packages и папка с пакетом espeech
+    (относительно: папку программы можно перенести). Имя — по библиотеке python3XX.zip рядом: версию Python
+    закрепляет downloads.json, здесь она не повторяется."""
     try:
         code = os.path.relpath(CODE, runtime_dir)
     except ValueError:   # другой диск
         code = CODE
-    text = "\n".join(("python311.zip", ".", r"Lib\site-packages", code)) + "\n"
-    path = os.path.join(runtime_dir, "python311._pth")
+    lib = glob.glob(os.path.join(runtime_dir, "python3*.zip"))
+    if len(lib) != 1:
+        raise Unavailable(tr("рантайм ESpeech повреждён: нет библиотеки Python в {dir}", dir=runtime_dir))
+    stem = os.path.basename(lib[0])[:-4]
+    text = "\n".join((stem + ".zip", ".", r"Lib\site-packages", code)) + "\n"
+    path = os.path.join(runtime_dir, stem + "._pth")
     try:
         with open(path, encoding="utf-8") as f:
             if f.read() == text:

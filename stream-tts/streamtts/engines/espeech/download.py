@@ -2,7 +2,7 @@
 
 Что и откуда — downloads.json, раздел espeech (закрепляет packaging/windows/pin-espeech.py):
 - рантайм → launch.RUNTIME (папка espeech-runtime рядом с программой, а не в runtime/: установщик при обновлении
-  очищает runtime/ целиком, а здесь ~1,1 ГБ): встраиваемый Python 3.11 (python.org), колёса пакетов (PyPI) —
+  очищает runtime/ целиком, а здесь ~1,1 ГБ): встраиваемый Python 3.14 (python.org), колёса пакетов (PyPI) —
   распаковкой, без pip, и нужные файлы колеса torch диапазонами (partzip.py, ~430 МБ из 1,9 ГБ). Код espeech-server и
   DLL-заглушки ставит установщик (launch.CODE). Рядом с python.exe — CRT из рантайма cosyvoice-server: новее, чем во
   встраиваемом Python, и с vcruntime140_threads.dll для torch. Потом байткод (compileall: без него каждый запуск
@@ -27,13 +27,16 @@ log = logging.getLogger("install")
 
 SRC_DIR = "espeech-src"     # исходники модели: paths.MODELS/.espeech-src
 CRT = ("msvcp140*.dll", "vcruntime140*.dll", "concrt140.dll")
-RUNTIME_EXTRA = 330 << 20   # рантайм без torch: Python, пакеты, байткод (замер)
+RUNTIME_EXTRA = 350 << 20   # рантайм без torch: Python, пакеты, байткод (замер на 3.14: 293 МБ файлов, из них
+                            # sympy 83 МБ, + кластеры диска)
 MODEL_DISK = 1450 << 20     # готовая папка модели (замер)
 CHUNK = 1 << 20
 RETRIES = 5
 # Проверка рантайма: всё, что импортируют espeech-server и сборка модели; espeech — первым: он добавляет папки DLL
-# (ruaccent — так, как его грузит accent.py: без transformers и huggingface_hub)
-SMOKE = ("import espeech, torch, numpy, safetensors, onnxruntime, tokenizers, razdel, psutil, onnx, espeech.server; "
+# (ruaccent — так, как его грузит accent.py: без transformers и huggingface_hub; torch._dynamo — как его импортирует
+# torch.optim при обучении LoRA, ему нужен sympy)
+SMOKE = ("import espeech, torch, numpy, safetensors, onnxruntime, tokenizers, razdel, psutil, onnx, espeech.server, "
+         "torch._dynamo; "
          "from espeech import accent; accent._import_ruaccent(); "
          "print('torch', torch.__version__, 'cuda', torch.cuda.is_available())")
 

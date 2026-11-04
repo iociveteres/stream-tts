@@ -51,15 +51,15 @@
  "espeech": {
   "runtime": {
    "python": {
-    "url": "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip",
-    "size": 11249023,
-    "sha256": "009d6bf7e3b2ddca3d784fa09f90fe54336d5b60f0e0f305c37f400bf83cfd3b"
+    "url": "https://www.python.org/ftp/python/3.14.7/python-3.14.7-embed-amd64.zip",
+    "size": 12673227,
+    "sha256": "d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15"
    },
    "wheels": [
     {
-     "url": "https://files.pythonhosted.org/packages/c5/31/7fc6239c12bce7e931463251cca4426c465e1876ba3cc785402ef4dd8f4e/numpy-2.4.6-cp311-cp311-win_amd64.whl",
-     "size": 12608406,
-     "sha256": "1e254a00cdf42b1e4d5b3d68d33af63268d41340d8885df2ab6470f2e1500147"
+     "url": "https://files.pythonhosted.org/packages/df/ac/46de6dda46478f7942f839e094970be2d4a861e005c4b3bf07c92e291a09/numpy-2.4.6-cp314-cp314-win_amd64.whl",
+     "size": 12450334,
+     "sha256": "b507f5c4c1d508876d1819b6bf9a49d365b96320b5d4993426b33a23ca4b8261"
     },
     {
      "url": "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
@@ -67,9 +67,9 @@
      "sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f"
     },
     {
-     "url": "https://files.pythonhosted.org/packages/37/de/6cab7e39917cc87728d2f00abe97c81fe86b29f9e1f758627864c28f0c21/onnxruntime-1.31.0-cp311-cp311-win_amd64.whl",
-     "size": 14885750,
-     "sha256": "317608967b03807ed4661113b08293fac02a1db6496a6863a07d9f19232936ad"
+     "url": "https://files.pythonhosted.org/packages/6a/66/0bf4fdb9f58efa69cf4eddde24c72aebcc628d6ff1d67c9546145c6b9922/onnxruntime-1.31.0-cp314-cp314-win_amd64.whl",
+     "size": 15268709,
+     "sha256": "83e3dbcf6abc6189c4bdf7d329c07ba1133c88172134c266d84b4409aa3b9dbf"
     },
     {
      "url": "https://files.pythonhosted.org/packages/d1/6c/24f074c9a0efb98e61b20aafe6b2641922d5db24e447d5d6daffd9e17555/tokenizers-0.23.3-cp310-abi3-win_amd64.whl",
@@ -97,9 +97,9 @@
      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
     },
     {
-     "url": "https://files.pythonhosted.org/packages/81/0d/3aaf8f1fea3430282bd65acb3808d80fbdfeb90f20cfecb4072604e37ca6/onnx-1.23.2-cp311-cp311-win_amd64.whl",
-     "size": 7875390,
-     "sha256": "a40265d62b7a614041593e11370d316880f9628eb5a0d49d9028c9c0e7f1cc08"
+     "url": "https://files.pythonhosted.org/packages/38/ce/102fd4a0b2a6d111a9c86745e084c4c68c0ee020eaa359a03a8d43e4646f/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+     "size": 7872489,
+     "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de"
     },
     {
      "url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
@@ -107,16 +107,26 @@
      "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353"
     },
     {
-     "url": "https://files.pythonhosted.org/packages/07/23/8870bb62d6e499d6bcbc1242b9f11689bae00a3d39d3684a9aefad8b6ee6/ml_dtypes-0.6.0-cp311-cp311-win_amd64.whl",
-     "size": 433670,
-     "sha256": "3035518e3e19add1a4cac9236ab22888b208a4074912514313ccb2d6d242cde8"
+     "url": "https://files.pythonhosted.org/packages/ff/ad/9c32c53f823dda3742df19a79c10bc198365937873ea125ba65747440c23/ml_dtypes-0.6.0-cp314-cp314-win_amd64.whl",
+     "size": 457224,
+     "sha256": "d574c2b28921dc72e869df248f1a278f6eee176a1f237c8642e1a71eb15f3977"
+    },
+    {
+     "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+     "size": 6299353,
+     "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+    },
+    {
+     "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+     "size": 536198,
+     "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
     }
    ],
    "torch": {
-    "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp311-cp311-win_amd64.whl",
-    "size": 1993704633,
-    "tail": 1992543166,
-    "tail_sha256": "34887fe356e06d365edc015a9e1f4d1d5bf29b4cebb1623b68d9c951446b9c6a",
+    "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-win_amd64.whl",
+    "size": 2001146779,
+    "tail": 1999985312,
+    "tail_sha256": "9eafe70b299b616990b359a6a56bbb3b73ef565da477b7b7ebcd00b81dbee038",
     "exclude": [
      "torch/lib/curand64*",
      "torch/lib/cusolverMg*",
@@ -136,9 +146,9 @@
      "torch/lib/cublas*",
      "torch/lib/cudart*"
     ],
-    "digest": "d47a26ff45c5f7b726043acfd8cc5cd916f17ad9d1b114ad22cbc7aab1d1cc23",
-    "unpacked": 818080357,
-    "download": 452618730
+    "digest": "9284d826326253f26be2634632a96d4c4eef949db0d2ac55393f83daa6d2182c",
+    "unpacked": 818319973,
+    "download": 454992275
    },
    "stubs": [
     "cudnn64_9.dll",
