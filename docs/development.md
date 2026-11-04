@@ -55,7 +55,8 @@
 ├── scripts/
 │   ├── download-model.sh  # загрузка модели и фронтенда с докачкой
 │   ├── import-voices.sh   # регистрация голосов из пар .wav + .txt и сохранение в voices/
-│   └── pack-handoff.py    # архив кода без данных для внешнего исполнителя (handoff/, git bundle и zip)
+│   ├── pack-handoff.py    # архив кода без данных для внешнего исполнителя (handoff/, git bundle и zip)
+│   └── measure-docs.py    # замер навигации: файлы и токены задач docs/index.md сейчас и на базе, стоимость входа
 ├── tools/                 # подбор образцов голосов (docs/voice-pipeline.md), запуск из корня проекта
 │   ├── voices/            # общее: страница выбора, синтез и оценки, модель эмоций и её сверка на слух, CAM++;
 │   │                      # pack-sets.py — коллекции для импорта voice-sets/<модель>/<набор>.zip
@@ -77,14 +78,15 @@
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
 │                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
-│                          # test_invariants.py),
+│                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py),
 │                          # test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
 │   └── espeech/           # espeech-server в espeech/.venv: test_text.py (нарезка, нормализатор, словарь),
 │                          # test_server.py (сервер с настоящей моделью), test_train.py (обучение LoRA),
 │                          # test_train_api.py (обучение через API сервера)
-├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
+├── docs/                  # index.md (задача → файлы, для ИИ-агентов), development.md (этот файл),
+│                          # voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
 │                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план),
 │                          # refactor-brief.md (ТЗ на структурный рефакторинг для внешнего исполнителя),
@@ -276,7 +278,8 @@ stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpe
 запросы в сеть), новый роут без группы — ошибка. `test_invariants.py` — без процесса stream-tts, секунды: компиляция
 всех `.py` из git, `check-i18n.py`, `docker compose config -q` (без docker — пропуск), флаги GPU у встроенного
 сервера, в `Dockerfile` и `docker-compose.gpu.yml`, `KEEPALIVE` < 5 с, `__version__` только в
-`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. Twitch с приложением (вход, награда, EventSub) и админка в
+`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. `test_index.py` — таблица `docs/index.md`: строки на все
+эталонные вопросы, пути из git (сейчас и на базе), разбор `scripts/measure-docs.py`. Twitch с приложением (вход, награда, EventSub) и админка в
 браузере пока не покрыты.
 
 **С настоящей моделью** (`test_real.py`, маркер `real`, без него тесты пропускаются):
