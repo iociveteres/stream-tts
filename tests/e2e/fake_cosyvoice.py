@@ -24,7 +24,8 @@ ONNX-фронтенд (FakeCosy(frontend=True)): GET /frontend/model отдаё�
 - fail — подстрока текста, на которой /tts отвечает 500;
 - down — /status отвечает 500 (сервер недоступен);
 - length_factor — во сколько раз звук длиннее расчётного (проверка жёсткой обрезки);
-- fail_save — /speaker/save отвечает 500.
+- fail_save — /speaker/save отвечает 500;
+- save_delay — с, ответ /speaker/save задерживается (голос извлечён, но ещё не сохранён).
 
 Обучение LoRA (FakeCosy(engine="espeech", train=True), как espeech/trainjob.py; capabilities.train): POST /train
 (multipart: voice, пары audio + text, steps, checkpointing, seed; реплики — только WAV PCM16 моно 24 кГц: stream-tts
@@ -118,6 +119,7 @@ class FakeCosy:
         self.down = False
         self.length_factor = 1.0
         self.fail_save = False
+        self.save_delay = 0.0
         self.chunk_delay = 0.0
         self.user_accents = {}   # слово -> разметка: словарь ударений пользователя (espeech)
         self.train_rate = 10
@@ -298,6 +300,7 @@ class FakeCosy:
         body = await request.json()
         with self._busy():
             self.calls.append(dict(call="save", name=body.get("name"), path=body.get("path"), ts=time.time()))
+            await asyncio.sleep(self.save_delay)
             if self.fail_save:
                 return web.Response(status=500, text="fake save failure")
             if body.get("name") not in self.voices:

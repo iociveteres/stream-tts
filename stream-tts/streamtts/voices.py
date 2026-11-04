@@ -51,6 +51,9 @@ class Voices:
         self.root = os.path.join(config.DATA, "demos")
         self._indexes = {}   # модель -> {голос: {phrase, lufs, ts}}
         self.wake = asyncio.Event()
+        # Редактор держит его, пока голос извлечён на сервере, но ещё не сохранён в файл (editor.save): иначе
+        # перечитанный в это окно список оставлял голос неудачного сохранения в списке до следующей проверки
+        self.listing = asyncio.Lock()
         self.progress = dict(todo=0, current="", error="")
         self._manifests = (0, {}, {})
         self.preempted = False
@@ -81,7 +84,8 @@ class Voices:
 
     async def refresh(self):
         """Список голосов с сервера. При изменении досинтезируются примеры."""
-        names = [n for n in await self.tts.speakers() if not n.startswith(DRAFT_PREFIX)]
+        async with self.listing:
+            names = [n for n in await self.tts.speakers() if not n.startswith(DRAFT_PREFIX)]
         if names != self.s["known_voices"]:
             added = set(names) - set(self.s["known_voices"])
             for n in names:

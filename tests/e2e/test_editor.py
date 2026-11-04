@@ -218,11 +218,12 @@ def test_save_voice(editor):
 
 def test_save_server_error_unregisters(editor):
     """/speaker/save не удался: ошибка видна, голос не остаётся зарегистрированным на сервере и не появляется в
-    списке."""
+    списке. Пока сервер сохраняет голос, stream-tts успевает перечитать список голосов (save_delay дольше
+    STREAM_TTS_VOICES_CHECK): извлечённый, но не сохранённый голос в список не попадает."""
     api, cosy = editor.api, editor.cosy
     src = add_source(api)
     set_variants(api, variant(src, "a", 1, 6))
-    cosy.fail_save = True
+    cosy.fail_save, cosy.save_delay = True, 2.5
     r = api.post("/api/draft/save", dict(variant="a", name="Broken_1", set="x"))
     assert r.status == 400 and r.json()["error"].startswith("сервер синтеза: cosyvoice 500"), r.text
     assert [c["name"] for c in cosy.called("delete")] == ["Broken_1"] and "Broken_1" not in cosy.voices

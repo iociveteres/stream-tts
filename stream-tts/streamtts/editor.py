@@ -397,12 +397,13 @@ class Editor:
         async with self.tts.lane.hold(PREVIEW, tr("сохранение голоса {voice}", voice=name)):
             if name in await self.tts.speakers():
                 raise ValueError(tr("голос {voice} уже есть: выберите другое имя", voice=name))
-            text = await m.register(name, v, text, _wav_bytes(x), self)
-            try:
-                await self.tts.save_speaker(name, target)
-            except Exception:
-                await self.tts.delete_speaker(name)
-                raise
+            async with self.voices.listing:   # голос на сервере, но ещё не в файле: в список не попадает
+                text = await m.register(name, v, text, _wav_bytes(x), self)
+                try:
+                    await self.tts.save_speaker(name, target)
+                except Exception:
+                    await self.tts.delete_speaker(name)
+                    raise
         meta = store.read_json(manifest, {})
         meta[name] = dict(meta.get(name) or {}, source="editor")
         store.write_json(manifest, meta)
