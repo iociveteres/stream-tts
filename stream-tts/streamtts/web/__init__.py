@@ -3,12 +3,12 @@ import asyncio, contextlib, hashlib, hmac, json, logging, os, re, secrets, tempf
 
 from aiohttp import web
 
-from . import config, editor, filters, i18n, install, separate, stats, updates
-from .engines.client import LIVE
-from .engines.espeech import train as lora
-from .i18n import tr
-from .engine import SERVICE_COMMANDS
-from .twitch import TwitchError, explain
+from .. import config, editor, filters, i18n, install, separate, stats, updates
+from ..engines.client import LIVE
+from ..engines.espeech import train as lora
+from ..i18n import tr
+from ..engine import SERVICE_COMMANDS
+from ..twitch import TwitchError, explain
 
 log = logging.getLogger("web")
 STATIC = os.path.join(config.HERE, "static")

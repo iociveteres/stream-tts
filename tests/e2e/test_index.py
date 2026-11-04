@@ -69,13 +69,14 @@ def test_base_paths(index):
 
 
 def test_other_paths(index, tracked):
-    text, _, _ = index
+    text, _, tasks = index
+    base = {p for t in tasks for p in t["base"]}   # пути базы сверяет test_base_paths
     tops = {p.split("/")[0] for p in tracked}
     dirs = {p.rsplit("/", 1)[0] + "/" for p in tracked if "/" in p}
     dirs |= {d[:i + 1] for d in dirs for i, c in enumerate(d) if c == "/"}
     bad = []
     for token in measure.CODE.findall(text):
-        if "/" not in token or re.search(r"[<>*{} ]", token) or token.split("/")[0] not in tops:
+        if "/" not in token or re.search(r"[<>*{} ]", token) or token.split("/")[0] not in tops or token in base:
             continue
         if token not in tracked and token.rstrip("/") + "/" not in dirs:
             bad.append(token)
