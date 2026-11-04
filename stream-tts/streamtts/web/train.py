@@ -1,12 +1,12 @@
 """Обучение LoRA голоса ESpeech (engines/espeech/train.py), /api/train*: набор реплик — здесь, в данных stream-tts,
 обучение — на espeech-server."""
-import logging, os, tempfile, urllib.parse
+import logging, os, urllib.parse
 
 from aiohttp import web
 
 from ..engines.espeech import train as lora
 from ..i18n import tr
-from .common import MAX_UPLOAD, fail, ok
+from .common import MAX_UPLOAD, fail, ok, upload
 
 log = logging.getLogger("web")
 
@@ -74,23 +74,14 @@ async def api_train_upload(request):
     ctx = request.app["ctx"]
     voice = urllib.parse.unquote(request.headers.get("X-Voice", ""))
     filename = urllib.parse.unquote(request.headers.get("X-Filename", "audio"))
-    fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(filename)[1][:10])
     try:
-        size = 0
-        with os.fdopen(fd, "wb") as f:
-            async for chunk in request.content.iter_chunked(1 << 20):
-                size += len(chunk)
-                if size > MAX_UPLOAD:
-                    return fail(tr("файл больше 512 МБ"))
-                f.write(chunk)
-        if request.headers.get("X-Kind") == "source":
-            result = await ctx.train.add_source(voice, tmp, filename)
-        else:
-            result = dict(item=await ctx.train.add_item(voice, tmp, filename))
+        async with upload(request, os.path.splitext(filename)[1][:10], MAX_UPLOAD, tr("файл больше 512 МБ")) as tmp:
+            if request.headers.get("X-Kind") == "source":
+                result = await ctx.train.add_source(voice, tmp, filename)
+            else:
+                result = dict(item=await ctx.train.add_item(voice, tmp, filename))
     except ValueError as e:
         return fail(str(e))
-    finally:
-        os.remove(tmp)
     return ok(**result, set=ctx.train.public(voice))
 
 

@@ -1,11 +1,11 @@
 """Редактор голоса — новый голос из записи (streamtts/editor.py): черновик, записи, варианты, синтез и сохранение,
 /api/draft*."""
-import os, tempfile, urllib.parse
+import os, urllib.parse
 
 from aiohttp import web
 
 from ..i18n import tr
-from .common import MAX_UPLOAD, fail, ok
+from .common import MAX_UPLOAD, fail, ok, upload
 
 
 async def api_draft(request):
@@ -42,20 +42,11 @@ async def api_draft_upload(request):
     """Запись для черновика: файл сырым телом, имя — в X-Filename (URL-кодировано)."""
     ctx = request.app["ctx"]
     filename = urllib.parse.unquote(request.headers.get("X-Filename", "audio"))
-    fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(filename)[1][:10])
     try:
-        size = 0
-        with os.fdopen(fd, "wb") as f:
-            async for chunk in request.content.iter_chunked(1 << 20):
-                size += len(chunk)
-                if size > MAX_UPLOAD:
-                    return fail(tr("файл больше 512 МБ"))
-                f.write(chunk)
-        result = await ctx.editor.add_source(tmp, filename)
+        async with upload(request, os.path.splitext(filename)[1][:10], MAX_UPLOAD, tr("файл больше 512 МБ")) as tmp:
+            result = await ctx.editor.add_source(tmp, filename)
     except ValueError as e:
         return fail(str(e))
-    finally:
-        os.remove(tmp)
     return ok(**result, draft=ctx.editor.public())
 
 

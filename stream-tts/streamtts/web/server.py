@@ -1,13 +1,13 @@
 """Встроенный сервер синтеза: модель и её загрузка, устройство, проверка скорости, наборы голосов, необязательные
 пакеты, CUDA, ESpeech, выгрузка моделей из памяти, обновления программы. Всё, что перезапускает или останавливает
 сервер, — через _restart_guard (common.py): обучение LoRA живёт в процессе сервера."""
-import logging, os, tempfile, urllib.parse
+import logging, urllib.parse
 
 from .. import downloads
 from ..engines.client import LIVE
 from ..engines.espeech import train as lora
 from ..i18n import tr
-from .common import _restart_guard, fail, ok
+from .common import _restart_guard, fail, ok, upload
 
 log = logging.getLogger("web")
 
@@ -83,20 +83,11 @@ async def api_voiceset_import(request):
     if stop := await _restart_guard(ctx, dict(force=request.headers.get("X-Force") == "1")):
         return stop
     filename = urllib.parse.unquote(request.headers.get("X-Filename", "voices.zip"))
-    fd, tmp = tempfile.mkstemp(suffix=".zip")
     try:
-        size = 0
-        with os.fdopen(fd, "wb") as f:
-            async for chunk in request.content.iter_chunked(1 << 20):
-                size += len(chunk)
-                if size > MAX_SET_UPLOAD:
-                    return fail(tr("архив больше 2 ГБ"))
-                f.write(chunk)
-        result = await inst.import_set(tmp, filename)
+        async with upload(request, ".zip", MAX_SET_UPLOAD, tr("архив больше 2 ГБ")) as tmp:
+            result = await inst.import_set(tmp, filename)
     except ValueError as e:
         return fail(str(e))
-    finally:
-        os.remove(tmp)
     ctx.voices.forget(result["added"])  # голос мог смениться: пример пересинтезировать
     ctx.voices.wake.set()
     ctx.engine.dirty.set()
