@@ -43,6 +43,8 @@
   браузере.)
 - Nuitka не видит импорты эффектов: их зависимости — в `--include-module` в `build-exe.py`. (Без теста: сборка exe;
   docs/stream-tts-windows.md, «Сборка».)
+- Слои stream-tts: `aiohttp.web` — только в `web/` и `__main__.py`, `engines/` не импортируют слои над собой, циклов
+  импорта нет, и ленивых тоже. (`test_layers.py`; docs/index.md, «Связи».)
 - Версия программы — только `__version__` в `streamtts/__init__.py`; релиз — аннотированный тег `v<версия>`.
   (`test_invariants.py`.)
 - Пути и вопросы `docs/index.md` — живые: переименовал файл — поправь индекс. (`test_index.py`.)
