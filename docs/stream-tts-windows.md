@@ -135,6 +135,11 @@ llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая
   (`requirements.txt`: зависимости stream-tts и Nuitka) на Python 3.14 и MSVC (Visual Studio или Build Tools с C++):
   MinGW Nuitka для Python 3.13+ не поддерживает. Первая сборка ~6 мин, повторные быстрее за счёт кэша компилятора.
   `--runtime core|all` кладёт рантайм рядом с exe для запуска без установщика, `--setup` собирает установщик.
+  Собранную программу `paths.py` узнаёт по `__compiled__` (`sys.frozen` Nuitka не задаёт); данные пакета и
+  `effects/` лежат рядом с exe. Пакет `streamtts` входит целиком, а импорты эффектов (они грузятся по пути) Nuitka не
+  видит: их новые зависимости — в `--include-module` в `build-exe.py`. Собранный exe проверяют на другом порту и с
+  отдельными данными (`STREAM_TTS_PORT`, `STREAM_TTS_DATA`; конфигурация `streamtts-exe-test`), чтобы не задеть
+  Docker-версию на 8090.
 - `StreamTTS.iss` — Inno Setup 6.5+: `dist/StreamTTS-Setup-<версия>.exe` (как он ставит, обновляет и удаляет —
   выше). Запущенную программу установщик и деинсталлятор видят по мьютексу `StreamTTS` и просят закрыть. Строка в
   `[Code]` не должна начинаться с `[`: Inno принимает её за заголовок секции. Языки — русский и английский: свои тексты в `[CustomMessages]`, список

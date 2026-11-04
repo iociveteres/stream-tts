@@ -1,5 +1,5 @@
 """Инварианты репозитория без процесса stream-tts (секунды): то, что раньше проверялось вручную командами и grep
-(AGENTS.md, «Проверка» и «Подводные камни»; docs/refactor-brief.md, §5).
+(AGENTS.md, «Инварианты»; docs/refactor-brief.md, §5).
 
 - все .py из git компилируются (вместо python -m py_compile по списку файлов);
 - английский словарь полон (stream-tts/check-i18n.py);

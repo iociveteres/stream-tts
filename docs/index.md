@@ -1,6 +1,7 @@
 # Навигация: задача → файлы
 
-Что открыть под типовую задачу. Пути — от корня проекта, в скобках — что искать в файле. «На базе» — пути на
+Что открыть под типовую задачу; ниже — области, данные и связи между частями. Пути — от корня проекта, в скобках —
+что искать в файле. «На базе» — пути на
 коммите до рефакторинга (База: `939f37a`), «=» — те же. Замер файлов и токенов по таблице —
 `scripts/measure-docs.py`, что пути живы и вопросы на месте — `tests/e2e/test_index.py`.
 
@@ -36,11 +37,48 @@
 | `stream-tts/streamtts/` | stream-tts на :8090: очередь (`engine.py`), HTTP и админка (`web.py`, `static/`), Twitch (`twitch.py`, `chat_irc.py`), голоса (`voices.py`), наборы и загрузки (`install.py`), редактор (`editor.py`), встроенный сервер (`runtime.py`) | [stream-tts.md](stream-tts.md), [stream-tts-deploy.md](stream-tts-deploy.md) |
 | `stream-tts/streamtts/engines/` | модели синтеза: `cosyvoice/`, `espeech/` — описание, запуск, клиент, особенности редактора; `client.py` — общий протокол и очередь к серверу | [stream-tts.md](stream-tts.md), «Модели синтеза» |
 | `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent), HTTP API как у cosyvoice-server, обучение LoRA | [espeech.md](espeech.md) |
-| `setup.sh`, `Dockerfile`, `docker-compose.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server; профиль `server-only` — только сервер для `scripts/` и `tools/` | [development.md](development.md), «Образы» |
-| `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup); CI — `.github/workflows/windows.yml` | [stream-tts-windows.md](stream-tts-windows.md) |
+| `setup.sh`, `Dockerfile`, `docker-compose.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server; профиль `server-only` — только сервер для `scripts/` и `tools/` (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp, код сервера не наш | [development.md](development.md), «Образы» |
+| `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+); CI — `.github/workflows/windows.yml`; `stubs/*.def` — DLL-заглушки torch ESpeech; `.venv`, `.inno`, `build/`, `dist/` — не в git | [stream-tts-windows.md](stream-tts-windows.md) |
 | `packaging/pin-espeech.py`, `packaging/linux/` | загрузки ESpeech для обеих систем, заглушки библиотек torch | [espeech.md](espeech.md), «Поставка» |
 | `scripts/` | загрузка модели, импорт голосов в `voices/*.gguf`, архив для внешнего исполнителя, этот замер | [voice-pipeline.md](voice-pipeline.md) |
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: страница выбора, синтез, оценки, коллекции наборов; реплики WC3 и других источников | [voice-pipeline.md](voice-pipeline.md), [voices-wc3.md](voices-wc3.md), [voices.md](voices.md) |
 | `tools/espeech/` | папка модели ESpeech, голоса `.espeech`, обучение LoRA из командной строки | [espeech.md](espeech.md) |
 | `effects/` | эффекты поверх синтеза (`post`) | [stream-tts.md](stream-tts.md), «Синтез и воспроизведение» |
 | `tests/e2e/`, `tests/espeech/` | e2e stream-tts на поддельном сервере; тесты espeech-server | [development.md](development.md), «Тесты» |
+
+## Данные (не в git)
+
+Раскладка голосов — `<модель>/<набор>/<голос>`: модель — `cosyvoice` или `espeech` (id из
+`stream-tts/streamtts/engines/`), набор — источник: `wc3` (`wc3-*`), `morrowind` (`mw-*`, только ESpeech), игры по
+одной (`dota2`, `portal`, `stalker`, `minecraft`, `neco-arc`, `altushka`), `streamers`. Каталог — [voices.md](voices.md).
+
+| Путь | Что |
+|---|---|
+| `voice-clips/<модель>/<набор>/` | исходные данные голосов (тексты реплик из игр): `cosyvoice/` — варианты образцов, синтез, оценки и выбор; `espeech/` — реплики для LoRA, адаптеры и голоса `.espeech` |
+| `voice-refs/cosyvoice/<набор>/` | итоговые образцы CosyVoice и `manifest.json` |
+| `voice-sets/<модель>/<набор>.zip` | коллекции для импорта в stream-tts, по одной на «модель + набор» (`tools/voices/pack-sets.py`) |
+| `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/` | установленные голоса, модели, ассеты игр и записи с YouTube, исследования, данные stream-tts |
+| `runtime/`, `espeech-runtime/`, `.env`, `.venv*` | нативный cosyvoice-server для Windows, Python с torch для ESpeech в Docker, секреты, окружения Python |
+
+## Связи, которые легко порвать
+
+- **`tools/`** считают корень как `ROOT = dirname(dirname(HERE))` и грузят соседние модули по пути
+  (`spec_from_file_location`): перед переносом или переименованием — `grep spec_from_file_location`.
+- **Имя набора** — имя папки источника в `voice-clips/<модель>/`, `voice-refs/cosyvoice/`,
+  `voice-sets/<модель>/<набор>.zip` и установленного набора `voices/<набор>/`; по нему stream-tts группирует страницу
+  голосов (GROUPS в `stream-tts/streamtts/voices.py`). Голоса обеих моделей одного набора лежат в одной папке
+  `voices/<набор>/`, а коллекцию из zip stream-tts ставит и удаляет по модели (`stream-tts/streamtts/install.py`).
+  Инструменты знают свою модель (`pick.py` — `voice-clips/cosyvoice`, `lora-clips.py` — `voice-clips/espeech/wc3`);
+  кеши `voice-clips/*.json` общие, их ключи — пути от корня: после переноса папок их надо переписать.
+- **`post`** в `alts.json` и `manifest.json` — `[скрипт, аргументы…]`, путь от корня. stream-tts ищет скрипт в
+  `STREAM_TTS_PROJECT` (в контейнере `/project`), грузит через importlib и вызывает `apply(звук, аргументы)`;
+  командная строка эффекта нужна `tools/voices/synth.py`.
+- **Модели синтеза** — `engines/<id>/` (описание, запуск, клиент), одна единовременно (`settings.engine`). Ядро зовёт
+  у клиента только lane/synth/stream/streams/stop/speakers/ok/status. Поле запроса модели — в `params()` её клиента,
+  особенности редактора голоса — в `Maker` (`engines/<id>/editor.py`), словарь ударений хранит сервер модели
+  (`/accents`), настройка модели — схемой `params` в `/status` сервера (`SETTINGS` клиента), новый запрос к серверу —
+  и в `tests/e2e/fake_cosyvoice.py` (оба режима). Голос без файла для текущей модели (`.gguf`/`.espeech`) зрителям не
+  выдаётся, но `users.voice` не перезаписывается; примеры и `calib_db` — свои у каждой модели (`voices.py`).
+- **`Engine.chat`** принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
+  (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах, новый тег IRC — и в
+  `tests/e2e/fake_irc.py`.

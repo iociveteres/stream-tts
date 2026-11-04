@@ -182,6 +182,37 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 После обновления версий на GPU стоит проверить, не исправлена ли ошибка с CUDA Graphs: уберите
 `GGML_CUDA_DISABLE_GRAPHS` (в `Dockerfile` и `engines/cosyvoice/launch.py`) и сравните громкость и разборчивость одной фразы с CPU-образом.
 
+## Запуск
+
+- Стек: `docker compose up -d --build` (`.env` настроен на GPU) — stream-tts со встроенным сервером; после правок —
+  `docker compose up -d --build stream-tts`. Только сервер — `docker compose up -d cosyvoice` (профиль `server-only`),
+  stream-tts сначала остановить: оба занимают 8080 и видеокарту. Сервисы могут быть в работе (стрим): перезапуск
+  контейнеров — по согласованию с пользователем.
+- Окружения Python: `stream-tts/.venv` (3.14) — stream-tts и `tests/e2e`; `espeech/.venv` (3.14,
+  `espeech/requirements.txt`) — espeech-server и `tests/espeech`; корневой `.venv` (3.11) — инструменты `tools/`
+  (numpy, onnxruntime, faster-whisper, torch cu124 и др.; cuBLAS и cuDNN для faster-whisper — из `torch/lib`) и
+  `scripts/measure-docs.py` (tiktoken). `review.py` и `pick.py` обходятся стандартной библиотекой.
+- Инструменты запускаются из корня проекта: `python tools/wc3/review.py b02`. Везде нужны `ffmpeg`/`ffprobe` в PATH;
+  звук в пайплайне — 24 кГц моно.
+- Shell-скрипты — bash (Git Bash), из PowerShell не запускаются.
+
+**Порты и конфигурации** (`.claude/launch.json`):
+
+| Порт | Что |
+|---|---|
+| 8080 | cosyvoice-server (в Docker — внутри контейнера stream-tts) |
+| 8090 | stream-tts в Docker |
+| 8092 | `stream-tts` — из исходников, данные в `stream-tts-data/native/`; его cosyvoice-server — на свободном порту |
+| 8093 | `stream-tts-en` — английский интерфейс без модели |
+| 8094 | `espeech` — espeech-server |
+| 8095 | `stream-tts-espeech` — свои данные, голоса и словарь ударений в `stream-tts-data/espeech-test/` |
+| 8097 | `stream-tts-espeech-dl` — загрузка ESpeech как у программы для Windows, всё в `stream-tts-data/espeech-dl/` |
+| 8098 | `streamtts-exe-test` — собранный exe с данными в `stream-tts-data/exe-test/` |
+| 8099 | `stream-tts-ui-edit` — правка строк интерфейса на поддельном сервере (`stream-tts/ui-edit.py`) |
+| 8765, 8766, 8767 | `review`, `pick`, `emotion-eval` — страницы инструментов |
+
+Встроенный espeech-server (выбрана ESpeech) — на свободном порту или `ESPEECH_PORT`.
+
 ## stream-tts из исходников
 
 `cd stream-tts && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt`,
