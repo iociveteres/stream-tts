@@ -19,11 +19,12 @@
   первой (cuBLAS torch берёт оттуда; без CUDA ESpeech работает только на процессоре). В образе stream-tts:cuda она
   уже есть, в stream-tts:cpu её нет, и ESpeech — на процессоре.
 Всё докачивается с места обрыва; прогресс — общий для загрузок (Installer.dl, install.py)."""
-import asyncio, contextlib, fnmatch, glob, hashlib, json, logging, os, shutil, tarfile, time, zipfile
+import asyncio, contextlib, fnmatch, glob, logging, os, shutil, tarfile, time, zipfile
 
 import aiohttp
 
 from . import launch
+from .launch import SYSTEM, runtime_spec, runtime_state, runtime_version, spec
 from ... import fetch, partzip, paths
 from ...i18n import tr
 from ...runtime import spawn_kwargs
@@ -31,7 +32,6 @@ from ...runtime import spawn_kwargs
 log = logging.getLogger("install")
 
 SRC_DIR = "espeech-src"     # исходники модели: paths.MODELS/.espeech-src
-SYSTEM = "windows" if os.name == "nt" else "linux"   # рантайм в downloads.json
 CRT = ("msvcp140*.dll", "vcruntime140*.dll", "concrt140.dll")
 # Рантайм сверх файлов torch: Python, пакеты, байткод (замер на 3.14: Windows — 293 МБ файлов, из них sympy 83 МБ,
 # + кластеры диска; Linux — 408 МБ: Python 53, пакеты 282, байткод torch 68)
@@ -46,32 +46,6 @@ SMOKE = ("import espeech, torch, numpy, safetensors, onnxruntime, tokenizers, ra
          "torch._dynamo; "
          "from espeech import accent; accent._import_ruaccent(); "
          "print('torch', torch.__version__, 'cuda', torch.cuda.is_available())")
-
-
-def spec():
-    from ...downloads import DOWNLOADS
-    return DOWNLOADS["espeech"]
-
-
-def runtime_spec():
-    return spec()["runtime"][SYSTEM]
-
-
-def runtime_version():
-    """Хэш закреплённого рантайма своей системы: другой — качать заново."""
-    return hashlib.sha256(json.dumps(runtime_spec(), sort_keys=True).encode()).hexdigest()[:16]
-
-
-def runtime_state():
-    """ok | missing | outdated."""
-    try:
-        with open(os.path.join(launch.RUNTIME, "version.txt"), encoding="utf-8") as f:
-            have = f.read().strip()
-    except OSError:
-        return "missing"
-    if not os.path.isfile(launch.runtime_python()):
-        return "missing"
-    return "ok" if have == runtime_version() else "outdated"
 
 
 def model_dir():

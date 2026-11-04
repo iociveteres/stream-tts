@@ -18,7 +18,7 @@
 --device auto|cuda|cpu: ESPEECH_DEVICE, иначе выбор в админке (settings.espeech_device); auto — решает torch
 (device()), без CUDA в бэкендах — cpu. Порт — ESPEECH_PORT (иначе свободный), адрес сервера — ESPEECH_HOST
 (по умолчанию 127.0.0.1)."""
-import glob, os, shutil
+import functools, glob, hashlib, json, os, shutil
 
 from ... import paths
 from ...i18n import tr
@@ -84,6 +84,39 @@ def find_server():
 
 def model_ready(models):
     return all(os.path.isfile(os.path.join(models, *f.split("/"))) for f in MODEL_FILES)
+
+
+# Закреплённый рантайм — раздел espeech downloads.json (packaging/pin-espeech.py). Он и проверка «рантайм скачан и
+# свежий» (её зовёт args()) — здесь, а не в download.py: тот импортирует launch, а downloads.py — движки
+# (engines.cosyvoice), так что оттуда — цикл импорта (tests/e2e/test_layers.py)
+SYSTEM = "windows" if os.name == "nt" else "linux"   # рантайм в downloads.json
+
+
+@functools.cache
+def spec():
+    with open(os.path.join(paths.HERE, "downloads.json"), encoding="utf-8") as f:
+        return json.load(f)["espeech"]
+
+
+def runtime_spec():
+    return spec()["runtime"][SYSTEM]
+
+
+def runtime_version():
+    """Хэш закреплённого рантайма своей системы: другой — качать заново."""
+    return hashlib.sha256(json.dumps(runtime_spec(), sort_keys=True).encode()).hexdigest()[:16]
+
+
+def runtime_state():
+    """ok | missing | outdated."""
+    try:
+        with open(os.path.join(RUNTIME, "version.txt"), encoding="utf-8") as f:
+            have = f.read().strip()
+    except OSError:
+        return "missing"
+    if not os.path.isfile(runtime_python()):
+        return "missing"
+    return "ok" if have == runtime_version() else "outdated"
 
 
 def cublas_dir():
@@ -237,8 +270,7 @@ class Launcher:
     async def args(self, host, port):
         self.model = ""
         if self.downloaded:
-            from . import download
-            if download.runtime_state() != "ok" or not model_ready(self.models):
+            if runtime_state() != "ok" or not model_ready(self.models):
                 raise Unavailable(tr("ESpeech не скачан. Скачать — на вкладке «Сервер»"))
             write_pth(RUNTIME)   # папку программы могли перенести
         else:
