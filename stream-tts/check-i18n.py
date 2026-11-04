@@ -1,8 +1,11 @@
 """Проверка английского словаря stream-tts (streamtts/static/en.json, механизм — streamtts/i18n.py).
 
-Ищет строки, которым нужен перевод: tr("…") в streamtts/**/*.py, T("…") в static/admin.js, editor.js, train.js и overlay.html,
-{{t:…}} в static/voices.html, плюс константы, которые переводятся при показе (причины возврата R_*, REPLIES и ACCESS_WHO в engine.py,
-HELIX_HINTS, GROUPS, подписи примеров и пакеты в install.py). Печатает ключи без перевода, переводы с кириллицей и
+Ищет строки, которым нужен перевод: tr("…") в streamtts/**/*.py, T("…") в static/*.js и overlay.html, {{t:…}} в
+static/voices.html, плюс константы модулей, которые переводятся при показе: причины возврата R_*, ответы зрителю REPLIES и
+ACCESS_WHO, подсказки Helix HELIX_HINTS, группы голосов GROUPS, подписи примеров SAMPLES, названия и описания пакетов
+PACKAGES. Константы ищутся по имени во всех модулях пакета, а не в конкретном файле: перенос в другой модуль проверку
+не выключает. Если известная константа не найдена нигде (переименована или задана не так, как ждёт разбор), это
+ошибка: иначе её строки молча выпали бы из проверки. Печатает ключи без перевода, переводы с кириллицей и
 расхождения подстановок {имя}. Код выхода 1, если что-то нашлось.
 
 Текст из разметки (admin.html, login.html) так не виден: его проверяет страница. Открыть админку на английском
@@ -26,35 +29,64 @@ def consts(node):
     return []
 
 
-def python_keys():
+def dict_values(node):   # {"ключ": "строка", …}: переводятся значения
+    return [s for v in getattr(node, "values", ()) for s in consts(v)]
+
+
+# Константы, которые переводятся при показе: имя → строки из значения. R_* — отдельно (причины возврата, по одной
+# строке на имя, в том числе кортежем: R_A, R_B = "…", "…").
+CONSTS = {
+    "REPLIES": dict_values,      # ответ зрителю при отказе
+    "ACCESS_WHO": dict_values,
+    "HELIX_HINTS": dict_values,  # подсказки к ошибкам Twitch Helix
+    "GROUPS": dict_values,       # группы на странице голосов
+    "SAMPLES": lambda v: [t.elts[1].value for t in getattr(v, "elts", ()) if len(getattr(t, "elts", ())) > 1],
+    # названия и описания пакетов: PACKAGES = {"id": dict(title=…, about=…, …)}
+    "PACKAGES": lambda v: [s for n in ast.walk(v) if isinstance(n, ast.keyword) and n.arg in ("title", "about")
+                           for s in consts(n.value)],
+}
+# Причины возврата баллов: все должны найтись, иначе их перевод перестал проверяться
+REASONS = ("R_OFF", "R_BAN", "R_ACCESS", "R_EMPTY", "R_FULL", "R_NOVOICE", "R_SYNTH", "R_SKIP", "R_CLEAR",
+           "R_RESTART", "R_COOLDOWN", "R_REMOVED")
+
+
+def module_consts(tree, found):
+    """Строки констант уровня модуля; found — имена найденных констант."""
+    keys = set()
+    for n in tree.body:
+        if not isinstance(n, ast.Assign) or len(n.targets) != 1:
+            continue
+        target, value = n.targets[0], n.value
+        names = [t.id for t in getattr(target, "elts", [target]) if isinstance(t, ast.Name)]
+        if all(name.startswith("R_") for name in names) and names:
+            values = value.elts if isinstance(target, ast.Tuple) and isinstance(value, ast.Tuple) else [value]
+            for name, v in zip(names, values):
+                if isinstance(v, ast.Constant) and isinstance(v.value, str):
+                    keys.add(v.value)
+                    found.add(name)
+        elif len(names) == 1 and names[0] in CONSTS:
+            got = CONSTS[names[0]](value)
+            if got:
+                keys.update(got)
+                found.add(names[0])
+    return keys
+
+
+def python_keys(found):
     keys = set()
     for p in glob.glob(os.path.join(PKG, "**", "*.py"), recursive=True):
-        src = open(p, encoding="utf-8").read()
-        for n in ast.walk(ast.parse(src)):
+        tree = ast.parse(open(p, encoding="utf-8").read())
+        for n in ast.walk(tree):
             if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "tr" and n.args:
                 keys.update(consts(n.args[0]))
-        name = os.path.basename(p)
-        if name == "engine.py":
-            for m in re.finditer(r'^R_\w+(?:, R_\w+)* = \(?((?:"[^"]*"(?:,\s*)?)+)', src, re.M):
-                keys.update(re.findall(r'"([^"]*)"', m[1]))
-            for d in ("REPLIES", "ACCESS_WHO"):  # ответы зрителю при отказе
-                keys.update(re.findall(r': "([^"]+)"', re.search(d + r" = \{(.*?)\}\n", src, re.S)[1]))
-        elif name == "twitch.py":
-            keys.update(re.findall(r'^\s+"[^"]+": "([^"]+)",$', src.split("HELIX_HINTS")[1].split("}")[0], re.M))
-        elif name == "voices.py":
-            keys.update(re.findall(r'"[\w-]+": "([^"]+)"', src.split("GROUPS = ")[1].split("}")[0]))
-        elif name == "install.py":
-            keys.update(re.findall(r'SAMPLES = \(\("[\w-]+", "([^"]+)"\),\)', src))
-            for n in ast.walk(ast.parse(src)):  # названия и описания пакетов (PACKAGES), переводятся при показе
-                if isinstance(n, ast.keyword) and n.arg in ("title", "about") and isinstance(n.value, ast.Constant):
-                    keys.add(n.value.value)
+        keys |= module_consts(tree, found)
     return keys
 
 
 def js_keys():
     keys = set()
-    for name in ("admin.js", "editor.js", "train.js", "overlay.html"):
-        src = open(os.path.join(STATIC, name), encoding="utf-8").read()
+    for path in sorted(glob.glob(os.path.join(STATIC, "*.js"))) + [os.path.join(STATIC, "overlay.html")]:
+        src = open(path, encoding="utf-8").read()
         for m in re.finditer(r'\bT\(\s*((?:' + STR + r'\s*\+?\s*)+)', src):  # T("…" + "…")
             keys.add("".join(json.loads('"' + s + '"') for s in re.findall(STR, m[1])))
         for m in re.finditer(r'\bT\([\w.]+ \? ' + STR + ' : ' + STR, src):   # T(x ? "…" : "…")
@@ -67,7 +99,12 @@ def js_keys():
 def main():
     sys.stdout.reconfigure(encoding="utf-8")  # консоль Windows: кириллица в ключах
     en = json.load(open(os.path.join(STATIC, "en.json"), encoding="utf-8"))
-    keys = {norm(k) for k in python_keys() | js_keys() if re.search("[а-яё]", k, re.I)}
+    found = set()
+    keys = {norm(k) for k in python_keys(found) | js_keys() if re.search("[а-яё]", k, re.I)}
+    lost = [name for name in (*REASONS, *CONSTS) if name not in found]
+    if lost:
+        print("константы не найдены ни в одном модуле streamtts — их строки не проверяются; поправь разбор "
+              "в check-i18n.py или имя в REASONS/CONSTS:", *lost, sep="\n  ")
     missing = sorted(k for k in keys if k not in en)
     cyrillic = sorted(k for k, v in en.items() if re.search("[а-яё]", v, re.I))
     slots = lambda s: sorted(re.findall(r"\{(\w+)\}", s)) + sorted(re.findall(r"%(\w+)%", s))
@@ -77,7 +114,7 @@ def main():
         if items:
             print(f"{title} ({len(items)}):", *items, sep="\n  ")
     print(f"ключей в коде: {len(keys)}, в en.json: {len(en)}")
-    return 1 if missing or cyrillic or mismatch else 0
+    return 1 if lost or missing or cyrillic or mismatch else 0
 
 
 if __name__ == "__main__":
