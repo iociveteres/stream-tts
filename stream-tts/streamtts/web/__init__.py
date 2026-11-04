@@ -9,6 +9,7 @@ from ..engines.espeech import train as lora
 from ..i18n import tr
 from ..engine import SERVICE_COMMANDS
 from ..twitch import TwitchError, explain
+from .common import MAX_UPLOAD, _restart_guard, fail, json_post, ok
 
 log = logging.getLogger("web")
 STATIC = os.path.join(config.HERE, "static")
@@ -18,7 +19,6 @@ PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/static/i
 REVALIDATE = ("/static/", "/voices/demos/")
 UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream"),
            "/api/draft/upload": ("application/octet-stream",), "/api/train/upload": ("application/octet-stream",)}
-MAX_UPLOAD = 512 << 20
 MAX_SET_UPLOAD = 2 << 30   # коллекция ESpeech: ~10 МБ на голос (адаптер LoRA), WC3 — ~680 МБ
 
 
@@ -70,7 +70,7 @@ def make_app(ctx):
     r.add_post("/api/voicesets/import", api_voiceset_import)
     r.add_post("/api/draft/upload", api_draft_upload)
     if i18n.EDITS_PATH:
-        r.add_post("/api/ui-edit", _wrap(post_ui_edit))
+        r.add_post("/api/ui-edit", json_post(post_ui_edit))
     r.add_post("/api/train/upload", api_train_upload)
     return app
 
@@ -276,14 +276,6 @@ async def api_profanity_get(request):
 
 
 # --- действия ---
-def ok(**kw):
-    return web.json_response(dict(ok=True, **kw))
-
-
-def fail(msg, status=400):
-    return web.json_response(dict(ok=False, error=msg), status=status)
-
-
 async def post_settings(request, ctx, data):
     s = ctx.settings
     params = {p["key"] for p in ctx.tts.schema()}
@@ -776,19 +768,6 @@ async def post_espeech_delete(request, ctx, data):
 
 
 # --- обучение LoRA голоса ESpeech (engines/espeech/train.py): набор здесь, обучение — на espeech-server ---
-async def _restart_guard(ctx, data):
-    """Действие перезапускает встроенный сервер синтеза, а обучение LoRA и его несохранённые результаты живут в
-    процессе сервера: во время обучения — отказ, с несохранёнными результатами — вопрос (confirm, повтор с force).
-    → ответ-отказ или None."""
-    if not ctx.runtime:
-        return None
-    r = await ctx.train.guard(bool(data.get("force")))
-    if r is None:
-        return None
-    text, confirm = r
-    return web.json_response(dict(ok=False, error=text, confirm=confirm), status=409)
-
-
 def _train_fail(e):
     if isinstance(e, lora.Refused):
         return web.json_response(dict(ok=False, error=str(e), code=e.code), status=400)
@@ -1004,23 +983,7 @@ async def post_ui_edit(request, ctx, data):
     return ok(edits=i18n.edits)
 
 
-def _wrap(fn):
-    async def handler(request):
-        try:
-            data = await request.json() if request.can_read_body else {}
-        except ValueError:
-            return fail(tr("неверный JSON"))
-        ctx = request.app["ctx"]
-        try:
-            resp = await fn(request, ctx, data or {})
-        except (KeyError, ValueError, TypeError) as e:
-            return fail(tr("неверный запрос: {e}", e=e))
-        ctx.engine.dirty.set()
-        return resp
-    return handler
-
-
-POSTS = {path: _wrap(fn) for path, fn in {
+POSTS = {path: json_post(fn) for path, fn in {
     "/api/settings": post_settings,
     "/api/source": post_source,
     "/api/voice": post_voice,

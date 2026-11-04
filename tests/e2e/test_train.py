@@ -380,7 +380,7 @@ def send(api, web, path, body):
 
 def test_every_route_guarded(managed):
     """Ни один роут админки не перезапускает встроенный сервер во время обучения LoRA молча: обучение и его
-    результаты живут в процессе сервера (AGENTS.md, _restart_guard в web.py). Роуты берутся из приложения, так что
+    результаты живут в процессе сервера (AGENTS.md, _restart_guard в web/common.py). Роуты берутся из приложения, так что
     разрезание web.py или новый роут без проверки этот тест заметит."""
     web, routes = post_routes()
     unknown = [p for p in routes if p not in RESTARTS and p not in KEEPS and not p.startswith(SKIPS)]
