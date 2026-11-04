@@ -1,9 +1,9 @@
 # espeech-server для разработки: py -3.14 -m venv espeech/.venv, затем
 #   espeech/.venv/Scripts/python -m pip install -r espeech/requirements.txt
-# torch — сборка с CUDA 13.2 с download.pytorch.org (колесо ~1,9 ГБ; программа для Windows берёт из него только
-# нужные файлы, docs/stream-tts-windows.md, «ESpeech»). Python 3.14 — везде один: stream-tts, образ Docker
-# (Ubuntu 26.04), встраиваемый Python программы для Windows; под cp314 у всех пакетов есть колёса win_amd64 и
-# manylinux x86_64. Версии здесь и в PACKAGES/TORCH packaging/windows/pin-espeech.py — одни и те же.
+# torch — сборка с CUDA 13.2 с download.pytorch.org (колесо ~1,9 ГБ; программа для Windows и Docker берут только
+# нужные файлы, docs/espeech.md, «Поставка»). Python 3.14.7 — везде один: stream-tts, образ Docker
+# (Ubuntu 26.04), скачиваемый рантайм ESpeech (Windows и Docker); под cp314 у всех пакетов есть колёса win_amd64 и
+# manylinux x86_64. Версии здесь и в PACKAGES/*_TORCH packaging/pin-espeech.py — одни и те же.
 --extra-index-url https://download.pytorch.org/whl/cu132
 torch==2.14.1+cu132
 numpy==2.4.6

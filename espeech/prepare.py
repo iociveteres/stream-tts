@@ -12,14 +12,14 @@
   частную память процесса; байты те же — проверяется); токенизаторы и config.json — в ruaccent/nn/; три малых словаря —
   в ruaccent/dictionary/. RuleEngine (koziev) и accents_nn.json.gz (tiny_mode) не нужны.
 Исходные файлы — SOURCES (репозиторий, закреплённая ревизия, пути); их же качает программа (адреса, размеры и sha256 —
-в stream-tts/streamtts/downloads.json, packaging/windows/pin-espeech.py). Готовые файлы пропускаются (--force —
+в stream-tts/streamtts/downloads.json, packaging/pin-espeech.py). Готовые файлы пропускаются (--force —
 пересобрать); каждый пишется во временный и переименовывается, так что прерванная сборка продолжается.
 
 usage: python -m espeech.prepare --src <папка> [out=models/espeech] [--force]
   --src — папка с исходными файлами в виде <репозиторий>/<путь> (так их раскладывает программа). Из кеша Hugging Face
   с загрузкой недостающего собирает tools/espeech/prepare.py.
 Нужны torch, safetensors, onnx (с protobuf)."""
-import argparse, collections, gzip, json, os, pickle, shutil, sqlite3, sys, time, zipfile
+import argparse, collections, gzip, json, os, pickle, shutil, sqlite3, sys, tempfile, time, zipfile
 
 ESPEECH = ("ESpeech/ESpeech-TTS-1_SFT-256K", "2bd8087e9b7e3a89e7b546e2fb1893f2f0ba137c")
 VOCOS = ("charactr/vocos-mel-24khz", "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21")
@@ -155,9 +155,10 @@ def accents_db(src, dst):
     t = time.time()
     d = json.load(gzip.open(src))
     assert all(isinstance(k, str) and isinstance(v, str) for k, v in d.items())
-    tmp = dst + ".tmp"
-    if os.path.exists(tmp):
-        os.remove(tmp)
+    # база собирается и проверяется во временной папке, а на место — копией: в Docker папка модели — том с Windows
+    # (Docker Desktop), и там VACUUM и 3 млн выборок проверки шли больше 20 мин вместо минуты
+    work = tempfile.mkdtemp(prefix="espeech-accents-")
+    tmp = os.path.join(work, "accents.sqlite")
     db = sqlite3.connect(tmp)
     db.execute("PRAGMA journal_mode=OFF")
     db.execute("PRAGMA synchronous=OFF")
@@ -168,8 +169,12 @@ def accents_db(src, dst):
     n = db.execute("SELECT count(*) FROM a").fetchone()[0]
     miss = sum(db.execute("SELECT s FROM a WHERE w=?", (k,)).fetchone() != (v,) for k, v in d.items())
     db.close()
-    assert n == len(d) and miss == 0, (n, len(d), miss)
-    os.replace(tmp, dst)
+    try:
+        assert n == len(d) and miss == 0, (n, len(d), miss)
+        shutil.copyfile(tmp, dst + ".tmp")
+        os.replace(dst + ".tmp", dst)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
     print(f"accents.sqlite: {n} форм, {os.path.getsize(dst) / 2**20:.0f} МБ, {time.time() - t:.0f} с, проверено",
           flush=True)
 
