@@ -42,9 +42,13 @@
 │                          # downloads.json (закреплённые загрузки: CUDA из llama.cpp, кванты
 │                          # модели, рантайм и модель ESpeech), static/ (static/en.json — английский словарь, static/i18n.js — перевод
 │                          # страниц, static/ui-edit.js и .css — режим правки строк, static/quants/ — примеры звука квантов для вкладки «Сервер»)
+├── packaging/
+│   ├── pin-espeech.py     # загрузки ESpeech в downloads.json для обеих систем и списки заглушек библиотек CUDA:
+│                          # windows/stubs/*.def, linux/stubs/**/*.map
+│   ├── linux/             # заглушки .so для torch ESpeech в Docker: stubs/<soname>.map (скрипты версий ld; в cublas/ —
+│                          # cudart и cuBLAS для образа без CUDA), build-stubs.sh (сборка, стадия espeech-stubs Dockerfile)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
-│                          # espeech-server и DLL-заглушки), pin-espeech.py (загрузки ESpeech в downloads.json и
-│                          # stubs/*.def — экспорт заглушек), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
+│                          # espeech-server и DLL-заглушки из stubs/*.def), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
 │                          # ничего не качает: модель и CUDA — в админке),
 │                          # release.py (latest.json релиза), THIRD-PARTY*.txt (сторонние лицензии);
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
@@ -86,6 +90,7 @@
 │
 │   Данные (в git не попадают):
 ├── models/                # модели и пакеты (volume; админка качает сюда); espeech/ — модель ESpeech
+├── espeech-runtime/       # Docker: python/ — Python 3.14 с torch для ESpeech (volume; админка качает сюда)
 ├── voices/                # установленные голоса .gguf и .espeech (volume): <голос>.<ext> или <набор>/<голос>.<ext>
 ├── voice-clips/           # исходные данные голосов: <модель>/<набор>/<голос>/; общие кеши *.json в корне
 │   ├── cosyvoice/         # варианты образцов, их синтез, оценки и выбор: wc3, streamers, игры по одной
@@ -113,12 +118,15 @@
 - Стадия `fetch` скачивает:
   - архив cosyvoice.cpp (`cosyvoice-server`, `cosyvoice-cli`, `quantize`, `libcosyvoice`, ONNX Runtime);
   - все `libggml*.so*` из релиза llama.cpp.
+- Стадия `espeech-stubs` собирает gcc заглушки библиотек CUDA для облегчённого torch ESpeech
+  (`packaging/linux/build-stubs.sh` по спискам `packaging/linux/stubs`; [espeech.md](espeech.md), «Поставка»).
 - Стадия `base` — рантайм-библиотеки сервера (ICU, libgomp, FFmpeg `libav*`) и `/opt/cosyvoice`, без curl и
-  компиляторов. Цель `stream-tts` добавляет Python 3.14 из apt (пакеты — в venv `/opt/venv`, PEP 668) и ffmpeg.
+  компиляторов. Цель `stream-tts` добавляет Python 3.14 из apt (пакеты — в venv `/opt/venv`, PEP 668), ffmpeg и
+  `/opt/cosyvoice/espeech` — код espeech-server и заглушки (сотни КБ; torch и модель качает админка в тома).
 - `LD_LIBRARY_PATH=/opt/cosyvoice` задан только в цели `cosyvoice`: там свой `libonnxruntime.so` (1.30), в
   stream-tts он перебил бы onnxruntime из venv, поэтому путь серверу добавляет `engines/cosyvoice/launch.py`.
 - Контекст сборки — весь проект, `.dockerignore` пускает в него только `cosyvoice/entrypoint.sh`,
-  `stream-tts/requirements.txt` и `stream-tts/streamtts/`.
+  `stream-tts/requirements.txt`, `stream-tts/streamtts/`, `espeech/*.py` (с `THIRD-PARTY.txt`) и `packaging/linux/`.
 
 **GGML** в релизах cosyvoice.cpp не поставляется, его берут из llama.cpp. Копируются все варианты
 `libggml-cpu-<isa>.so`, и сервер сам выбирает лучший для текущего процессора (на Zen 3 это `haswell`).
@@ -242,8 +250,8 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
 stream-tts (`install.py` напрямую): коллекции CosyVoice и ESpeech в одной папке набора, замена и удаление по модели,
 занятые имена, битые архивы; `test_espeech_download.py` — загрузка ESpeech без сети (`partzip.py`,
 `engines/espeech/download.py` напрямую, локальный HTTP-сервер с Range): только нужные файлы zip диапазонами, докачка
-после обрыва без повторной загрузки, выбор по списку, подмена хвоста или файла, распаковка колёс, состояние
-рантайма, закреплённое в `downloads.json`; `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
+после обрыва без повторной загрузки, выбор по списку, подмена хвоста или файла, распаковка колёс и Python из tar.gz,
+состояние рантайма, закреплённое в `downloads.json` для обеих систем (и заглушки к нему); `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
 предел), варианты и их проверки, синтез ячеек (фронтенд, `_draft-*`, перерегистрация, кэш, сравнение), сохранение
 (имя, путь в `<голоса>/<набор>/`, manifest, образец, ошибка сервера), черновик после перезапуска и его удаление, сервер
 без фронтенда, очередь с живой озвучкой, выгрузка фронтенда, «убрать музыку» без пакета; `test_stats.py` —

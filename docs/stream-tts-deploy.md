@@ -24,7 +24,9 @@ cosyvoice-server — нативный `cosyvoice-server(.exe)`: папка `runt
 `--llm-flash-attn 0`. В админке рядом с адресом сервера видны «встроенный», бэкенд, модель и число голосов.
 
 ESpeech (`engines/espeech/launch.py`): `python -m espeech` интерпретатором его окружения — `ESPEECH_SERVER` (путь
-к `python(.exe)` или папке с ним), иначе `runtime/espeech/` (поставка — позже), иначе `espeech/.venv` проекта;
+к `python(.exe)` или папке с ним), иначе скачанный рантайм, если в `<рантайм>/espeech/` лежит код espeech-server
+(программа для Windows и образ Docker: Python с torch и модель качаются кнопкой на вкладке «Сервер»,
+[espeech.md](espeech.md), «Поставка»; `ESPEECH_RUNTIME` — папка рантайма), иначе `espeech/.venv` проекта;
 `--models <модели>/espeech` (без весов сервер ждёт, причина — в админке), `--voices <голоса>`, `--device cuda`, если
 есть драйвер NVIDIA (`ESPEECH_DEVICE=cpu|cuda` или выбор в админке). Встроенный сервер один: смена модели
 перезапускает его с другим движком на том же порту (`COSYVOICE_PORT` или `ESPEECH_PORT` модели, выбранной при
@@ -101,14 +103,23 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 `Dockerfile`, цель `stream-tts`), `restart: unless-stopped`. Возможности те же, что у программы для Windows:
 вкладка «Сервер», наборы голосов из zip, загрузка пакетов, выгрузка модели, очистка образца от музыки; CUDA уже в
 образе `stream-tts:cuda` (`docker-compose.gpu.yml`), скачивать её не нужно. Проверка обновлений выключена:
-обновление — `git pull && docker compose up -d --build`.
+обновление — `git pull && docker compose up -d --build`. ESpeech — так же, как у программы: в образе только код
+espeech-server и заглушки библиотек CUDA (сотни КБ), Python 3.14 с torch (скачать ~580 МБ, на диске ~1,4 ГБ) и
+модель (1,8 ГБ) качает кнопка «Скачать» в карточке «Модель ESpeech» на вкладке «Сервер» в тома `./espeech-runtime` и
+`./models` — пересборка образа их не трогает. На `stream-tts:cuda` ESpeech работает на видеокарте (cuBLAS и cudart
+torch берёт из CUDA образа), на `stream-tts:cpu` — только на процессоре ([espeech.md](espeech.md), «Поставка»).
+С Docker Desktop на Windows загрузка дольше, чем у программы (~10 мин): запись тысяч файлов рантайма в том на диске
+Windows медленная.
 
 - Образ: `ubuntu:26.04` (glibc 2.43 для cosyvoice.cpp), Python 3.14 из apt в venv `/opt/venv`, ffmpeg, aiohttp,
   numpy, onnxruntime; сервер — `/opt/cosyvoice`. На CUDA образ больше на объём рантайма CUDA.
-- Пути: `STREAM_TTS_RUNTIME=/opt/cosyvoice`, `STREAM_TTS_MODELS=/models`, `STREAM_TTS_VOICES=/voices`,
-  `STREAM_TTS_DATA=/data`, `STREAM_TTS_PROJECT=/project`.
-- Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `./models:/models` и `./voices:/voices`
-  с записью (админка качает модели и ставит наборы), `voice-refs/` и `effects/` (скрипты эффектов) только для
+- Пути: `STREAM_TTS_RUNTIME=/opt/cosyvoice` (в его `espeech/` — код espeech-server и заглушки),
+  `STREAM_TTS_MODELS=/models`, `STREAM_TTS_VOICES=/voices`, `STREAM_TTS_DATA=/data`, `STREAM_TTS_PROJECT=/project`,
+  `ESPEECH_RUNTIME=/espeech-runtime/python`.
+- Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `./models:/models`, `./voices:/voices`
+  и `./espeech-runtime:/espeech-runtime` с записью (админка качает модели и рантайм ESpeech и ставит наборы; рантайм —
+  в `espeech-runtime/python/`, рядом при загрузке — `python.dl/` и `python.tmp/`), `voice-refs/` и `effects/`
+  (скрипты эффектов) только для
   чтения. Режим `cut` в `effects/villager-fx.py` звуки жителя не читает. Остальным режимам нужна
   `voice-origs/minecraft-villager/`.
 - Порты: 8090 — интерфейс и оверлей, 8080 (`PORT`) — WebUI и API сервера для `scripts/` и `tools/`, оба на
@@ -135,7 +146,8 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 | `STREAM_TTS_BIND` | `127.0.0.1` | `0.0.0.0`, чтобы OBS на другом ПК дотянулся по сети |
 | `STREAM_TTS_PASSWORD` | — | пароль админки; обязателен, если `BIND` не localhost |
 | `STREAM_TTS_LANG` | язык установщика, иначе `ru` | `ru` или `en`: язык при первом запуске, дальше — переключатель в админке |
-| `ESPEECH_SERVER` | `espeech/.venv` проекта | python окружения espeech-server или папка с ним |
+| `ESPEECH_SERVER` | скачанный рантайм, иначе `espeech/.venv` проекта | python окружения espeech-server или папка с ним |
+| `ESPEECH_RUNTIME` | `espeech-runtime` рядом с программой, `/espeech-runtime/python` в Docker | куда кнопка «Скачать» ставит Python с torch для ESpeech |
 | `ESPEECH_DEVICE` | `auto` | `cuda` или `cpu` для ESpeech |
 | `ESPEECH_PORT`, `ESPEECH_HOST` | свободный, `127.0.0.1` | как `COSYVOICE_PORT` и `COSYVOICE_HOST`, если при запуске выбрана ESpeech |
 | `COSYVOICE_SERVER` | `runtime/cosyvoice-server(.exe)` | путь к серверу или его папке |

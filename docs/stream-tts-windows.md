@@ -49,7 +49,7 @@ CUDA — два архива из релиза llama.cpp той же сборк�
 «Модель ESpeech» на вкладке «Сервер» (`engines/espeech/download.py`). Карточка видна, пока ESpeech не скачан, и у
 выбранной модели ESpeech; выбрать её можно и до загрузки — сервер ждёт с причиной «ESpeech не скачан». Всё качается
 из первоисточников, адреса, размеры и sha256 закреплены в разделе `espeech` файла `downloads.json`
-(`packaging/windows/pin-espeech.py`), с докачкой после обрыва или отмены и общим прогрессом:
+(`packaging/pin-espeech.py`, раздел `runtime.windows`; Docker качает так же, [espeech.md](espeech.md), «Поставка»), с докачкой после обрыва или отмены и общим прогрессом:
 
 | Что | Откуда | Скачать | На диске |
 |---|---|---|---|
@@ -83,8 +83,8 @@ ESpeech заново не качает. Удаление программы сп
 
 Закреплённые загрузки — `stream-tts/streamtts/downloads.json`: CUDA (версия, нужные файлы и их размер, архивы
 llama.cpp — адрес, размер, распакованный размер, sha256 и какие файлы из него берутся) и кванты модели (адрес
-Hugging Face на конкретной ревизии, размеры, sha256), а ещё ESpeech (раздел `espeech`: рантайм и модель, его пишет
-`pin-espeech.py`). Его читают `install.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
+Hugging Face на конкретной ревизии, размеры, sha256), а ещё ESpeech (раздел `espeech`: рантаймы Windows и Linux и модель, его пишет
+`packaging/pin-espeech.py`). Его читают `install.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
 ESpeech) и `build-exe.py` (передаёт значения в `StreamTTS.iss` через `/D`). Переход на другую сборку
 llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая запись `cuda` здесь (`build-runtime.py` не
 соберётся, если CUDA не из сборки ядра). Файлы — в `packaging/windows/`:
@@ -98,12 +98,14 @@ llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая
   оттуда; `vcruntime140_threads.dll` в наборе — для torch ESpeech. В `core/espeech/` — пакет `espeech/` (только
   `*.py`) и DLL-заглушки из `stubs/*.def`: их собирает MSVC (`vswhere`, нужен C++ из Visual Studio или Build Tools,
   на `windows-latest` есть), `--flat` их не копирует. Нужна только стандартная библиотека Python.
-- `pin-espeech.py` — закрепить загрузки ESpeech: раздел `espeech` в `downloads.json` (Python, колёса PyPI под
-  cp314 win_amd64, часть колеса torch и чекпойнта ESpeech — хвост zip с центральным каталогом, его sha256, выбор
-  файлов и общий sha256 выбранных, `stream-tts/streamtts/partzip.py`) и `stubs/*.def` (экспорт настоящих DLL из колеса
-  torch и архива cudart). Запускать при смене версий в нём (`PYTHON`, `TORCH`, `PACKAGES`) или источников модели в
-  `espeech/prepare.py`; колесо torch (1,9 ГБ) и чекпойнт (2,7 ГБ) нужны целиком: `--torch-wheel`, `--checkpoint`
-  или загрузка в `build/cache`.
+- `../pin-espeech.py` (`packaging/pin-espeech.py`, общий с Docker) — закрепить загрузки ESpeech: раздел `espeech` в
+  `downloads.json` (рантаймы обеих систем — Python, колёса PyPI под cp314 win_amd64 / manylinux, часть колеса torch;
+  часть чекпойнта ESpeech — хвост zip с центральным каталогом, его sha256, выбор файлов и общий sha256 выбранных,
+  `stream-tts/streamtts/partzip.py`), `stubs/*.def` (экспорт настоящих DLL из колеса torch и архива cudart) и
+  `packaging/linux/stubs/**/*.map` для Docker. Запускать при смене версий в нём (`WIN_PYTHON`, `WIN_TORCH`,
+  `PACKAGES` и Linux-варианты) или источников модели в `espeech/prepare.py` (`--what windows,linux,model` — что
+  закреплять); колёса torch (1,9 ГБ и 533 МБ) и чекпойнт (2,7 ГБ) нужны целиком: `--torch-wheel`,
+  `--linux-torch-wheel`, `--checkpoint` или загрузка в `build/cache`.
 - `build-exe.py` — `StreamTTS.exe` через Nuitka (standalone, консольное приложение) в `dist/StreamTTS/` (113 МБ, из
   них 38 МБ — onnxruntime для очистки от музыки; его инструменты с onnx, sympy и protobuf не включаются):
   пакет `streamtts` со `static/` и `profanity.txt`, `effects/villager-fx.py`. Нужен сборочный venv

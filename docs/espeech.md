@@ -104,9 +104,10 @@ espeech/.venv/Scripts/python -m espeech --models models/espeech --voices voices 
 загрузки модели): имитация карты меньше, для проверки нехватки памяти при обучении.
 
 Конфигурация `espeech` в `.claude/launch.json`. Окружение для разработки — `espeech/requirements.txt` (Python 3.14,
-torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимостей); те же версии качает программа для Windows
-(`PACKAGES` и `TORCH` в `packaging/windows/pin-espeech.py`). `ESPEECH_DLL_DIRS` — папки DLL, которые пакет добавляет
-в поиск до импорта torch (у программы — заглушки и cuBLAS, `espeech/__init__.py`). `--device auto|cuda|cpu` (на CPU — fp32;
+torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимостей); те же версии качают программа для Windows и
+Docker (`PACKAGES`, `WIN_TORCH`, `LINUX_TORCH` в `packaging/pin-espeech.py`, ниже «Поставка»). `ESPEECH_DLL_DIRS` —
+библиотеки CUDA, которые пакет подключает до импорта torch (заглушки и cuBLAS, `espeech/__init__.py`: на Windows —
+папки поиска DLL, на Linux — загрузка с `RTLD_GLOBAL`). `--device auto|cuda|cpu` (на CPU — fp32;
 скорость на CPU ещё не исследована), `--steps 16|32|12` — шагов по умолчанию. `auto` решает сам сервер
 (`torch.cuda.is_available()`): `nvcuda.dll` в системе бывает и без рабочего драйвера NVIDIA, а torch на такой машине
 падает с «Found no NVIDIA driver». stream-tts при `auto` передаёт `auto` (без CUDA в бэкендах — `cpu`), а если
@@ -364,6 +365,49 @@ stream-tts (у сервера — только то, что пришло по HT
 espeech/.venv/Scripts/python -m pytest tests/espeech
 ```
 
+## Поставка
+
+ESpeech опциональна: ставит её только тот, кому она нужна, кнопкой «Скачать» в карточке «Модель ESpeech» на вкладке
+«Сервер». В установщике программы для Windows и в образах Docker — только код espeech-server и заглушки библиотек
+CUDA (сотни КБ), torch там нет. Загрузка — один код для обеих систем (`engines/espeech/download.py`, `launch.py`):
+всё из первоисточников, адреса, размеры и sha256 закреплены в разделе `espeech` файла `downloads.json`
+(`packaging/pin-espeech.py`: рантайм — свой у каждой системы, `runtime.windows` и `runtime.linux`, модель — общая),
+с докачкой после обрыва и общим прогрессом. Версии одни: Python 3.14.7, те же пакеты (`PACKAGES`), torch
+2.14.1+cu132; модель собирает `python -m espeech.prepare` в скачанном рантайме.
+
+| | Программа для Windows | Docker (`stream-tts:cuda`, `stream-tts:cpu`) |
+|---|---|---|
+| код espeech-server и заглушки (`launch.CODE`) | `{app}\runtime\espeech\` от установщика (`build-runtime.py`, MSVC) | `/opt/cosyvoice/espeech/` из образа (стадия `espeech-stubs`, gcc) |
+| Python 3.14.7 | встраиваемый, python.org, 12 МБ | python-build-standalone (`install_only_stripped` без tcl/tk, pip и заголовков), 36 МБ |
+| путь к пакету `espeech` | `python314._pth` | `espeech.pth` в site-packages |
+| пакеты (13 колёс, распаковкой, без pip) | win_amd64, 45 МБ | manylinux x86_64, 61 МБ |
+| torch — нужные файлы колеса диапазонами | 434 из 1908 МБ (CUDA-библиотеки в колесе — их не качать) | 487 из 533 МБ (CUDA-библиотек в колесе нет, пакеты nvidia-* не нужны) |
+| заглушки (`STUBS`) | cuDNN, cuSPARSE, cuSOLVER, NVRTC, cuFFT — `.def` экспорта DLL | ещё NCCL, cuPTI, cuRAND, cuSPARSELt, cuFile, NVSHMEM (cuSOLVER не нужен) — `.map`, символы, которые torch берёт, с версиями |
+| настоящие из CUDA cosyvoice-server (`CUBLAS`) | cuBLAS, cuBLASLt (cudart в torch статически); CUDA качается вместе с ESpeech, если её нет | cudart, cuBLASLt, cuBLAS из `/opt/cosyvoice` образа `stream-tts:cuda` (те же CUDA 13.4 и llama.cpp b11500) |
+| без CUDA | заглушки `stubs\cublas\`, синтез на процессоре | `stream-tts:cpu` — заглушки `stubs/cublas/` (и cudart), синтез на процессоре |
+| подключение библиотек (`ESPEECH_DLL_DIRS`) | папки поиска DLL (`os.add_dll_directory`) | загрузка до torch с `RTLD_GLOBAL`, `LD_LIBRARY_PATH` не задаётся (в `/opt/cosyvoice` свой `libonnxruntime.so`) |
+| рантайм (`ESPEECH_RUNTIME`) | `{app}\espeech-runtime\`, ~1,1 ГБ (вне `runtime\`: его очищает обновление) | том `./espeech-runtime`, `/espeech-runtime/python`, 1,4 ГБ (пересборка образа не трогает) |
+| модель | `{app}\models\espeech\`, 1,84 ГБ скачать, 1,4 ГБ на диске | том `./models`, то же |
+
+Рантайм собирается в `<папка>.tmp` (байткод `compileall`, проверка импортом с `torch._dynamo`) и переименовывается;
+версия — хэш рантайма своей системы в `version.txt`: при другом закреплении карточка предлагает «Обновить» (модель
+заново не качается). Почему так и сколько весит каждая часть — `samples/espeech-lean` (Windows) и
+`samples/espeech-lean-linux` (Linux: какие `.so` torch требует при загрузке, версии символов, замеры). Облегчённый
+torch экономит на Windows ~200 МБ uss, на Linux — ~60 МБ при загрузке и ~120 МБ на обучении (страницы `.so` там
+файловые и в uss не входят), а главное — 0,6 ГБ загрузки и 1,4 ГБ на диске вместо ~3,5 и 5,6 ГБ полного venv с
+пакетами nvidia-*:
+
+| Linux, RTX 3060 Ti, uss | облегчённый | полный venv |
+|---|---|---|
+| `import torch` / + CUDA-контекст / + cuBLAS | 430 / 533 / 822 МБ | 496 / 599 / 886 МБ |
+| модель загружена / после 9 фраз | 1395 / 1555 МБ | 1449 / 1610 МБ |
+| пик обучения LoRA без экономии / с ней | 1997 / 2014 МБ | 2116 / 2132 МБ |
+| без CUDA: `import torch` | 249 МБ | 497 МБ |
+
+Скорость синтеза и обучения и видеопамять — те же. Заглушённые библиотеки синтез и обучение не вызывают: новый вызов
+(свёртка с cuDNN, FFT на GPU, линейная алгебра на GPU — `libtorch_cuda_linalg.so` в рантайм не входит) даст ошибку
+только в программе и Docker, из `espeech/.venv` всё работает.
+
 ## Лицензии
 
 Код DiT, сэмплера и Vocos в `model.py` — по F5-TTS, Vocos и x-transformers (MIT, `espeech/THIRD-PARTY.txt`); RUAccent
@@ -395,13 +439,13 @@ espeech/.venv/Scripts/python -m pytest tests/espeech
    `static/editor.js` (записи, волну и тестовые фразы возьмёт страница дообучения, этап 5); словарь ударений — у
    сервера (`/accents`, `capabilities.user_accents`), карточка на вкладке «Сервер» и правка щелчком в «Как
    прочитает» ([stream-tts.md](stream-tts.md)).
-4. ~~Поставка для Windows~~ — сделано, но не в установщике, а загрузкой по кнопке на вкладке «Сервер»
-   ([stream-tts-windows.md](stream-tts-windows.md), «ESpeech»): установщик кладёт код espeech-server и DLL-заглушки
-   (`build-runtime.py`), программа качает встраиваемый Python 3.14, пакеты, облегчённый torch (только нужные файлы
-   колеса, диапазонами), CUDA для cuBLAS, если её нет, и исходники модели, а папку модели собирает
-   `espeech/prepare.py`; всё закреплено в `downloads.json` (раздел `espeech`, `pin-espeech.py`). Осталось: Docker. Отдельного
-   сервиса `espeech` не будет: сервер выбранной модели stream-tts запускает сам, в своём контейнере, — как туда
-   попадает torch (в образ stream-tts его класть не хотели), ещё не решено.
+4. ~~Поставка~~ — сделано, но не в установщике и не в образе, а загрузкой по кнопке на вкладке «Сервер» одним кодом
+   для программы для Windows и Docker (раздел «Поставка» выше): установщик или образ кладут код espeech-server и
+   заглушки библиотек CUDA, stream-tts качает Python 3.14.7, пакеты, облегчённый torch (только нужные файлы колеса,
+   диапазонами), программе — CUDA для cuBLAS, если её нет, и исходники модели, а папку модели собирает
+   `espeech/prepare.py`; всё закреплено в `downloads.json` (раздел `espeech`, `packaging/pin-espeech.py`). Отдельного
+   сервиса или образа `espeech` нет: сервер выбранной модели stream-tts запускает сам, в своём контейнере, а torch
+   ставит пользователь, которому нужна ESpeech (образ без torch).
 5. LoRA: обучение в `tools/espeech/`, потом в программе (страница модуля ESpeech, задача в процессе сервера). Порядок:
    ~~ядро обучения в пакете `espeech/` (его зовут и `tools/espeech/train.py`, и сервер)~~ — сделано (`train.py`,
    выше) → ~~исследование «дообучение на 6 ГБ» и малого набора реплик~~ — сделано (`samples/espeech-lora-small`,

@@ -15,7 +15,8 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | `setup.sh`, `Dockerfile`, `docker-compose*.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server (:8090 и :8080), профиль `server-only` — только сервер для `scripts/` и `tools/` (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp (код сервера не наш) | да |
 | `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent) для stream-tts, HTTP API как у cosyvoice-server ([docs/espeech.md](docs/espeech.md)); вторая модель stream-tts (`streamtts/engines/espeech`) | да, кроме `.venv` |
 | `stream-tts/streamtts/` | stream-tts на :8090: озвучка наград Twitch, админка, оверлей OBS (спецификация [docs/stream-tts.md](docs/stream-tts.md), развёртывание `stream-tts-deploy.md`, Windows `stream-tts-windows.md`) | да |
-| `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml`; `pin-espeech.py` и `stubs/*.def` — загрузки ESpeech и DLL-заглушки torch | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
+| `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+) для Windows; CI — `.github/workflows/windows.yml`; `stubs/*.def` — DLL-заглушки torch ESpeech | да, кроме `.venv`, `.inno`, `build/`, `dist/` |
+| `packaging/pin-espeech.py`, `packaging/linux/` | загрузки ESpeech для обеих систем в `downloads.json`; заглушки .so torch для Docker (`stubs/**/*.map`, `build-stubs.sh`) | да |
 | `scripts/` | `download-model.sh`; `import-voices.sh` — голоса из `voice-refs/cosyvoice/<набор>/<голос>.wav + .txt` в `voices/*.gguf` | да |
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: общий (`pick.py`, `synth.py`, оценки, коллекции для импорта `pack-sets.py`), реплики WC3, прочие источники ([docs/voice-pipeline.md](docs/voice-pipeline.md), [docs/voices-wc3.md](docs/voices-wc3.md)) | да |
 | `tools/espeech/` | папка модели ESpeech из кеша Hugging Face (`prepare.py`, сборка — `espeech/prepare.py`) голоса `.espeech` (`make-voice.py`), обучение LoRA (`train.py`) | да |
@@ -25,7 +26,7 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 | `voice-clips/<модель>/<набор>/` | исходные данные голосов: `cosyvoice/` — варианты образцов, синтез, оценки и выбор; `espeech/` — реплики для LoRA, адаптеры и голоса `.espeech` по голосам | нет (тексты реплик из игр) |
 | `voice-refs/cosyvoice/<набор>/` | итоговые образцы CosyVoice и `manifest.json` | нет |
 | `voice-sets/<модель>/<набор>.zip` | коллекции для импорта в stream-tts, по одной на «модель + набор» (`tools/voices/pack-sets.py`) | нет |
-| `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `runtime/`, `.env` | данные, секреты, нативный cosyvoice-server для Windows | нет |
+| `voices/`, `models/`, `voice-origs/`, `samples/`, `stream-tts-data/`, `runtime/`, `espeech-runtime/`, `.env` | данные, секреты, нативный cosyvoice-server для Windows, Python с torch для ESpeech в Docker | нет |
 
 Данные голосов — `<модель>/<набор>/<голос>`: модель — `cosyvoice` или `espeech` (id из `streamtts/engines/`), набор —
 источник: `wc3` (`wc3-*`), `morrowind` (`mw-*`, только ESpeech), игры по одной (`dota2`, `portal`, `stalker`,
@@ -149,12 +150,17 @@ RTX 3060 Ti 8 ГБ; сервер обычно запущен на GPU.
 - Веса ESpeech помечены Apache-2.0, но похожи на дообучение F5-TTS (CC-BY-NC-4.0): в установщик их не класть —
   программа качает их по кнопке пользователя из репозитория авторов (docs/espeech.md, «Лицензии»). Английский ESpeech
   не читает (сильный акцент).
-- ESpeech у программы для Windows (docs/stream-tts-windows.md, «ESpeech»): Python, пакеты, часть колеса torch и
-  исходники модели закреплены в `downloads.json` (раздел `espeech`). Сменил версии в `espeech/requirements.txt` или
-  источники модели в `espeech/prepare.py` (`SOURCES`) — `packaging/windows/pin-espeech.py` и новый `version.txt`
-  рантайма у пользователей (качается заново). torch там без cuDNN, cuSPARSE, cuSOLVER, NVRTC, cuFFT и cuBLAS — вместо
-  них заглушки: новый вызов этих библиотек в espeech-server (свёртка с cuDNN, FFT на GPU) сломает программу, хотя из
-  `espeech/.venv` всё работает. Пакет `espeech` импортируется раньше torch: он добавляет папки DLL (`ESPEECH_DLL_DIRS`).
+- ESpeech у программы для Windows и в Docker качается кнопкой одним кодом (docs/espeech.md, «Поставка»): Python,
+  пакеты, часть колеса torch — свои у каждой системы (`espeech.runtime.windows|linux` в `downloads.json`), исходники
+  модели — общие. Сменил версии в `espeech/requirements.txt` или источники модели в `espeech/prepare.py` (`SOURCES`) —
+  `packaging/pin-espeech.py` (пинит обе системы и пишет списки заглушек) и новый `version.txt` рантайма у
+  пользователей (качается заново). torch там без cuDNN, cuSPARSE, cuSOLVER, NVRTC, cuFFT (на Linux ещё NCCL, cuPTI,
+  cuRAND, cuSPARSELt, cuFile, NVSHMEM), cuBLAS и cudart — настоящие из CUDA cosyvoice-server, остальное — заглушки
+  (`packaging/windows/stubs/*.def`, `packaging/linux/stubs/**/*.map`, в образе — стадия `espeech-stubs`): новый вызов
+  этих библиотек в espeech-server (свёртка с cuDNN, FFT на GPU) сломает программу и Docker, хотя из `espeech/.venv`
+  всё работает. Пакет `espeech` импортируется раньше torch: он подключает библиотеки (`ESPEECH_DLL_DIRS`; на Linux —
+  загрузкой с `RTLD_GLOBAL`, `LD_LIBRARY_PATH` не задавать). Рантайм в Docker — том `./espeech-runtime`
+  (`ESPEECH_RUNTIME=/espeech-runtime/python`: сборка идёт рядом, в `python.tmp`, и переименовывается).
 
 ## Соглашения
 
