@@ -27,7 +27,7 @@
 | З7 | Голоса: список, группы наборов, примеры | `stream-tts/streamtts/voices.py` (GROUPS) | = | `tests/e2e/test_voices.py` |
 | З8 | Статистика и база SQLite | `stream-tts/streamtts/stats.py`, `stream-tts/streamtts/store.py` | = | `tests/e2e/test_stats.py` |
 | З9 | Загрузки: CUDA, кванты, ESpeech | `stream-tts/streamtts/downloads.json`, `stream-tts/streamtts/install.py`, `stream-tts/streamtts/downloads.py`, `stream-tts/streamtts/fetch.py`, `stream-tts/streamtts/engines/espeech/download.py`, `stream-tts/streamtts/partzip.py`, `packaging/pin-espeech.py` | `stream-tts/streamtts/downloads.json`, `stream-tts/streamtts/install.py`, `stream-tts/streamtts/engines/espeech/download.py`, `stream-tts/streamtts/partzip.py`, `packaging/pin-espeech.py` | `tests/e2e/test_espeech_download.py` |
-| З10 | Нормализация текста ESpeech (числа, латиница, ники) | `espeech/normalize.py`, `espeech/pipeline.py` | = | `tests/espeech/test_text.py` |
+| З10 | Нормализация текста ESpeech (числа, латиница, ники) | `espeech/normalize.py` (normalize), `espeech/numbers.py`, `espeech/latin.py`, `espeech/pipeline.py` | `espeech/normalize.py`, `espeech/pipeline.py` | `tests/espeech/test_text.py`, `tests/espeech/test_normalize_corpus.py` |
 | З11 | Обучение LoRA голоса ESpeech | `stream-tts/streamtts/engines/espeech/train.py`, `stream-tts/streamtts/static/train.js`, `espeech/trainjob.py`, `espeech/train.py` | = | `tests/e2e/test_train.py`, `tests/espeech/test_train_api.py` |
 
 ## Куда смотреть

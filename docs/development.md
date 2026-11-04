@@ -19,10 +19,11 @@
 ├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): server.py (HTTP API
 │                          # как у cosyvoice-server: обработчик и роуты), engine.py (модель в рабочем потоке),
 │                          # wire.py (multipart, WAV), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
-│                          # RUAccent и словарь ударений пользователя), normalize.py (текст чата), pipeline.py
-│                          # (нарезка на куски), lora.py (адаптер голоса), train.py (обучение LoRA на
-│                          # загруженной модели), pairs.py (реплики для обучения: звук, текст, проверка),
-│                          # trainjob.py (обучение задачей сервера, POST /train), voices.py (формат .espeech), prepare.py (папка модели из файлов Hugging
+│                          # RUAccent и словарь ударений пользователя), normalize.py (текст чата: конвейер; числа —
+│                          # numbers.py и numerals.py, латиница — latin.py), pipeline.py (нарезка на куски),
+│                          # lora.py (адаптер голоса), train.py (обучение LoRA на загруженной модели), pairs.py
+│                          # (реплики для обучения: звук, текст, проверка), trainjob.py (обучение задачей сервера,
+│                          # POST /train), voices.py (формат .espeech), prepare.py (папка модели из файлов Hugging
 │                          # Face; её запускает и программа для Windows); requirements.txt — окружение
 │                          # espeech/.venv, THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
