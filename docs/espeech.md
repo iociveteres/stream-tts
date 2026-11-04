@@ -137,6 +137,8 @@ torch 2.14.1+cu132 с download.pytorch.org, ruaccent без зависимост
 под `torch._disable_dynamo`) при первом вызове импортирует `torch._dynamo`, а тот — sympy с mpmath (+81 МБ uss и ~1 с,
 только на обучении); остальные зависимости torch (networkx, jinja2, filelock, fsspec) на этом пути не нужны. Они
 добавлены в рантайм (`PACKAGES` в `pin-espeech.py`), проверка рантайма после загрузки импортирует `torch._dynamo`.
+В собранной программе (Nuitka, MSVC) то же: загрузка с нуля со сборкой модели на 3.14, обучение, остановка,
+прослушивание и сохранение; память — как в таблице.
 
 **Папка модели** `models/espeech/` собирается `espeech/prepare.py` (`python -m espeech.prepare --src <папка>`) из
 исходных файлов Hugging Face на закреплённых ревизиях (`SOURCES`): программа для Windows качает их сама
