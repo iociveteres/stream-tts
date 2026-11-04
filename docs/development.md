@@ -87,7 +87,8 @@
 ├── docs/                  # development.md (этот файл), voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
 │                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план),
-│                          # refactor-brief.md (ТЗ на структурный рефакторинг для внешнего исполнителя)
+│                          # refactor-brief.md (ТЗ на структурный рефакторинг для внешнего исполнителя),
+│                          # refactor-plan.md (план и порядок коммитов этого рефакторинга)
 │
 │   Данные (в git не попадают):
 ├── models/                # модели и пакеты (volume; админка качает сюда); espeech/ — модель ESpeech
