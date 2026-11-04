@@ -9,7 +9,7 @@ sys.path.insert(0, ROOT)
 
 from espeech import model as M, normalize, pipeline as P  # noqa: E402
 from espeech.accent import UserAccents, keep_marked, unmark  # noqa: E402
-from espeech.server import cuda_note  # noqa: E402
+from espeech.engine import cuda_note  # noqa: E402
 
 BPS = 24.0   # байт на секунду звука — темп медленного голоса (Артес ~22–24)
 

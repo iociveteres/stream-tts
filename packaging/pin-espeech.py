@@ -72,7 +72,7 @@ WIN_EXCLUDE = [
     # не грузятся статически и синтезу не нужны
     *(L + m for m in ("curand64*", "cusolverMg*", "cufftw*", "nvperf_host*", "nvJitLink*", "*.lib", "*.h")),
     "torch/include/*", "torch/bin/*", "torch/share/*",
-    # cuDNN выключен (server.py): от него нужна только заглушка cudnn64_9
+    # cuDNN выключен (engine.py): от него нужна только заглушка cudnn64_9
     *(L + m for m in ("cudnn*", "cusparse*", "cusolver*", "nvrtc*", "cufft*")),
     # cuBLAS — из CUDA cosyvoice-server; cudart torch связан статически
     *(L + m for m in ("cublas*", "cudart*")),

@@ -59,7 +59,7 @@ def test_default_steps_and_overfit():
 
 
 def test_multipart():
-    from espeech.server import multipart
+    from espeech.wire import multipart
     b = "x" + uuid.uuid4().hex
     body = (f'--{b}\r\nContent-Disposition: form-data; name="voice"\r\n\r\nтест\r\n'
             f'--{b}\r\nContent-Disposition: form-data; name="audio"; filename="р 1.wav"\r\n'

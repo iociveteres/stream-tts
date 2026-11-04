@@ -17,7 +17,8 @@
 ├── cosyvoice/
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
 ├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): server.py (HTTP API
-│                          # как у cosyvoice-server), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
+│                          # как у cosyvoice-server: обработчик и роуты), engine.py (модель в рабочем потоке),
+│                          # wire.py (multipart, WAV), model.py (DiT, сэмплер, Vocos), accent.py (облегчённый
 │                          # RUAccent и словарь ударений пользователя), normalize.py (текст чата), pipeline.py
 │                          # (нарезка на куски), lora.py (адаптер голоса), train.py (обучение LoRA на
 │                          # загруженной модели), pairs.py (реплики для обучения: звук, текст, проверка),
