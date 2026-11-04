@@ -17,8 +17,9 @@ NVIDIA (nvcuda.dll), а ggml-cuda.dll рядом с cosyvoice-server нет, в�
 версия пишется в cuda-version.txt (по ней установщик при обновлении решает, сохранить ли CUDA или удалить вместе со
 старым рантаймом), потом сервер перезапускается и заново ищет устройства.
 
-ESpeech (рантайм с torch и модель) программа для Windows качает по кнопке на вкладке «Сервер» —
-engines/espeech/download.py; CUDA, если её нет, качается вместе с ним (torch берёт cuBLAS оттуда).
+ESpeech (рантайм с torch и модель) программа для Windows и образ Docker качают по кнопке на вкладке «Сервер» —
+engines/espeech/download.py; CUDA (программе для Windows), если её нет, качается вместе с ним (torch берёт cuBLAS
+оттуда).
 
 Набор голосов — zip с голосами (*.gguf CosyVoice, *.espeech ESpeech) и manifest.json (ключи — имена голосов:
 title, post…) в корне или в одной папке. Имя набора — эта папка или имя zip; оно же группа на странице голосов
@@ -122,7 +123,7 @@ class Installer:
     def __init__(self, settings, runtime, changed, cosy=None, espeech=None):
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
         self.cosy = cosy   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
-        self.espeech = espeech   # запуск ESpeech: у программы для Windows рантайм и модель качаются (download.py)
+        self.espeech = espeech   # запуск ESpeech: у программы для Windows и в Docker рантайм и модель качаются (download.py)
         self.task = None
         self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
         self._last_push = 0.0
@@ -194,7 +195,7 @@ class Installer:
             self.cosy.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
         log.info("CUDA %s установлена в %s", CUDA["version"], d)
 
-    # --- ESpeech (программа для Windows) ---
+    # --- ESpeech (программа для Windows, образ Docker) ---
     def espeech_state(self):
         if not self.espeech or not self.espeech.downloaded:
             return dict(offer=False)

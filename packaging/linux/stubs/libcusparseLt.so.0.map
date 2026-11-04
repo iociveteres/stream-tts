@@ -1,0 +1,21 @@
+/* Заглушка libcusparseLt.so.0 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+{
+  global:
+    cusparseLtDenseDescriptorInit;
+    cusparseLtInit;
+    cusparseLtMatDescriptorDestroy;
+    cusparseLtMatmul;
+    cusparseLtMatmulAlgGetAttribute;
+    cusparseLtMatmulAlgSelectionInit;
+    cusparseLtMatmulAlgSetAttribute;
+    cusparseLtMatmulDescSetAttribute;
+    cusparseLtMatmulDescriptorInit;
+    cusparseLtMatmulGetWorkspace;
+    cusparseLtMatmulPlanDestroy;
+    cusparseLtMatmulPlanInit;
+    cusparseLtMatmulSearch;
+    cusparseLtSpMMACompress2;
+    cusparseLtSpMMACompressedSize2;
+    cusparseLtStructuredDescriptorInit;
+  local: *;
+};

@@ -1,0 +1,18 @@
+/* Заглушка libnvrtc.so.13 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+libnvrtc.so.13 {
+  global:
+    nvrtcAddNameExpression;
+    nvrtcCompileProgram;
+    nvrtcCreateProgram;
+    nvrtcDestroyProgram;
+    nvrtcGetCUBIN;
+    nvrtcGetCUBINSize;
+    nvrtcGetErrorString;
+    nvrtcGetLoweredName;
+    nvrtcGetPTX;
+    nvrtcGetPTXSize;
+    nvrtcGetProgramLog;
+    nvrtcGetProgramLogSize;
+    nvrtcVersion;
+  local: *;
+};

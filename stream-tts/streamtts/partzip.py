@@ -158,7 +158,7 @@ class _Hashing(io.RawIOBase):
 
 
 def digest_of(path, spec):
-    """digest выбранных файлов полного архива (для закрепления: packaging/windows/pin-espeech.py)."""
+    """digest выбранных файлов полного архива (для закрепления: packaging/pin-espeech.py)."""
     h = hashlib.sha256()
     with zipfile.ZipFile(path) as z:
         for info in sorted(selected(spec, z.infolist()), key=lambda i: i.filename):

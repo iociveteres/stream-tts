@@ -1,4 +1,4 @@
-; Заглушка cublasLt64_13.dll: экспорт настоящей DLL (packaging/windows/pin-espeech.py), сборка — build-runtime.py
+; Заглушка cublasLt64_13.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
 LIBRARY cublasLt64_13.dll
 EXPORTS
   ?DeserializeContextFromFile@cask_cublas@@YA?AW4Status@1@AEAVContext@1@VStringView@1@@Z=stub_fail

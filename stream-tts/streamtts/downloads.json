@@ -50,117 +50,249 @@
  },
  "espeech": {
   "runtime": {
-   "python": {
-    "url": "https://www.python.org/ftp/python/3.14.7/python-3.14.7-embed-amd64.zip",
-    "size": 12673227,
-    "sha256": "d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15"
-   },
-   "wheels": [
-    {
-     "url": "https://files.pythonhosted.org/packages/df/ac/46de6dda46478f7942f839e094970be2d4a861e005c4b3bf07c92e291a09/numpy-2.4.6-cp314-cp314-win_amd64.whl",
-     "size": 12450334,
-     "sha256": "b507f5c4c1d508876d1819b6bf9a49d365b96320b5d4993426b33a23ca4b8261"
+   "windows": {
+    "python": {
+     "url": "https://www.python.org/ftp/python/3.14.7/python-3.14.7-embed-amd64.zip",
+     "size": 12673227,
+     "sha256": "d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15"
     },
-    {
-     "url": "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
-     "size": 355540,
-     "sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/6a/66/0bf4fdb9f58efa69cf4eddde24c72aebcc628d6ff1d67c9546145c6b9922/onnxruntime-1.31.0-cp314-cp314-win_amd64.whl",
-     "size": 15268709,
-     "sha256": "83e3dbcf6abc6189c4bdf7d329c07ba1133c88172134c266d84b4409aa3b9dbf"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/d1/6c/24f074c9a0efb98e61b20aafe6b2641922d5db24e447d5d6daffd9e17555/tokenizers-0.23.3-cp310-abi3-win_amd64.whl",
-     "size": 2872101,
-     "sha256": "1f0823bb00c5fdc98e487354d54dd55a03848d61a1a0bf29a68c77f24f3b26c3"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/15/2c/664223a3924aa6e70479f7d37220b3a658765b9cfe760b4af7ffdc50d38f/razdel-0.5.0-py3-none-any.whl",
-     "size": 21149,
-     "sha256": "76f59691c3216b47d32fef6274c18c12d61f602f1444b7ef4b135b03801f6d37"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba807a03511f97c5f86b3caeda6ad92351a7/psutil-7.2.2-cp37-abi3-win_amd64.whl",
-     "size": 137737,
-     "sha256": "eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/0f/ba/d0033444205367e6eaeacc6a141013dab67ee483edaa0e0278ac0389a8ce/ruaccent-1.5.8.3-py2.py3-none-any.whl",
-     "size": 22304,
-     "sha256": "35c220a07aa9c3c11574a6be7eb5a4dbe4c5f60be58cafb80e9c6d0796eb05b1"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
-     "size": 45571,
-     "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/38/ce/102fd4a0b2a6d111a9c86745e084c4c68c0ee020eaa359a03a8d43e4646f/onnx-1.23.2-cp312-abi3-win_amd64.whl",
-     "size": 7872489,
-     "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
-     "size": 456514,
-     "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/ff/ad/9c32c53f823dda3742df19a79c10bc198365937873ea125ba65747440c23/ml_dtypes-0.6.0-cp314-cp314-win_amd64.whl",
-     "size": 457224,
-     "sha256": "d574c2b28921dc72e869df248f1a278f6eee176a1f237c8642e1a71eb15f3977"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
-     "size": 6299353,
-     "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
-    },
-    {
-     "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
-     "size": 536198,
-     "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
-    }
-   ],
-   "torch": {
-    "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-win_amd64.whl",
-    "size": 2001146779,
-    "tail": 1999985312,
-    "tail_sha256": "9eafe70b299b616990b359a6a56bbb3b73ef565da477b7b7ebcd00b81dbee038",
-    "exclude": [
-     "torch/lib/curand64*",
-     "torch/lib/cusolverMg*",
-     "torch/lib/cufftw*",
-     "torch/lib/nvperf_host*",
-     "torch/lib/nvJitLink*",
-     "torch/lib/*.lib",
-     "torch/lib/*.h",
-     "torch/include/*",
-     "torch/bin/*",
-     "torch/share/*",
-     "torch/lib/cudnn*",
-     "torch/lib/cusparse*",
-     "torch/lib/cusolver*",
-     "torch/lib/nvrtc*",
-     "torch/lib/cufft*",
-     "torch/lib/cublas*",
-     "torch/lib/cudart*"
+    "wheels": [
+     {
+      "url": "https://files.pythonhosted.org/packages/df/ac/46de6dda46478f7942f839e094970be2d4a861e005c4b3bf07c92e291a09/numpy-2.4.6-cp314-cp314-win_amd64.whl",
+      "size": 12450334,
+      "sha256": "b507f5c4c1d508876d1819b6bf9a49d365b96320b5d4993426b33a23ca4b8261"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
+      "size": 355540,
+      "sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/6a/66/0bf4fdb9f58efa69cf4eddde24c72aebcc628d6ff1d67c9546145c6b9922/onnxruntime-1.31.0-cp314-cp314-win_amd64.whl",
+      "size": 15268709,
+      "sha256": "83e3dbcf6abc6189c4bdf7d329c07ba1133c88172134c266d84b4409aa3b9dbf"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/d1/6c/24f074c9a0efb98e61b20aafe6b2641922d5db24e447d5d6daffd9e17555/tokenizers-0.23.3-cp310-abi3-win_amd64.whl",
+      "size": 2872101,
+      "sha256": "1f0823bb00c5fdc98e487354d54dd55a03848d61a1a0bf29a68c77f24f3b26c3"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/15/2c/664223a3924aa6e70479f7d37220b3a658765b9cfe760b4af7ffdc50d38f/razdel-0.5.0-py3-none-any.whl",
+      "size": 21149,
+      "sha256": "76f59691c3216b47d32fef6274c18c12d61f602f1444b7ef4b135b03801f6d37"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba807a03511f97c5f86b3caeda6ad92351a7/psutil-7.2.2-cp37-abi3-win_amd64.whl",
+      "size": 137737,
+      "sha256": "eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/0f/ba/d0033444205367e6eaeacc6a141013dab67ee483edaa0e0278ac0389a8ce/ruaccent-1.5.8.3-py2.py3-none-any.whl",
+      "size": 22304,
+      "sha256": "35c220a07aa9c3c11574a6be7eb5a4dbe4c5f60be58cafb80e9c6d0796eb05b1"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+      "size": 45571,
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/38/ce/102fd4a0b2a6d111a9c86745e084c4c68c0ee020eaa359a03a8d43e4646f/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+      "size": 7872489,
+      "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+      "size": 456514,
+      "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/ff/ad/9c32c53f823dda3742df19a79c10bc198365937873ea125ba65747440c23/ml_dtypes-0.6.0-cp314-cp314-win_amd64.whl",
+      "size": 457224,
+      "sha256": "d574c2b28921dc72e869df248f1a278f6eee176a1f237c8642e1a71eb15f3977"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+      "size": 6299353,
+      "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "size": 536198,
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+     }
     ],
-    "digest": "9284d826326253f26be2634632a96d4c4eef949db0d2ac55393f83daa6d2182c",
-    "unpacked": 818319973,
-    "download": 454992275
+    "torch": {
+     "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-win_amd64.whl",
+     "size": 2001146779,
+     "tail": 1999985312,
+     "tail_sha256": "9eafe70b299b616990b359a6a56bbb3b73ef565da477b7b7ebcd00b81dbee038",
+     "exclude": [
+      "torch/lib/curand64*",
+      "torch/lib/cusolverMg*",
+      "torch/lib/cufftw*",
+      "torch/lib/nvperf_host*",
+      "torch/lib/nvJitLink*",
+      "torch/lib/*.lib",
+      "torch/lib/*.h",
+      "torch/include/*",
+      "torch/bin/*",
+      "torch/share/*",
+      "torch/lib/cudnn*",
+      "torch/lib/cusparse*",
+      "torch/lib/cusolver*",
+      "torch/lib/nvrtc*",
+      "torch/lib/cufft*",
+      "torch/lib/cublas*",
+      "torch/lib/cudart*"
+     ],
+     "digest": "9284d826326253f26be2634632a96d4c4eef949db0d2ac55393f83daa6d2182c",
+     "unpacked": 818319973,
+     "download": 454992275
+    },
+    "stubs": [
+     "cudnn64_9.dll",
+     "cusparse64_12.dll",
+     "cusolver64_12.dll",
+     "nvrtc64_130_0.dll",
+     "cufft64_12.dll"
+    ],
+    "cublas": [
+     "cublas64_13.dll",
+     "cublasLt64_13.dll"
+    ]
    },
-   "stubs": [
-    "cudnn64_9.dll",
-    "cusparse64_12.dll",
-    "cusolver64_12.dll",
-    "nvrtc64_130_0.dll",
-    "cufft64_12.dll"
-   ],
-   "cublas": [
-    "cublas64_13.dll",
-    "cublasLt64_13.dll"
-   ]
+   "linux": {
+    "python": {
+     "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260929/cpython-3.14.7%2B20260929-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+     "size": 36262931,
+     "sha256": "da5357f47b1d9c8d4c439004d463d893ef688a44c27438a62b47073d26d1377e",
+     "exclude": [
+      "python/share/*",
+      "python/include/*",
+      "python/bin/idle*",
+      "python/bin/pip*",
+      "python/bin/pydoc*",
+      "python/bin/*-config",
+      "python/lib/pkgconfig/*",
+      "python/lib/libpython3*",
+      "python/lib/libtcl*",
+      "python/lib/libtk*",
+      "python/lib/tcl*",
+      "python/lib/tk*",
+      "python/lib/itcl*",
+      "python/lib/thread*",
+      "python/lib/python3.14/site-packages/*",
+      "python/lib/python3.14/ensurepip/*",
+      "python/lib/python3.14/idlelib/*",
+      "python/lib/python3.14/tkinter/*",
+      "python/lib/python3.14/turtledemo/*",
+      "python/lib/python3.14/lib-dynload/_tkinter*"
+     ]
+    },
+    "wheels": [
+     {
+      "url": "https://files.pythonhosted.org/packages/f3/eb/ebffaa97dc55502df69584a8f0dcf07f69a3e0b3e2323670a2722db9aa39/numpy-2.4.6-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 16638245,
+      "sha256": "a2c306dea656c12c68f51f4cea133cbe78ca7435eb28c735eac1d3ebe73be6e8"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/28/50/f203ff3a3ddfe19308efc83c5a3a29ed02bf786732ec35e68bf9162f3365/safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "size": 516040,
+      "sha256": "fd6f3f93c9a0a7cc2788ee63fb763353d4bd2e89b0751bc78fcf7dda00bea774"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/30/2e/5c6ec7e26a097e97ee70f2dee68b8ca4d9d26701f2f33c3f8ab585cb89fe/onnxruntime-1.31.0-cp314-cp314-manylinux_2_28_x86_64.whl",
+      "size": 23762993,
+      "sha256": "e4efa4a1a0bb0b5173c6a3292c181d518b8323f9d56e978635d0c09d38c94d1a"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/3a/40/6706b82693715581457c6d5423eaa7faae576bb0526c5738a57085eb4449/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "size": 3396193,
+      "sha256": "376851d22bcf9d650a5c3090bb83e6cf9e895fbf0595369fa4cd43c1f69b5f87"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/15/2c/664223a3924aa6e70479f7d37220b3a658765b9cfe760b4af7ffdc50d38f/razdel-0.5.0-py3-none-any.whl",
+      "size": 21149,
+      "sha256": "76f59691c3216b47d32fef6274c18c12d61f602f1444b7ef4b135b03801f6d37"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/b5/70/5d8df3b09e25bce090399cf48e452d25c935ab72dad19406c77f4e828045/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 155560,
+      "sha256": "076a2d2f923fd4821644f5ba89f059523da90dc9014e85f8e45a5774ca5bc6f9"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/0f/ba/d0033444205367e6eaeacc6a141013dab67ee483edaa0e0278ac0389a8ce/ruaccent-1.5.8.3-py2.py3-none-any.whl",
+      "size": 22304,
+      "sha256": "35c220a07aa9c3c11574a6be7eb5a4dbe4c5f60be58cafb80e9c6d0796eb05b1"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+      "size": 45571,
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/87/56/21509a657f9a73ab0ca307d325043f49ca6c4ff6bf79edeb9e159190d44d/onnx-1.23.2-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 8881633,
+      "sha256": "7abf381d278f31ac62487fddedc9dd42da842dce94d5d43536836ee3efdf4a2b"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/db/f3/3996583dd2906297a637af12114deddf7658af6e683fedb83be061983fb5/protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl",
+      "size": 343223,
+      "sha256": "89f23aa53c24553a2416fd4fd1ec06f74fa42b14b546d8883128813f775bbfd2"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/1c/b1/1831dd8c9b06c013085d31a2ac4f03392d43bd36bfc6ff591a08bcedc1cf/ml_dtypes-0.6.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 409966,
+      "sha256": "8f490c003369ce60e514a0c3b12374f05274c101fee1bead6740ec8a564032b0"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+      "size": 6299353,
+      "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "size": 536198,
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+     }
+    ],
+    "torch": {
+     "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-manylinux_2_28_x86_64.whl",
+     "size": 559168974,
+     "tail": 557940573,
+     "tail_sha256": "6a44e09c6cef91329b06c5c9de37979b19710fc751db2503070d1cc6c609fd2f",
+     "exclude": [
+      "torch/include/*",
+      "torch/bin/protoc*",
+      "torch/share/*",
+      "torch/lib/libshm/*",
+      "torch/lib/libshm_windows/*",
+      "torch/lib/libtorch_cuda_linalg.so"
+     ],
+     "digest": "15b09d4677b40dfced2c4cf7927162a71eb8d724fc4cf585da8082595be81b12",
+     "unpacked": 1059471433,
+     "download": 510544233
+    },
+    "stubs": [
+     "libcudnn.so.9",
+     "libcusparse.so.12",
+     "libcufft.so.12",
+     "libnvrtc.so.13",
+     "libcupti.so.13",
+     "libnccl.so.2",
+     "libcusparseLt.so.0",
+     "libcufile.so.0",
+     "libcurand.so.10",
+     "libnvshmem_host.so.3"
+    ],
+    "cublas": [
+     "libcudart.so.13",
+     "libcublasLt.so.13",
+     "libcublas.so.13"
+    ]
+   }
   },
   "model": {
    "files": [

@@ -1,8 +1,8 @@
-"""Загрузка ESpeech программой для Windows (engines/espeech/download.py, partzip.py) без сети и без настоящих файлов:
-часть zip диапазонами с локального HTTP-сервера (выбор файлов, докачка после обрыва, подмена хвоста или файла),
-распаковка колёс и состояние рантайма. Сам рантайм с torch и сборку модели проверяет запуск программы (docs/espeech.md,
-«Поставка»): они качают гигабайты."""
-import asyncio, hashlib, json, os, random, sys, zipfile
+"""Загрузка ESpeech (engines/espeech/download.py, partzip.py; программа для Windows и образ Docker) без сети и без
+настоящих файлов: часть zip диапазонами с локального HTTP-сервера (выбор файлов, докачка после обрыва, подмена хвоста
+или файла), распаковка колёс и Python из tar.gz, состояние рантайма, закрепление для обеих систем. Сам рантайм с torch
+и сборку модели проверяет запуск программы и контейнера (docs/espeech.md, «Поставка»): они качают гигабайты."""
+import asyncio, hashlib, io, json, os, random, sys, tarfile, zipfile
 
 import aiohttp
 import pytest
@@ -216,8 +216,9 @@ def test_runtime_state(tmp_path, monkeypatch):
     monkeypatch.setattr(launch, "RUNTIME", str(tmp_path / "rt"))
     monkeypatch.setattr(paths, "MODELS", str(tmp_path / "models"))
     assert download.runtime_state() == "missing"
-    os.makedirs(tmp_path / "rt")
-    (tmp_path / "rt" / "python.exe").write_bytes(b"MZ")
+    os.makedirs(os.path.dirname(launch.runtime_python()))
+    with open(launch.runtime_python(), "wb") as f:
+        f.write(b"MZ")
     (tmp_path / "rt" / "version.txt").write_text("old")
     assert download.runtime_state() == "outdated"
     (tmp_path / "rt" / "version.txt").write_text(download.runtime_version())
@@ -230,17 +231,55 @@ def test_runtime_state(tmp_path, monkeypatch):
     assert download.model_ready()
 
 
+def test_unpack_tar(tmp_path):
+    """Python из tar.gz (python-build-standalone): без верхней папки python/ и без масок exclude, ссылки сохраняются;
+    путь наружу — ошибка фильтра data."""
+    def tgz(path, entries):
+        with tarfile.open(path, "w:gz") as t:
+            for name, data, link in entries:
+                i = tarfile.TarInfo(name)
+                if link:
+                    i.type, i.linkname = tarfile.SYMTYPE, link
+                    t.addfile(i)
+                else:
+                    i.size, i.mode = len(data), 0o755
+                    t.addfile(i, io.BytesIO(data))
+    good = tmp_path / "py.tar.gz"
+    tgz(good, [("python/bin/python3.14", b"ELF", None), ("python/bin/python3", b"", "python3.14"),
+               ("python/lib/python3.14/os.py", b"x = 1", None), ("python/share/terminfo/a", b"t", None),
+               ("python/lib/python3.14/site-packages/pip/__init__.py", b"", None)])
+    out = tmp_path / "rt"
+    download._unpack_tar(str(good), str(out), ["python/share/*", "python/lib/python3.14/site-packages/*"])
+    found = sorted(os.path.relpath(os.path.join(r, f), out).replace(os.sep, "/")
+                   for r, _, fs in os.walk(out) for f in fs)
+    # символическая ссылка — только не на Windows (там tarfile её пропускает, а tar.gz нужен только Linux)
+    assert found == ["bin/python3"] * (os.name != "nt") + ["bin/python3.14", "lib/python3.14/os.py"]
+    evil = tmp_path / "evil.tar.gz"
+    tgz(evil, [("python/../../evil.py", b"boom", None)])
+    with pytest.raises(tarfile.FilterError):
+        download._unpack_tar(str(evil), str(tmp_path / "rt2"), [])
+
+
 def test_pinned_downloads():
-    """downloads.json: рантайм и модель закреплены целиком (pin-espeech.py), заглушки есть для всех DLL из списка."""
+    """downloads.json: рантаймы обеих систем и модель закреплены целиком (pin-espeech.py), заглушки есть для всех
+    библиотек из списков; настоящие библиотеки CUDA — те же, что ищет launch.py."""
     with open(os.path.join(STREAM_TTS, "streamtts", "downloads.json"), encoding="utf-8") as f:
         e = json.load(f)["espeech"]
-    r, m = e["runtime"], e["model"]
-    for item in [r["python"], *r["wheels"], *m["files"]]:
-        assert item["url"].startswith("https://") and item["size"] > 0 and len(item["sha256"]) == 64
-    for part in (r["torch"], m["checkpoint"]):
-        assert 0 < part["tail"] < part["size"] and len(part["tail_sha256"]) == 64 and len(part["digest"]) == 64
-        assert part["download"] < part["size"]
-    stubs = os.path.join(os.path.dirname(STREAM_TTS), "packaging", "windows", "stubs")
-    for dll in r["stubs"] + r["cublas"]:
-        assert os.path.isfile(os.path.join(stubs, dll[:-4] + ".def")), dll
+    m, packaging = e["model"], os.path.join(os.path.dirname(STREAM_TTS), "packaging")
+    assert sorted(e["runtime"]) == ["linux", "windows"]
+    for system, r in e["runtime"].items():
+        for item in [r["python"], *r["wheels"], *m["files"]]:
+            assert item["url"].startswith("https://") and item["size"] > 0 and len(item["sha256"]) == 64
+        for part in (r["torch"], m["checkpoint"]):
+            assert 0 < part["tail"] < part["size"] and len(part["tail_sha256"]) == 64 and len(part["digest"]) == 64
+            assert part["download"] < part["size"]
+        names = [os.path.basename(w["url"]) for w in r["wheels"]]
+        assert all(("win_amd64" in n) == (system == "windows") or n.endswith("-none-any.whl") for n in names), names
+        for lib in r["stubs"] + r["cublas"]:
+            sub = ["cublas"] if lib in r["cublas"] else []
+            stub = (os.path.join(packaging, "windows", "stubs", lib[:-4] + ".def") if system == "windows" else
+                    os.path.join(packaging, "linux", "stubs", *sub, lib + ".map"))
+            assert os.path.isfile(stub), stub
+    assert tuple(e["runtime"][download.SYSTEM]["cublas"]) == launch.CUBLAS
+    assert e["runtime"]["linux"]["python"]["url"].endswith(".tar.gz") and e["runtime"]["linux"]["python"]["exclude"]
     assert all(f["path"].count("/") >= 2 for f in m["files"])   # <владелец>/<репозиторий>/<путь>

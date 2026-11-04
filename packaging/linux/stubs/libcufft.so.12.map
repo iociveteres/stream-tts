@@ -1,0 +1,12 @@
+/* Заглушка libcufft.so.12 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+libcufft.so.12 {
+  global:
+    cufftCreate;
+    cufftDestroy;
+    cufftSetAutoAllocation;
+    cufftSetStream;
+    cufftSetWorkArea;
+    cufftXtExec;
+    cufftXtMakePlanMany;
+  local: *;
+};

@@ -1,0 +1,21 @@
+/* Заглушка libcublasLt.so.13 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+libcublasLt.so.13 {
+  global:
+    cublasLtGetVersion;
+    cublasLtMatmul;
+    cublasLtMatmulAlgoCheck;
+    cublasLtMatmulAlgoConfigGetAttribute;
+    cublasLtMatmulAlgoConfigSetAttribute;
+    cublasLtMatmulAlgoGetHeuristic;
+    cublasLtMatmulAlgoInit;
+    cublasLtMatmulDescCreate;
+    cublasLtMatmulDescDestroy;
+    cublasLtMatmulDescSetAttribute;
+    cublasLtMatmulPreferenceCreate;
+    cublasLtMatmulPreferenceDestroy;
+    cublasLtMatmulPreferenceSetAttribute;
+    cublasLtMatrixLayoutCreate;
+    cublasLtMatrixLayoutDestroy;
+    cublasLtMatrixLayoutSetAttribute;
+  local: *;
+};

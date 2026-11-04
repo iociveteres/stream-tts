@@ -1,4 +1,4 @@
-; Заглушка cublas64_13.dll: экспорт настоящей DLL (packaging/windows/pin-espeech.py), сборка — build-runtime.py
+; Заглушка cublas64_13.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
 LIBRARY cublas64_13.dll
 EXPORTS
   cublasAlloc=stub_fail

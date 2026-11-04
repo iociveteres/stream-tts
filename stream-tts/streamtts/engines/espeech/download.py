@@ -1,20 +1,25 @@
-"""Загрузка ESpeech программой для Windows по кнопке на вкладке «Сервер»: рантайм и модель из первоисточников.
+"""Загрузка ESpeech по кнопке на вкладке «Сервер» (программа для Windows и образ Docker — одним кодом): рантайм и
+модель из первоисточников.
 
-Что и откуда — downloads.json, раздел espeech (закрепляет packaging/windows/pin-espeech.py):
-- рантайм → launch.RUNTIME (папка espeech-runtime рядом с программой, а не в runtime/: установщик при обновлении
-  очищает runtime/ целиком, а здесь ~1,1 ГБ): встраиваемый Python 3.14 (python.org), колёса пакетов (PyPI) —
-  распаковкой, без pip, и нужные файлы колеса torch диапазонами (partzip.py, ~430 МБ из 1,9 ГБ). Код espeech-server и
-  DLL-заглушки ставит установщик (launch.CODE). Рядом с python.exe — CRT из рантайма cosyvoice-server: новее, чем во
-  встраиваемом Python, и с vcruntime140_threads.dll для torch. Потом байткод (compileall: без него каждый запуск
-  компилирует torch заново, +1 с) и проверка — импорт torch и пакетов. Собирается в <папка>.tmp и переименовывается;
-  версия — хэш раздела runtime в version.txt, при другой закреплённой версии рантайм качается заново;
+Что и откуда — downloads.json, раздел espeech (закрепляет packaging/pin-espeech.py), рантайм — свой у каждой системы
+(runtime.windows, runtime.linux), версии Python и пакетов одни:
+- рантайм → launch.RUNTIME (у программы — папка espeech-runtime рядом с ней, а не в runtime/: установщик при
+  обновлении очищает runtime/ целиком, а здесь ~1,1 ГБ; в Docker — том): Python 3.14.7 (встраиваемый с python.org на
+  Windows, python-build-standalone на Linux — без ненужного: python.exclude), колёса пакетов (PyPI) — распаковкой, без
+  pip, и нужные файлы колеса torch диапазонами (partzip.py: на Windows ~430 МБ из 1,9 ГБ, на Linux 490 из 533 МБ).
+  Код espeech-server и заглушки библиотек CUDA уже на месте (launch.CODE: от установщика или из образа). На Windows
+  рядом с python.exe — CRT из рантайма cosyvoice-server: новее, чем во встраиваемом Python, и с
+  vcruntime140_threads.dll для torch. Потом байткод (compileall: без него каждый запуск компилирует torch заново, +1 с)
+  и проверка — импорт torch и пакетов. Собирается в <папка>.tmp и переименовывается; версия — хэш рантайма своей
+  системы в version.txt, при другой закреплённой версии рантайм качается заново;
 - модель → paths.MODELS/espeech: исходные файлы с Hugging Face в .espeech-src/ (из чекпойнта — только EMA-копия
   весов, урезанный чекпойнт собирается как zip), сборка — python -m espeech.prepare в скачанном рантайме, потом
   исходники удаляются;
-- CUDA: если видеокарта NVIDIA есть, а CUDA для cosyvoice-server нет, она качается первой (cuBLAS torch берёт оттуда;
-  без CUDA ESpeech работает только на процессоре).
+- CUDA (только программа для Windows): если видеокарта NVIDIA есть, а CUDA для cosyvoice-server нет, она качается
+  первой (cuBLAS torch берёт оттуда; без CUDA ESpeech работает только на процессоре). В образе stream-tts:cuda она
+  уже есть, в stream-tts:cpu её нет, и ESpeech — на процессоре.
 Всё докачивается с места обрыва; прогресс — общий для загрузок (Installer.dl, install.py)."""
-import asyncio, contextlib, glob, hashlib, json, logging, os, shutil, time, zipfile
+import asyncio, contextlib, fnmatch, glob, hashlib, json, logging, os, shutil, tarfile, time, zipfile
 
 import aiohttp
 
@@ -26,9 +31,11 @@ from ...runtime import spawn_kwargs
 log = logging.getLogger("install")
 
 SRC_DIR = "espeech-src"     # исходники модели: paths.MODELS/.espeech-src
+SYSTEM = "windows" if os.name == "nt" else "linux"   # рантайм в downloads.json
 CRT = ("msvcp140*.dll", "vcruntime140*.dll", "concrt140.dll")
-RUNTIME_EXTRA = 350 << 20   # рантайм без torch: Python, пакеты, байткод (замер на 3.14: 293 МБ файлов, из них
-                            # sympy 83 МБ, + кластеры диска)
+# Рантайм сверх файлов torch: Python, пакеты, байткод (замер на 3.14: Windows — 293 МБ файлов, из них sympy 83 МБ,
+# + кластеры диска; Linux — 408 МБ: Python 53, пакеты 282, байткод torch 68)
+RUNTIME_EXTRA = (350 if os.name == "nt" else 420) << 20
 MODEL_DISK = 1450 << 20     # готовая папка модели (замер)
 CHUNK = 1 << 20
 RETRIES = 5
@@ -46,9 +53,13 @@ def spec():
     return DOWNLOADS["espeech"]
 
 
+def runtime_spec():
+    return spec()["runtime"][SYSTEM]
+
+
 def runtime_version():
-    """Хэш закреплённого рантайма: другой — качать заново."""
-    return hashlib.sha256(json.dumps(spec()["runtime"], sort_keys=True).encode()).hexdigest()[:16]
+    """Хэш закреплённого рантайма своей системы: другой — качать заново."""
+    return hashlib.sha256(json.dumps(runtime_spec(), sort_keys=True).encode()).hexdigest()[:16]
 
 
 def runtime_state():
@@ -58,7 +69,7 @@ def runtime_state():
             have = f.read().strip()
     except OSError:
         return "missing"
-    if not os.path.isfile(os.path.join(launch.RUNTIME, "python.exe")):
+    if not os.path.isfile(launch.runtime_python()):
         return "missing"
     return "ok" if have == runtime_version() else "outdated"
 
@@ -73,11 +84,11 @@ def model_ready():
 
 def runtime_disk():
     """Рантайм на диске: torch и ~RUNTIME_EXTRA на Python, пакеты и байткод."""
-    return spec()["runtime"]["torch"]["unpacked"] + RUNTIME_EXTRA
+    return runtime_spec()["torch"]["unpacked"] + RUNTIME_EXTRA
 
 
 def runtime_size():
-    r = spec()["runtime"]
+    r = runtime_spec()
     return r["python"]["size"] + sum(w["size"] for w in r["wheels"]) + r["torch"]["download"]
 
 
@@ -87,7 +98,7 @@ def model_size():
 
 
 def offered():
-    """Программа для Windows: код espeech-server поставлен установщиком, рантайм качается по кнопке."""
+    """Программа для Windows и образ Docker: код espeech-server на месте, рантайм качается по кнопке."""
     return launch.downloadable()
 
 
@@ -174,7 +185,7 @@ class Steps:
     # --- рантайм ---
     async def runtime(self, on_ready):
         """Скачать и собрать рантайм; on_ready(готовая папка) переносит её на место (сервер ESpeech остановлен)."""
-        r = spec()["runtime"]
+        r = runtime_spec()
         dl_dir = launch.RUNTIME + ".dl"
         os.makedirs(dl_dir, exist_ok=True)
         py = os.path.join(dl_dir, _name(r["python"]["url"]))
@@ -184,26 +195,32 @@ class Steps:
             dst = os.path.join(dl_dir, _name(w["url"]))
             await self.fetch(w["url"], _name(w["url"]), dst, w["size"], w["sha256"])
             wheels.append(dst)
-        part = os.path.join(dl_dir, "torch.part")
+        # имя — по закреплённому выбору файлов: у прерванной загрузки другого закрепления хвост тот же, а диапазоны
+        # другие, и докачка в тот же .part дала бы не те файлы
+        part = os.path.join(dl_dir, f"torch-{r['torch']['digest'][:16]}.part")
+        for old in glob.glob(os.path.join(dl_dir, "torch*.part")):
+            if old != part:
+                self.inst.dl["done"] = max(0, self.inst.dl["done"] - _size(old))
+                os.remove(old)
         ranges = await self.partial(r["torch"], part, _name(r["torch"]["url"]))
 
         tmp = launch.RUNTIME + ".tmp"
         self.label(tr("ESpeech: распаковка"))
-        await asyncio.to_thread(_unpack, tmp, py, wheels, part, r["torch"], ranges)
+        await asyncio.to_thread(_unpack, tmp, py, r["python"], wheels, part, r["torch"], ranges)
         self.label(tr("ESpeech: подготовка Python"))
         # ошибки — только у файлов, которые не импортируются (py312_intrinsics.py с синтаксисом 3.12 в тестах torch);
         # в один процесс: дочерние процессы -j открыли бы окна консоли
-        await self.run([os.path.join(tmp, "python.exe"), "-m", "compileall", "-q",
-                        os.path.join(tmp, "Lib", "site-packages")], tmp, check=False, quiet=True)
+        python = launch.runtime_python(tmp)
+        await self.run([python, "-m", "compileall", "-q", launch.site_packages(tmp)], tmp, check=False, quiet=True)
         self.label(tr("ESpeech: проверка"))
-        await self.run([os.path.join(tmp, "python.exe"), "-c", SMOKE], tmp)
+        await self.run([python, "-c", SMOKE], tmp)
         with open(os.path.join(tmp, "version.txt"), "w", encoding="utf-8") as f:
             f.write(runtime_version())
         await on_ready(tmp)
         shutil.rmtree(dl_dir, ignore_errors=True)
 
     async def run(self, args, runtime_dir, check=True, quiet=False):
-        """Процесс рантайма ESpeech (python.exe из runtime_dir) с выводом в лог (quiet — без); ошибка — RuntimeError
+        """Процесс рантайма ESpeech (Python из runtime_dir) с выводом в лог (quiet — без); ошибка — RuntimeError
         с последней строкой вывода."""
         proc = await asyncio.create_subprocess_exec(
             *args, cwd=runtime_dir, env=launch.process_env(runtime_dir), stdin=asyncio.subprocess.DEVNULL,
@@ -245,8 +262,7 @@ class Steps:
             await asyncio.to_thread(_slim_checkpoint, part, ck, ranges, dst)
             os.remove(part)
         self.label(tr("ESpeech: сборка модели"))
-        await self.run([os.path.join(launch.RUNTIME, "python.exe"), "-m", "espeech.prepare", "--src", src, out],
-                       launch.RUNTIME)
+        await self.run([launch.runtime_python(), "-m", "espeech.prepare", "--src", src, out], launch.RUNTIME)
         if not model_ready():
             raise RuntimeError(tr("модель ESpeech собрана не полностью"))
         shutil.rmtree(src, ignore_errors=True)
@@ -269,13 +285,16 @@ def bytes_present():
 
 
 # --- распаковка (в потоке) ---
-def _unpack(tmp, py, wheels, part, torch_spec, ranges):
+def _unpack(tmp, py, py_spec, wheels, part, torch_spec, ranges):
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
-    with zipfile.ZipFile(py) as z:
-        z.extractall(tmp)
-    site = os.path.join(tmp, "Lib", "site-packages")
-    os.makedirs(site)
+    if zipfile.is_zipfile(py):   # встраиваемый Python — целиком
+        with zipfile.ZipFile(py) as z:
+            z.extractall(tmp)
+    else:
+        _unpack_tar(py, tmp, py_spec.get("exclude", ()))
+    site = launch.site_packages(tmp)
+    os.makedirs(site, exist_ok=True)
     for w in wheels:
         _unpack_wheel(w, site)
 
@@ -288,14 +307,30 @@ def _unpack(tmp, py, wheels, part, torch_spec, ranges):
             shutil.copyfileobj(src, f, CHUNK)
 
     partzip.extract(part, torch_spec, ranges, sink)
-    for mask in CRT:   # CRT новее, чем во встраиваемом Python, и с vcruntime140_threads.dll (torch_cpu.dll)
-        for f in glob.glob(os.path.join(paths.RUNTIME, mask)):
-            shutil.copy(f, tmp)
-    missing = [f for f in ("vcruntime140_threads.dll", "msvcp140.dll") if not os.path.isfile(os.path.join(tmp, f))]
-    if missing:
-        raise RuntimeError(tr("нет {files} в {dir}: переустановите программу", files=", ".join(missing),
-                              dir=paths.RUNTIME))
+    if os.name == "nt":
+        for mask in CRT:   # CRT новее, чем во встраиваемом Python, и с vcruntime140_threads.dll (torch_cpu.dll)
+            for f in glob.glob(os.path.join(paths.RUNTIME, mask)):
+                shutil.copy(f, tmp)
+        missing = [f for f in ("vcruntime140_threads.dll", "msvcp140.dll") if not os.path.isfile(os.path.join(tmp, f))]
+        if missing:
+            raise RuntimeError(tr("нет {files} в {dir}: переустановите программу", files=", ".join(missing),
+                                  dir=paths.RUNTIME))
     launch.write_pth(tmp)
+
+
+def _unpack_tar(path, dst, exclude):
+    """Python из tar.gz (python-build-standalone): без верхней папки python/ и без файлов по маскам exclude (fnmatch
+    по полным именам в архиве); фильтр data — ничего вне dst, без устройств и прав setuid."""
+    masks = [m.lower() for m in exclude]
+    with tarfile.open(path) as t:
+        members = []
+        for m in t.getmembers():
+            top, _, rest = m.name.partition("/")
+            if not rest or any(fnmatch.fnmatch(m.name.lower(), x) for x in masks):
+                continue
+            link = m.linkname.partition("/")[2] if m.islnk() else m.linkname   # жёсткая ссылка — от корня архива
+            members.append(m.replace(name=rest, linkname=link, deep=False))
+        t.extractall(dst, members, filter="data")
 
 
 def _unpack_wheel(path, site):

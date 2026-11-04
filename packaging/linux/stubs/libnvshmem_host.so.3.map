@@ -1,0 +1,25 @@
+/* Заглушка libnvshmem_host.so.3 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+NVSHMEM {
+  global:
+    nvshmem_free;
+    nvshmem_info_get_version;
+    nvshmem_init;
+    nvshmem_malloc;
+    nvshmem_ptr;
+    nvshmem_team_n_pes;
+    nvshmem_team_split_strided;
+    nvshmemid_hostlib_finalize;
+    nvshmemid_hostlib_init_attr;
+    nvshmemid_init_status;
+    nvshmemx_alltoallmem_on_stream;
+    nvshmemx_broadcastmem_on_stream;
+    nvshmemx_cumodule_init;
+    nvshmemx_get_uniqueid;
+    nvshmemx_getmem_on_stream;
+    nvshmemx_mc_ptr;
+    nvshmemx_putmem_on_stream;
+    nvshmemx_putmem_signal_on_stream;
+    nvshmemx_set_attr_uniqueid_args;
+    nvshmemx_signal_wait_until_on_stream;
+  local: *;
+};

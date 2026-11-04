@@ -1,4 +1,4 @@
-; Заглушка nvrtc64_130_0.dll: экспорт настоящей DLL (packaging/windows/pin-espeech.py), сборка — build-runtime.py
+; Заглушка nvrtc64_130_0.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
 LIBRARY nvrtc64_130_0.dll
 EXPORTS
   __nvrtcCPEx=stub_fail

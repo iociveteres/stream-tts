@@ -1,0 +1,26 @@
+/* Заглушка libcupti.so.13 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+libcupti.so.13 {
+  global:
+    cuptiActivityDisable;
+    cuptiActivityEnable;
+    cuptiActivityEnableCudaEventDeviceTimestamps;
+    cuptiActivityEnableDriverApi;
+    cuptiActivityEnableRuntimeApi;
+    cuptiActivityFlushAll;
+    cuptiActivityGetNextRecord;
+    cuptiActivityGetNumDroppedRecords;
+    cuptiActivityPopExternalCorrelationId;
+    cuptiActivityPushExternalCorrelationId;
+    cuptiActivityRegisterCallbacks;
+    cuptiActivityRegisterTimestampCallback;
+    cuptiActivitySetAttribute;
+    cuptiEnableCallback;
+    cuptiEnableDomain;
+    cuptiFinalize;
+    cuptiGetCallbackName;
+    cuptiGetResultString;
+    cuptiGetVersion;
+    cuptiSubscribe;
+    cuptiUnsubscribe;
+  local: *;
+};

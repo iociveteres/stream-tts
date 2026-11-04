@@ -1,4 +1,4 @@
-; Заглушка cufft64_12.dll: экспорт настоящей DLL (packaging/windows/pin-espeech.py), сборка — build-runtime.py
+; Заглушка cufft64_12.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
 LIBRARY cufft64_12.dll
 EXPORTS
   cufftCreate=stub_fail

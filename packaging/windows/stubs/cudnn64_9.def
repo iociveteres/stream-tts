@@ -1,4 +1,4 @@
-; Заглушка cudnn64_9.dll: экспорт настоящей DLL (packaging/windows/pin-espeech.py), сборка — build-runtime.py
+; Заглушка cudnn64_9.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
 LIBRARY cudnn64_9.dll
 EXPORTS
   cudnnActivationBackward=stub_fail

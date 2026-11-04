@@ -1,3 +1,5 @@
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.yml text eol=lf
+# скрипты версий ld для заглушек .so (packaging/linux/build-stubs.sh в стадии Dockerfile)
+*.map text eol=lf

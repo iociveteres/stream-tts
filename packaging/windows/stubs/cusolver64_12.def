@@ -1,4 +1,4 @@
-; Заглушка cusolver64_12.dll: экспорт настоящей DLL (packaging/windows/pin-espeech.py), сборка — build-runtime.py
+; Заглушка cusolver64_12.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
 LIBRARY cusolver64_12.dll
 EXPORTS
   NvOptimusEnablementCuda=stub_data0 DATA
