@@ -105,3 +105,12 @@ def test_bad_archives(voices, tmp_path):
         voicesets._check_zip(make_zip(tmp_path, "b.zip", {"b.gguf": ESPEECH}), "b.zip")
     with pytest.raises(ValueError, match="нет голосов"):
         voicesets._check_zip(make_zip(tmp_path, "c.zip", {"readme.txt": b"hi"}), "c.zip")
+
+
+@pytest.mark.parametrize("voice", ["Артес", "-thrall", ".thrall", "_thrall", "thrall\n", "a" * 65])
+def test_voice_name_rule(voices, tmp_path, voice):
+    """Имя голоса из zip — по тому же правилу, что в редакторе (voices.NAME): иначе ставится голос, который в
+    редакторе не создать и не переименовать."""
+    with pytest.raises(ValueError, match="недопустимое имя голоса"):
+        voicesets._check_zip(make_zip(tmp_path, "s.zip", {f"{voice}.gguf": GGUF}), "s.zip")
+    assert voicesets._check_zip(make_zip(tmp_path, "ok.zip", {"Thrall_2.v1-x.gguf": GGUF}), "ok.zip")

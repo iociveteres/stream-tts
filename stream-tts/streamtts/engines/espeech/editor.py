@@ -86,7 +86,7 @@ class Maker:
         return parts + [speed] if speed else parts   # без поправки ключ прежний
 
     def ref_name(self, voice):
-        return f"ref-{voice}~{self.ENGINE}"   # «~» в имени голоса не бывает (editor.NAME)
+        return f"ref-{voice}~{self.ENGINE}"   # «~» в имени голоса не бывает (voices.NAME)
 
     def check(self, v):
         t = v.get("tempo")

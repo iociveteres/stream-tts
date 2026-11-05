@@ -12,9 +12,9 @@ import contextlib, json, os, re, shutil, zipfile
 from . import paths, store
 from .engines import ENGINES, cosyvoice
 from .i18n import tr
+from .voices import NAME as VOICE_NAME
 
 SET_NAME = re.compile(r"[^a-z0-9_-]+")
-VOICE_NAME = re.compile(r"^[\w.-]{1,64}$")
 MAX_VOICE = 64 << 20       # голос CosyVoice ~200 КБ, ESpeech с адаптером ~10 МБ; больше — точно не голос
 # Модель по расширению файла голоса. Папка набора (источника) держит голоса обеих моделей: голос с тем же именем у
 # другой модели — в том же наборе (editor.py). Коллекция в zip — голоса одной модели одного источника
@@ -97,7 +97,7 @@ def _check_zip(path, filename):
             elif base == "manifest.json":
                 manifest = i.filename
             elif ext in EXT_MODEL:
-                if not VOICE_NAME.match(voice):
+                if not VOICE_NAME.fullmatch(voice):
                     raise ValueError(tr("недопустимое имя голоса: {voice}", voice=voice))
                 if i.file_size > MAX_VOICE:
                     raise ValueError(tr("{file}: слишком большой для голоса", file=base))

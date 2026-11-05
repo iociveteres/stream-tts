@@ -29,7 +29,7 @@ import numpy as np
 from ... import audio, config, store
 from ...config import SR
 from ...i18n import tr
-from ...voices import DEMO_SEED
+from ...voices import DEMO_SEED, NAME
 from ..client import PREVIEW
 from .client import TrainError
 
@@ -50,7 +50,6 @@ VAL_MIN_ITEMS, VAL_MIN_N, VAL_MAX_N = 30, 5, 12
 BUSY = ("running", "stopping")
 SNAPSHOTS = ("last", "best")
 ID = re.compile(r"[0-9a-f]{8}")
-SAFE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}", re.ASCII)
 
 
 class Refused(ValueError):
@@ -115,7 +114,7 @@ class Training:
         self.require()
         if voice not in self.voices.names():
             raise ValueError(tr("нет такого голоса"))
-        name = voice if SAFE.fullmatch(voice) else "v-" + hashlib.sha1(voice.encode()).hexdigest()[:12]
+        name = voice if NAME.fullmatch(voice) else "v-" + hashlib.sha1(voice.encode()).hexdigest()[:12]
         return os.path.join(self.root, name)
 
     @staticmethod

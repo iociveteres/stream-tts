@@ -33,7 +33,7 @@ from . import audio, config, engines, paths, separate, store, voicesets
 from .config import SR
 from .engines.client import PREVIEW
 from .i18n import tr
-from .voices import DEMO_SEED, DRAFT_PREFIX
+from .voices import DEMO_SEED, DRAFT_PREFIX, NAME
 
 log = logging.getLogger("editor")
 
@@ -46,7 +46,6 @@ DENOISE = "afftdn=nf=-25"  # шумоподавление ffmpeg: фон и ши
 FADE = 0.01                # с: без щелчков на краях отрезка
 CONTEXT = 1.0              # с: запас записи по краям отрезка для отделения от музыки
 ID = re.compile(r"[\w-]{1,24}")
-NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
 
 
 def _hash(*parts):
