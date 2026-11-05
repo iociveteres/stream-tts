@@ -13,6 +13,9 @@ log = logging.getLogger("twitch")
 ID = "https://id.twitch.tv/oauth2"
 HELIX = "https://api.twitch.tv/helix"
 EVENTSUB = "wss://eventsub.wss.twitch.tv/ws"
+if config.TEST_TWITCH:   # поддельный Twitch e2e-тестов (config.TEST_TWITCH)
+    ID, HELIX = f"{config.TEST_TWITCH}/oauth2", f"{config.TEST_TWITCH}/helix"
+    EVENTSUB = config.TEST_TWITCH.replace("http", "ws", 1) + "/ws"
 SCOPES = "channel:manage:redemptions user:read:chat"
 # Для ответов зрителю в чат при отказе. Не обязателен: вход, сделанный до его появления, продолжает работать, а
 # ответы включаются после повторного входа (интерфейс подсказывает)
