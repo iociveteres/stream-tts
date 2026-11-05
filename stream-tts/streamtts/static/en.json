@@ -847,7 +847,21 @@
  "У модели Supertonic 3 только готовые голоса: голос из записи она не делает. Чтобы сделать голос, выберите другую модель на вкладке <a href=\"#server\">«Сервер»</a>. Черновик сохранится.": "Supertonic 3 has only built-in voices: it can't make a voice from a recording. To make a voice, pick another model on the <a href=\"#server\">Server</a> tab. The draft will be kept.",
  "в архиве нет голосов ({exts})": "the archive has no voices ({exts})",
  "модель {engine} не делает голос из записи: у неё только готовые голоса. Чтобы сделать голос, выберите другую модель на вкладке «Сервер»": "{engine} can't make a voice from a recording: it has only built-in voices. To make a voice, pick another model on the Server tab",
- "нет модели Supertonic 3: положите файлы Supertone/supertonic-3 в {dir}": "no Supertonic 3 model: put the Supertone/supertonic-3 files into {dir}",
  "рядом с {path} нет пакета supertonic": "no supertonic package next to {path}",
- "у модели {engine} устройство не выбирается": "{engine} has no device choice"
+ "у модели {engine} устройство не выбирается": "{engine} has no device choice",
+ "Supertonic 3 здесь не скачивается": "Supertonic 3 is not downloadable here",
+ "Supertonic 3 скачан, готовые голоса поставлены.": "Supertonic 3 downloaded, ready-made voices installed.",
+ "Supertonic 3 уже скачан": "Supertonic 3 is already downloaded",
+ "Веса Supertonic 3 распространяются по лицензии OpenRAIL-M с ограничениями использования (ссылка — в карточке модели). Скачивая модель, вы принимаете эти условия.": "Supertonic 3 weights are distributed under the OpenRAIL-M license with use restrictions (link in the model card). By downloading the model you accept these terms.",
+ "Готовых голосов: {n} из {total}. «Поставить голоса» вернёт недостающие.": "Ready-made voices: {n} of {total}. \"Install voices\" restores the missing ones.",
+ "Модель Supertonic 3": "Supertonic 3 model",
+ "Поставить голоса": "Install voices",
+ "Принимаю, скачать": "Accept and download",
+ "Удалить Supertonic 3": "Delete Supertonic 3",
+ "Удалить Supertonic 3 ({size}) вместе с его готовыми голосами? Скачать можно будет снова.": "Delete Supertonic 3 ({size}) together with its ready-made voices? You can download it again.",
+ "для Supertonic 3 нужно {need} МБ свободного места, а есть {free} МБ": "Supertonic 3 needs {need} MB of free space, only {free} MB available",
+ "нет модели Supertonic 3: скачайте её на вкладке «Сервер»": "no Supertonic 3 model: download it on the \"Server\" tab",
+ "скачать {size}": "download {size}",
+ "Лицензия:": "License:",
+ "Лёгкая модель для генерации речи на процессоре в реальном времени, без возможности добавлять новые голоса. Поставляется с 10 голосами.": "A lightweight model for real-time speech generation on the CPU; new voices cannot be added. Comes with 10 voices."
 }

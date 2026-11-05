@@ -100,6 +100,10 @@ RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements
 # /opt/cosyvoice — это paths.RUNTIME, код — в его espeech/, как у программы для Windows
 COPY --from=espeech-stubs /out/stubs /opt/cosyvoice/espeech/stubs
 COPY espeech/*.py espeech/THIRD-PARTY.txt /opt/cosyvoice/espeech/espeech/
+# Supertonic 3 (третья модель): supertonic-server запускает Python образа (зависимости — numpy и onnxruntime из
+# requirements.txt), нормализатор русского — из кода espeech выше; модель stream-tts качает по кнопке в том /models
+# (engines/supertonic/launch.py и download.py)
+COPY supertonic/*.py supertonic/THIRD-PARTY.txt /opt/cosyvoice/supertonic/supertonic/
 COPY stream-tts/streamtts ./streamtts
 
 # LD_LIBRARY_PATH не задаётся: в /opt/cosyvoice свой libonnxruntime.so (1.30), он перебил бы onnxruntime из venv;

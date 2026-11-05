@@ -1,6 +1,6 @@
 """Встроенный сервер синтеза: модель и её загрузка, устройство, проверка скорости, наборы голосов, необязательные
-пакеты, CUDA, ESpeech, выгрузка моделей из памяти, обновления программы. Всё, что перезапускает или останавливает
-сервер, — через _restart_guard (common.py): обучение LoRA живёт в процессе сервера."""
+пакеты, CUDA, ESpeech, Supertonic 3, выгрузка моделей из памяти, обновления программы. Всё, что перезапускает или
+останавливает сервер, — через _restart_guard (common.py): обучение LoRA живёт в процессе сервера."""
 import logging, urllib.parse
 
 from .. import downloads
@@ -134,6 +134,23 @@ async def post_espeech_delete(request, ctx, data):
     return ok()
 
 
+async def post_supertonic_download(request, ctx, data):
+    inst = _install(ctx)
+    if stop := await _restart_guard(ctx, data):   # после загрузки сервер Supertonic перезапускается
+        return stop
+    inst.start_supertonic()
+    return ok()
+
+
+async def post_supertonic_delete(request, ctx, data):
+    inst = _install(ctx)
+    if stop := await _restart_guard(ctx, data):   # сервер Supertonic останавливается, пока удаляются файлы
+        return stop
+    await inst.delete_supertonic()
+    ctx.voices.wake.set()
+    return ok()
+
+
 # --- модели в памяти (вкладка «Статистика») ---
 async def post_model_unload(request, ctx, data):
     what = str(data["id"])
@@ -191,6 +208,8 @@ POSTS = {
     "/api/cuda/download": post_cuda_download,
     "/api/espeech/download": post_espeech_download,
     "/api/espeech/delete": post_espeech_delete,
+    "/api/supertonic/download": post_supertonic_download,
+    "/api/supertonic/delete": post_supertonic_delete,
     "/api/models/unload": post_model_unload,
     "/api/models/load": post_model_load,
     "/api/update/check": post_update_check,

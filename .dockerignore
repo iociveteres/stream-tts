@@ -7,6 +7,9 @@
 # ESpeech: код сервера (без .venv) и списки символов для заглушек
 !espeech/*.py
 !espeech/THIRD-PARTY.txt
+# Supertonic 3: код сервера (веса — по кнопке, не в образ)
+!supertonic/*.py
+!supertonic/THIRD-PARTY.txt
 !packaging/linux/
 **/__pycache__
 **/*.pyc

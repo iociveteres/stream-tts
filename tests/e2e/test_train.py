@@ -331,6 +331,7 @@ RESTARTS = {"/api/backend": dict(backend="cpu"), "/api/engine": dict(engine="esp
             "/api/models/unload": dict(id="tts"), "/api/bench": dict(all=True),
             "/api/voicesets/delete": dict(name="wc3"), "/api/voicesets/import": None,   # None — пустой zip сырым телом
             "/api/cuda/download": {}, "/api/espeech/download": {}, "/api/espeech/delete": {},
+            "/api/supertonic/download": {}, "/api/supertonic/delete": {},
             "/api/package/delete": "restart"}
 # Сервер не трогают: после всех запросов (тело — {} или указанное) тот же процесс сервера и обучение идёт.
 KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/rebuild": {},

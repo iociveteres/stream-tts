@@ -9,7 +9,7 @@ espeech-server, и говорит с ним по общему протоколу
 ## Модель
 
 Папка — раскладка репозитория Hugging Face [Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3),
-ревизия `3cadd1ee6394adea1bd021217a0e650ede09a323` (18.05.2026), всего 405 МБ; у разработчика —
+ревизия `3cadd1ee6394adea1bd021217a0e650ede09a323` (18.05.2026), всего 401 291 751 байт (383 МБ); у разработчика —
 `models/supertonic/` (вне git):
 
 | Файл | Байт | sha256 |
@@ -71,8 +71,8 @@ stream-tts/.venv/Scripts/python -m supertonic --models models/supertonic --voice
 Голос — файл `<имя>.supertonic`: JSON стиля из `voice_styles/*.json` модели как есть (`style_ttl` [1, 50, 256] и
 `style_dp` [1, 8, 16], у каждого `dims` и `data`). Имя голоса — имя файла; файлы ищутся в `--voices` и на один
 уровень подпапок (наборы), папка перечитывается при каждом запросе. Одно имя в двух наборах — берётся первый
-(корень, затем наборы по алфавиту). Пресеты в stream-tts раскладываются набором `supertonic`
-(`voices/supertonic/M1.supertonic` …).
+(корень, затем наборы по алфавиту). Готовые голоса stream-tts ставит набором `supertonic` под понятными зрителю
+именами (`voices/supertonic/anna.supertonic` …, «Поставка»).
 
 ### API
 
@@ -158,7 +158,49 @@ Ryzen 5 5600G (6 ядер, 12 потоков), Windows 10, onnxruntime 1.31.0 CP
 «тысяча пятьсот» местами звучит как «тысяча пять», а ник с хвостом «xXx» нормализатор читает «икс икс икс»
 («Warcraft III» — «ай ай ай»: так `espeech/normalize.py` читает римские цифры как латиницу).
 
+## Поставка
+
+Везде одинаково — у программы для Windows, в Docker и из исходников: модель качает кнопка «Скачать» в карточке
+«Модель Supertonic 3» на вкладке «Сервер» — она видна, когда Supertonic 3 выбрана в «Модели синтеза» (`stream-tts/streamtts/engines/supertonic/download.py`, Installer в
+`install.py`, `POST /api/supertonic/download` и `/delete` — через `_restart_guard`). Веса в установщик и образ не
+кладутся (OpenRAIL-M, «Лицензии»): перед загрузкой админка показывает условия и ссылку на `LICENSE` закреплённой
+ревизии и спрашивает согласие.
+
+- **Что качается.** Раздел `supertonic` в `stream-tts/streamtts/downloads.json`: репозиторий, ревизия, адрес
+  `https://huggingface.co/Supertone/supertonic-3/resolve/<ревизия>` и 17 файлов из таблицы выше с размером и
+  sha256. Каждый — `fetch.py`: в `<файл>.part` с докачкой (Range) и повторами, сверка sha256, потом переименование;
+  файл того же размера уже на месте — не качается. Папка — `<модели>/supertonic/` в раскладке HF (её и ждёт
+  сервер), `LICENSE` — рядом с весами. Проверено: размеры всех файлов и sha256 весов совпадают с ответами Hugging
+  Face (`x-linked-size`, `x-linked-etag`), малые файлы скачиваются с тем же sha256.
+- **Готовые голоса.** После загрузки 10 стилей `voice_styles/*.json` копируются как есть в
+  `<голоса>/supertonic/<имя>.supertonic`, в `manifest.json` набора — запись на голос (группа «Supertonic 3» на
+  странице голосов, примеры синтезируются сами). Имена (`VOICES` в `download.py`): M1–M5 — `anton`, `boris`, `gleb`,
+  `oleg`, `pavel`, F1–F5 — `anna`, `vera`, `nina`, `olga`, `rita`. Зритель выбирает голос командой `!ttssf <имя>`:
+  «m1» ему ничего не говорит, а здесь пол слышен по имени, имена короткие, латиницей без двойного прочтения (нет ж,
+  ш, й, х, ц) и по алфавиту в порядке номеров стиля. Пропал голос (удалили набор) — кнопка «Поставить голоса»
+  возвращает его без загрузки; голоса пользователя в той же папке не трогаются.
+- **Запуск.** Сервер, ждущий модель (`runtime.Unavailable` «нет модели Supertonic 3»), после загрузки
+  перезапускается и поднимается сам. Чем запускается — `engines/supertonic/launch.py`: программа для Windows —
+  сама (`StreamTTS.exe --supertonic <аргументы>`: пакет `supertonic` и модули `espeech/` нормализатора
+  скомпилированы в exe, `packaging/windows/build-exe.py`, `StreamTTS.py`; путь к exe — `paths.PROGRAM`, у Nuitka
+  `sys.executable` — несуществующий `python.exe`); Docker — Python образа, код — `/opt/cosyvoice/supertonic/supertonic`
+  и `/opt/cosyvoice/espeech/espeech` (`Dockerfile`) в `PYTHONPATH`; из исходников — интерпретатор stream-tts.
+  Своего рантайма нет: numpy и onnxruntime у stream-tts те же.
+- **Удаление** («✕» в карточке) — при остановленном сервере: папка модели и 10 готовых голосов с их записями в
+  `manifest.json`; потом сервер снова ждёт модель.
+- **Лицензии кода** — `supertonic/THIRD-PARTY.txt` (MIT кода Supertone): у программы — `licenses\supertonic-THIRD-PARTY.txt`
+  и строка в `packaging/windows/THIRD-PARTY*.txt` (страница «Информация» установщика, там же — веса по кнопке), в
+  образе — рядом с кодом сервера.
+
+Проверено на собранной программе (порт 8098, свои данные, файлы модели — из `models/supertonic` разработчика через
+локальный HTTP-сервер): загрузка 383 МБ, голоса и примеры всех 10, фраза 82 символа — 8,2 с звука за 1,9 с, процесс
+сервера — 488 МБ рабочего набора, удаление. Раскладка образа — запуском сервера вне проекта только с двумя этими
+папками в `PYTHONPATH`.
+
 ## Тесты
+
+stream-tts: `tests/e2e/test_supertonic_download.py` — загрузка без сети (докачка, неверный sha256, голоса, запуск
+сервера, удаление), закрепление в `downloads.json`, запуск у программы и в Docker, модули `espeech/` в сборке exe.
 
 `stream-tts/.venv/Scripts/python -m pytest tests/supertonic` (~20 с, настоящая модель на процессоре; без модели
 пропускаются; в worktree модель берётся из основной копии репозитория, путь можно задать `SUPERTONIC_MODELS`):

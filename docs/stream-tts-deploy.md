@@ -7,7 +7,8 @@
 
 stream-tts всегда сам запускает сервер синтеза и обслуживает его: админка и сервер — на одной машине (компьютер
 стримера с программой для Windows или Linux-сервер с Docker, к админке которого ходят по локальной сети). Моделей
-две — CosyVoice3 (cosyvoice-server) и ESpeech (espeech-server, [espeech.md](espeech.md)), работает одна, выбранная
+три — CosyVoice3 (cosyvoice-server), ESpeech (espeech-server, [espeech.md](espeech.md)) и Supertonic 3
+(supertonic-server, [supertonic.md](supertonic.md)), работает одна, выбранная
 на вкладке «Сервер» (`settings.engine`; спецификация — [stream-tts.md](stream-tts.md), «Модели синтеза»).
 
 cosyvoice-server — нативный `cosyvoice-server(.exe)`: папка `runtime/` рядом с программой (в исходниках — в корне
@@ -30,11 +31,14 @@ ESpeech (`engines/espeech/launch.py`): `python -m espeech` интерпрета�
 `--models <модели>/espeech` (без весов сервер ждёт, причина — в админке), `--voices <голоса>`, `--device cuda`, если
 есть драйвер NVIDIA (`ESPEECH_DEVICE=cpu|cuda` или выбор в админке).
 
-Supertonic 3 (`engines/supertonic/launch.py`), пока только из исходников: `python -m supertonic` интерпретатором
-stream-tts с корнем проекта в `PYTHONPATH`, если в проекте есть `supertonic/server.py` (`SUPERTONIC_SERVER` — другой
-python или папка с ним); `--models <модели>/supertonic` (файлы `Supertone/supertonic-3`; без них сервер ждёт,
-причина — в админке), `--voices <голоса>`, `--threads`, если задана `SUPERTONIC_THREADS`. Устройство — только
-процессор.
+Supertonic 3 (`engines/supertonic/launch.py`) своего рантайма не имеет — numpy и onnxruntime у stream-tts уже есть:
+программа для Windows запускает сервер сама (`StreamTTS.exe --supertonic …`, код скомпилирован в exe), в Docker —
+`python -m supertonic` Python образа с кодом из `/opt/cosyvoice/supertonic` и `/opt/cosyvoice/espeech` в
+`PYTHONPATH`, из исходников — интерпретатором stream-tts с корнем проекта в `PYTHONPATH` (`SUPERTONIC_SERVER` —
+другой python или папка с ним); `--models <модели>/supertonic` (без модели сервер ждёт, причина — в админке),
+`--voices <голоса>`, `--threads`, если задана `SUPERTONIC_THREADS`. Устройство — только процессор. Модель (~400 МБ) и
+10 готовых голосов ставит кнопка «Скачать» в карточке «Модель Supertonic 3» на вкладке «Сервер» — везде одинаково
+([supertonic.md](supertonic.md), «Поставка»).
 
 Встроенный сервер один: смена модели перезапускает его с другим движком на том же порту (`COSYVOICE_PORT`,
 `ESPEECH_PORT` или `SUPERTONIC_PORT` модели, выбранной при запуске, иначе свободный).
@@ -115,12 +119,15 @@ espeech-server и заглушки библиотек CUDA (сотни КБ), Py
 модель (1,8 ГБ) качает кнопка «Скачать» в карточке «Модель ESpeech» на вкладке «Сервер» в тома `./espeech-runtime` и
 `./models` — пересборка образа их не трогает. На `stream-tts:cuda` ESpeech работает на видеокарте (cuBLAS и cudart
 torch берёт из CUDA образа), на `stream-tts:cpu` — только на процессоре ([espeech.md](espeech.md), «Поставка»).
+Supertonic 3: в образе — код supertonic-server (десятки КБ), его запускает Python образа; модель (~400 МБ) и готовые
+голоса кнопка «Скачать» в карточке «Модель Supertonic 3» кладёт в тома `./models/supertonic` и `./voices/supertonic`.
 С Docker Desktop на Windows загрузка дольше, чем у программы (~10 мин): запись тысяч файлов рантайма в том на диске
 Windows медленная.
 
 - Образ: `ubuntu:26.04` (glibc 2.43 для cosyvoice.cpp), Python 3.14 из apt в venv `/opt/venv`, ffmpeg, aiohttp,
   numpy, onnxruntime; сервер — `/opt/cosyvoice`. На CUDA образ больше на объём рантайма CUDA.
-- Пути: `STREAM_TTS_RUNTIME=/opt/cosyvoice` (в его `espeech/` — код espeech-server и заглушки),
+- Пути: `STREAM_TTS_RUNTIME=/opt/cosyvoice` (в его `espeech/` — код espeech-server и заглушки, в `supertonic/` — код
+  supertonic-server),
   `STREAM_TTS_MODELS=/models`, `STREAM_TTS_VOICES=/voices`, `STREAM_TTS_DATA=/data`, `STREAM_TTS_PROJECT=/project`,
   `ESPEECH_RUNTIME=/espeech-runtime/python`.
 - Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `./models:/models`, `./voices:/voices`
@@ -157,7 +164,7 @@ Windows медленная.
 | `ESPEECH_RUNTIME` | `espeech-runtime` рядом с программой, `/espeech-runtime/python` в Docker | куда кнопка «Скачать» ставит Python с torch для ESpeech |
 | `ESPEECH_DEVICE` | `auto` | `cuda` или `cpu` для ESpeech |
 | `ESPEECH_PORT`, `ESPEECH_HOST` | свободный, `127.0.0.1` | как `COSYVOICE_PORT` и `COSYVOICE_HOST`, если при запуске выбрана ESpeech |
-| `SUPERTONIC_SERVER` | python stream-tts, если в проекте есть `supertonic/` | python для supertonic-server или папка с ним |
+| `SUPERTONIC_SERVER` | сама программа для Windows, python stream-tts в Docker и в исходниках | python для supertonic-server или папка с ним |
 | `SUPERTONIC_THREADS` | — | потоков процессора у Supertonic 3 (`--threads`) |
 | `SUPERTONIC_PORT`, `SUPERTONIC_HOST` | свободный, `127.0.0.1` | как `COSYVOICE_PORT` и `COSYVOICE_HOST`, если при запуске выбрана Supertonic 3 |
 | `COSYVOICE_SERVER` | `runtime/cosyvoice-server(.exe)` | путь к серверу или его папке |

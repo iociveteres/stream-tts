@@ -1,6 +1,6 @@
 "use strict";
 /** Вкладка «Сервер»: модель и её загрузка, устройство, модель синтеза и её настройки, словарь ударений,
- *  CUDA, ESpeech, скорость, наборы голосов; необязательные пакеты (блок — в настройках). */
+ *  CUDA, ESpeech, Supertonic 3, скорость, наборы голосов; необязательные пакеты (блок — в настройках). */
 // --- сервер: модель, устройство, наборы голосов ---
 const fmtMB = b => T("{n} МБ", { n: fmtNum(b / 1048576, 0) });
 const fmtDur = s => s < 60 ? T("{n} с", { n: Math.ceil(s) }) : T("{n} мин", { n: Math.round(s / 60) });
@@ -75,9 +75,13 @@ function renderServer() {
   $$("#tab-server .managed").forEach(el => el.hidden = !st);
   if (!st) return;
   $("#quants-card").hidden = c.engine !== "cosyvoice";
-  // ESpeech: карточка у выбранной модели, а у программы для Windows ещё и пока он не скачан — предложение скачать
-  $("#espeech-card").hidden = c.engine !== "espeech" && !(st.espeech.offer && !st.espeech.installed);
+  // Карточки ESpeech и Supertonic 3 — только у выбранной модели: обе выбираются и до загрузки (сервер ждёт модель).
+  // Идущая загрузка держит свою карточку, чтобы её можно было отменить и после смены модели.
+  const loading = p => st.download.package === p && st.download.state === "running";
+  $("#espeech-card").hidden = c.engine !== "espeech" && !loading("espeech");
   $("#espeech-dir").textContent = st.espeech.model_dir || rt.models_dir || "";
+  $("#supertonic-card").hidden = !st.supertonic.offer || c.engine !== "supertonic" && !loading("supertonic");
+  $("#supertonic-dir").textContent = st.supertonic.model_dir || "";
   $("#models-dir").textContent = st.models_dir;
   $("#voices-dir").textContent = st.voices_dir;
   const d = st.download, running = d.state === "running";
@@ -115,6 +119,7 @@ function renderServer() {
     running: dlProgress(d),
     done: d.package === "cuda" ? T("Готово: CUDA установлена, сервер перезапускается.")
       : d.package === "espeech" ? T("ESpeech скачан")
+      : d.package === "supertonic" ? T("Supertonic 3 скачан, готовые голоса поставлены.")
       : d.package ? ((pkg(d.package) || {}).restart ? T("Готово: пакет скачан, сервер перезапускается.")
         : T("Готово: пакет скачан."))
       : T("Готово: {quant} скачана, сервер перезапускается.", { quant: d.quant }),
@@ -142,6 +147,7 @@ function renderServer() {
   $("#backend-lock").textContent = T("Устройство задано переменной {var}.", { var: rt.device_env });
   renderCuda(st, d);
   renderEspeech(st, d);
+  renderSupertonic(st, d);
   // Наборы голосов
   // Набор — по записи на модель: коллекция «модель + источник» ставится и удаляется отдельно (voicesets.py)
   $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
@@ -287,6 +293,46 @@ function renderEspeech(st, d) {
     what,
     !e.gpu ? h("div", { class: "small warn" }, T("Нет видеокарты NVIDIA. На процессоре ESpeech слишком медленный для стрима.")) : null,
     status), action));
+}
+
+// Supertonic 3 (engines/supertonic/download.py): модель с Hugging Face и 10 готовых голосов. Веса — под OpenRAIL-M:
+// условия видны в карточке и подтверждаются перед загрузкой
+let supertonicKey = "";
+function renderSupertonic(st, d) {
+  const e = st.supertonic, mine = d.package === "supertonic", running = d.state === "running";
+  const key = JSON.stringify([e, mine && d, running]);
+  if (key === supertonicKey) return;
+  supertonicKey = key;
+  if (!e.offer) { $("#supertonic").replaceChildren(); return; }
+  let action;
+  if (mine && running) action = h("button", { onclick: () => api("/api/model/cancel") }, T("Отменить"));
+  else if (e.installed) action = h("button", { class: "icon danger", title: T("Удалить Supertonic 3"), onclick: async () => {
+      if (await ask(T("Удалить Supertonic 3 ({size}) вместе с его готовыми голосами? Скачать можно будет снова.",
+          { size: fmtMB(e.disk) }), T("Удалить"), true)) api("/api/supertonic/delete"); } }, "✕");
+  else if (e.model) action = h("button", { class: "primary", disabled: running, onclick: () => api("/api/supertonic/download") },
+    T("Поставить голоса"));
+  else action = h("button", { class: "primary", disabled: running, onclick: async () => {
+      if (await ask(T("Веса Supertonic 3 распространяются по лицензии OpenRAIL-M с ограничениями использования " +
+          "(ссылка — в карточке модели). Скачивая модель, вы принимаете эти условия."), T("Принимаю, скачать")))
+        api("/api/supertonic/download"); } }, T("Скачать"));
+  const status = mine && ["running", "error", "cancelled"].includes(d.state) ? h("div", { class: "small " + ({ error: "bad" }[d.state] || "") },
+      { running: dlProgress(d), error: T("Ошибка: {e}. «Скачать» продолжит с того же места.", { e: d.error }),
+        cancelled: T("Загрузка отменена: «Скачать» продолжит с того же места.") }[d.state])
+    : mine && d.state === "done" && e.installed ? h("div", { class: "small good" }, T("Supertonic 3 скачан, готовые голоса поставлены."))
+    : null;
+  const size = e.installed || e.model ? T("на диске {disk}", { disk: fmtMB(e.disk) })
+    : T("скачать {size}", { size: fmtMB(e.size) });
+  const partial = e.model && !e.installed ? h("div", { class: "small warn" },
+    T("Готовых голосов: {n} из {total}. «Поставить голоса» вернёт недостающие.", { n: e.voices, total: e.voices_total }))
+    : null;
+  $("#supertonic").replaceChildren(h("li", { class: e.installed ? "" : "on" }, h("div", { class: "grow" },
+    h("b", {}, "Supertonic 3"), " ", h("span", { class: "muted small" }, size),
+    e.installed ? h("span", { class: "tag" }, T("установлен")) : null,
+    h("div", { class: "small muted" }, T("Лёгкая модель для генерации речи на процессоре в реальном времени, без " +
+      "возможности добавлять новые голоса. Поставляется с 10 голосами.")),
+    h("div", { class: "small muted" }, T("Лицензия:") + " ", h("a", { href: e.license, target: "_blank", rel: "noopener" },
+      "BigScience OpenRAIL-M")),
+    partial, status), action));
 }
 
 // Скорость синтеза (bench.py): результаты по устройствам и моделям, текущее выделено

@@ -7,7 +7,9 @@ usage: packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py
 которым запущена, и берёт пакеты из него. Компилятор — MSVC (Visual Studio или Build Tools с C++): MinGW Nuitka для
 Python 3.13+ не поддерживает. Первая сборка — несколько минут, повторные быстрее (кэш Nuitka в %LOCALAPPDATA%).
 Результат: packaging/windows/dist/StreamTTS/ (StreamTTS.exe, DLL Python, streamtts/static, effects/, licenses/ —
-тексты лицензий Python, пакетов и runtime Nuitka; лицензии рантайма — в runtime/licenses/).
+тексты лицензий Python, пакетов и runtime Nuitka; лицензии рантайма — в runtime/licenses/). В exe скомпилирован и
+supertonic-server (пакет supertonic/ и нормализатор из espeech/, чистый Python): его запускает StreamTTS.exe
+--supertonic (StreamTTS.py); веса модели программа качает по кнопке.
 --runtime core|all кладёт в dist/StreamTTS/runtime/ рантайм из build/runtime (build-runtime.py): core — без CUDA,
 all — с CUDA (нужен build-runtime.py --cuda). Так собранную программу можно запустить без установщика; установщик
 (StreamTTS.iss) берёт рантайм сам, из build/runtime/core.
@@ -30,6 +32,8 @@ VERSION = re.search(r'__version__ = "(.+?)"', open(os.path.join(SRC, "streamtts"
 # onnxruntime требует flatbuffers, packaging и protobuf только для инструментов (onnxruntime.tools и т. п.), а
 # `import onnxruntime` их не тянет, и Nuitka их в программу не кладёт.
 OWN_LICENSES = {"onnxruntime": ("LICENSE", "ThirdPartyNotices.txt")}
+# Модули espeech/, нужные supertonic-server (docs/supertonic.md, «Текст»): чистый Python и numpy, без torch
+ESPEECH_MODULES = ("normalize", "numbers", "numerals", "latin", "accent", "wire")
 
 
 def nuitka_args(jobs):
@@ -44,6 +48,12 @@ def nuitka_args(jobs):
         # эффект грузится importlib по пути (paths.resource -> папка exe), его импорты Nuitka не видит
         f"--include-data-files={os.path.join(ROOT, 'effects', 'villager-fx.py')}=effects/villager-fx.py",
         "--include-module=argparse,glob,subprocess,threading",  # zlib встроен в Python
+        # supertonic-server (StreamTTS.exe --supertonic): пакет и модули espeech, которые он импортирует (нормализатор
+        # русского, ударения «+», WAV); остальное в espeech/ — torch, его в программе нет
+        "--include-package=supertonic",
+        f"--include-module={','.join('espeech.' + m for m in ESPEECH_MODULES)}",
+        # accent.py грузит RUAccent только в функции, которую supertonic-server не зовёт
+        "--nofollow-import-to=ruaccent,torch",
         # консольное приложение: закрыть окно — выключить (desktop.py)
         "--windows-console-mode=force",
         "--company-name=StreamTTS", "--product-name=StreamTTS", f"--file-version={VERSION}",
@@ -69,8 +79,9 @@ def requirements(path):
 def copy_licenses():
     """Тексты лицензий того, что Nuitka положила в программу, — в dist/StreamTTS/licenses/.
 
-    LICENSE проекта (MIT, как StreamTTS-LICENSE.txt), Python (LICENSE.txt установки, на которой venv: там же OpenSSL, libffi, SQLite и прочие), пакеты из
-    stream-tts/requirements.txt с зависимостями (их *.dist-info/licenses; у numpy там и OpenBLAS, и рантайм GCC),
+    LICENSE проекта (MIT, как StreamTTS-LICENSE.txt), уведомление о коде Supertone в supertonic-server
+    (supertonic-THIRD-PARTY.txt, MIT), Python (LICENSE.txt установки, на которой venv: там же OpenSSL, libffi, SQLite
+    и прочие), пакеты из stream-tts/requirements.txt с зависимостями (их *.dist-info/licenses; у numpy там и OpenBLAS, и рантайм GCC),
     исключение Nuitka для её runtime и списки THIRD-PARTY*.txt. Лицензии рантайма — в runtime/licenses/
     (build-runtime.py)."""
     lic = os.path.join(APP, "licenses")
@@ -79,6 +90,8 @@ def copy_licenses():
     for name in ("THIRD-PARTY.txt", "THIRD-PARTY.en.txt"):
         shutil.copy(os.path.join(HERE, name), lic)
     shutil.copy(os.path.join(ROOT, "LICENSE"), os.path.join(lic, "StreamTTS-LICENSE.txt"))
+    # код supertonic-server — перенос helper.py Supertone (MIT); нормализатор espeech — код проекта
+    shutil.copy(os.path.join(ROOT, "supertonic", "THIRD-PARTY.txt"), os.path.join(lic, "supertonic-THIRD-PARTY.txt"))
     os.makedirs(os.path.join(lic, "python"))
     shutil.copy(os.path.join(sys.base_prefix, "LICENSE.txt"), os.path.join(lic, "python"))
 
@@ -147,7 +160,8 @@ def main():
     if not a.no_build:
         for d in (APP, os.path.join(DIST, "StreamTTS.dist")):
             shutil.rmtree(d, ignore_errors=True)
-        env = dict(os.environ, PYTHONPATH=SRC)  # пакет streamtts — из исходников
+        # пакет streamtts — из исходников, supertonic и espeech — из корня проекта
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join((SRC, ROOT)))
         subprocess.run(nuitka_args(a.jobs), cwd=HERE, env=env, check=True)
         os.replace(os.path.join(DIST, "StreamTTS.dist"), APP)
     copy_licenses()

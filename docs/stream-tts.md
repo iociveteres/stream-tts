@@ -213,19 +213,23 @@ EventSub отключается; обратный переход входит с
 
 Моделей три: **CosyVoice3** (cosyvoice-server), **ESpeech** (espeech-server, [espeech.md](espeech.md): речь лучше по-
 русски, ударения RUAccent) и **Supertonic 3** (supertonic-server из `supertonic/` проекта, ONNX от Supertone: только
-процессор и только 10 готовых голосов M1–M5, F1–F5 — своего клонирования у модели нет). Работает одна (`settings.engine`), выбор — на вкладке «Сервер»; смена ждёт текущий
+процессор и только 10 готовых голосов — своего клонирования у модели нет, [supertonic.md](supertonic.md)). Работает одна (`settings.engine`), выбор — на вкладке «Сервер»; смена ждёт текущий
 запрос к серверу и держит очередь к нему, пока сервер новой модели не ответит: озвучка ждёт, а не падает. Смена
 перезапускает встроенный сервер с другим движком ([stream-tts-deploy.md](stream-tts-deploy.md)). Каждая модель —
 модуль `streamtts/engines/<id>/`: описание (расширение голоса, устройства, загрузки), запуск сервера, клиент.
 ESpeech программа для Windows и образ Docker качают одним кодом по кнопке «Скачать» в карточке «Модель ESpeech» на
 вкладке «Сервер» (Python с PyTorch и модель, `engines/espeech/download.py`; [espeech.md](espeech.md), «Поставка»,
 [stream-tts-windows.md](stream-tts-windows.md), «ESpeech»), из исходников папку модели собирает
-`tools/espeech/prepare.py`, а карточки нет. Supertonic из исходников запускает интерпретатор stream-tts (у сервера
-только numpy и onnxruntime) с корнем проекта в `PYTHONPATH`, если в проекте есть `supertonic/server.py`
-(`SUPERTONIC_SERVER` — другой Python); модель — файлы Hugging Face `Supertone/supertonic-3` в `models/supertonic/`
-(`onnx/*.onnx`, `onnx/tts.json`, `onnx/unicode_indexer.json`, `voice_styles/`), без них сервер ждёт, причина — в
-«Состоянии сервера» на вкладке «Сервер». У программы для Windows и в Docker Supertonic пока нет, загрузки модели по
-кнопке — тоже. Протокол у серверов общий —
+`tools/espeech/prepare.py`, а карточки нет. У supertonic-server своего рантайма нет (numpy и onnxruntime есть у
+stream-tts): программа для Windows запускает его сама (`StreamTTS.exe --supertonic`), Docker и исходники —
+интерпретатором stream-tts (`engines/supertonic/launch.py`, [stream-tts-deploy.md](stream-tts-deploy.md)). Модель
+и 10 готовых голосов везде качает кнопка «Скачать» в карточке «Модель Supertonic 3» на вкладке «Сервер»
+(карточки ESpeech и Supertonic 3 видны только у выбранной модели — выбрать её можно и до загрузки)
+(`engines/supertonic/download.py`): сначала — условия лицензии весов (OpenRAIL-M) и ссылка на неё, потом файлы
+`Supertone/supertonic-3` закреплённой ревизии (раздел `supertonic` в `downloads.json`, 383 МБ, докачка и sha256) в
+`<модели>/supertonic/` в раскладке Hugging Face; без модели сервер ждёт с причиной «нет модели Supertonic 3», после
+загрузки запускается сам. Карточка видна, пока модель не скачана, и у выбранной Supertonic; «Поставить голоса»
+возвращает пропавшие готовые голоса без загрузки, «✕» удаляет модель с готовыми голосами. Протокол у серверов общий —
 подмножество API cosyvoice-server; ядро пользуется только очередью, синтезом целиком и потоком, остановкой и списком
 голосов, а поля модели в запрос добавляет её клиент.
 
@@ -247,7 +251,10 @@ ESpeech программа для Windows и образ Docker качают од
 - **Устройство** у Supertonic одно — процессор: в карточке «Устройство синтеза» единственный вариант, выбор
   (`POST /api/backend`) отказывает.
 - **Голоса.** Голос — файл модели с тем же именем: `.gguf` у CosyVoice, `.espeech` у ESpeech, `.supertonic` у
-  Supertonic (JSON стиля: `style_ttl`, `style_dp`; готовые голоса — набор `supertonic`). Список голосов — с
+  Supertonic (JSON стиля: `style_ttl`, `style_dp`). Готовые голоса Supertonic — набор `supertonic`
+  (`<голоса>/supertonic/`, группа «Supertonic 3» на странице голосов): стили модели M1–M5 — `anton`, `boris`,
+  `gleb`, `oleg`, `pavel`, F1–F5 — `anna`, `vera`, `nina`, `olga`, `rita` (зритель набирает имя в `!ttssf`: короткие
+  имена латиницей без двойного прочтения, пол слышен по имени; `VOICES` в `engines/supertonic/download.py`). Список голосов — с
   сервера выбранной модели; голос без файла для неё зрителям не выдаётся (его не выбрать `!ttssf`, зритель с ним
   получает голос по хешу ника), но выбор зрителя (`users.voice`) и настройки голоса остаются и вернутся вместе с
   моделью. Примеры звучания и усиление для стриминга у каждой модели свои: примеры CosyVoice — в `<данные>/demos/`,
