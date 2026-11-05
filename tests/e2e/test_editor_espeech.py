@@ -52,7 +52,7 @@ def test_espeech_draft_limits(esp):
     assert not esp.api.state()["cosy"]["capabilities"].get("frontend")
     d = esp.api.get("/api/draft").json()
     assert d["engine"] == dict(id="espeech", title="ESpeech", min=4.0, max=12.0, ok=[6, 7], packages=["music"],
-                               accent=True)
+                               accent=True, extract=True)
     src = add_source(esp.api)
     set_variants(esp.api, variant(src, "short", 1, 4.5), variant(src, "long", 0, 13))
     assert synth(esp.api, variant="short").text == "образец 3.5 с: нужно от 4 до 12 с"

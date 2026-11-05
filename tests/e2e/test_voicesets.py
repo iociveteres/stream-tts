@@ -15,6 +15,9 @@ from streamtts import paths, voicesets  # noqa: E402
 GGUF = b"GGUF" + bytes(60)
 _head = json.dumps({"__metadata__": {"format": "espeech-voice"}}).encode()
 ESPEECH = struct.pack("<Q", len(_head)) + _head + bytes(16)   # safetensors: длина заголовка, JSON, данные
+# голос Supertonic 3 — JSON стиля (style_ttl, style_dp: dims и data)
+SUPERTONIC = {"style_ttl": {"dims": [1, 2, 2], "data": [[[0.1, 0.2], [0.3, 0.4]]]},
+              "style_dp": {"dims": [1, 1, 2], "data": [[[0.5, 0.6]]]}}
 
 
 @pytest.fixture
@@ -98,12 +101,31 @@ def test_taken_voice_per_model(voices, tmp_path):
     assert listing(voices / "mw") == ["alpha.espeech", "bravo.gguf"]
 
 
+def test_supertonic_set(voices, tmp_path):
+    """Набор supertonic (готовые голоса Supertonic 3): .supertonic ставится своей модели, рядом с голосами других
+    моделей того же набора, и удаляется отдельно."""
+    r = put(make_zip(tmp_path, "supertonic.zip", {"supertonic/F1.supertonic": SUPERTONIC,
+                                                  "supertonic/M1.supertonic": SUPERTONIC,
+                                                  "supertonic/manifest.json": {"F1": {"title": "Ф1"}}}))
+    assert (r["name"], r["models"], r["added"]) == ("supertonic", ["supertonic"], ["F1", "M1"])
+    put(make_zip(tmp_path, "supertonic-cosy.zip", {"supertonic/F1.gguf": GGUF}))
+    d = voices / "supertonic"
+    assert listing(d) == ["F1.gguf", "F1.supertonic", "M1.supertonic", "manifest.json"]
+    assert [(s["model"], s["title"], s["voices"]) for s in voicesets.list_sets()] == [
+        ("cosyvoice", "CosyVoice3", ["F1"]), ("supertonic", "Supertonic 3", ["F1", "M1"])]
+    voicesets._delete_set("supertonic", "supertonic")
+    assert listing(d) == ["F1.gguf", "manifest.json"]
+
+
 def test_bad_archives(voices, tmp_path):
     with pytest.raises(ValueError, match="не голос ESpeech"):
         voicesets._check_zip(make_zip(tmp_path, "a.zip", {"a.espeech": GGUF}), "a.zip")
     with pytest.raises(ValueError, match="не голос CosyVoice3"):
         voicesets._check_zip(make_zip(tmp_path, "b.zip", {"b.gguf": ESPEECH}), "b.zip")
-    with pytest.raises(ValueError, match="нет голосов"):
+    for bad in (GGUF, {"style_ttl": {}}, {"style_ttl": {"dims": []}, "style_dp": [1]}, b"\xff\xfe"):
+        with pytest.raises(ValueError, match="не голос Supertonic 3"):
+            voicesets._check_zip(make_zip(tmp_path, "s.zip", {"s.supertonic": bad}), "s.zip")
+    with pytest.raises(ValueError, match=r"нет голосов \(\*\.gguf, \*\.espeech, \*\.supertonic\)"):
         voicesets._check_zip(make_zip(tmp_path, "c.zip", {"readme.txt": b"hi"}), "c.zip")
 
 

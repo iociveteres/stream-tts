@@ -46,6 +46,8 @@ async def post_backend(request, ctx, data):
     if stop := await _restart_guard(ctx, data):
         return stop
     backend, launcher = str(data.get("backend", "auto")), ctx.runtime.launcher
+    if not launcher.DEVICE_KEY:   # Supertonic 3 — только процессор
+        return fail(tr("у модели {engine} устройство не выбирается", engine=ctx.tts.title))
     devices = launcher.public()["devices"]
     if backend not in devices:
         return fail(tr("ожидалось {values}", values=", ".join(devices)))

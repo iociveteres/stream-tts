@@ -1,7 +1,7 @@
 """Наборы голосов из zip: проверка архива, установка, удаление по модели, список установленных.
 
-Набор голосов — zip с голосами (*.gguf CosyVoice, *.espeech ESpeech) и manifest.json (ключи — имена голосов:
-title, post…) в корне или в одной папке. Имя набора — эта папка или имя zip; оно же группа на странице голосов
+Набор голосов — zip с голосами (*.gguf CosyVoice, *.espeech ESpeech, *.supertonic Supertonic 3) и manifest.json
+(ключи — имена голосов: title, post…) в корне или в одной папке. Имя набора — эта папка или имя zip; оно же группа на странице голосов
 (voices.GROUPS). Набор ставится в paths.VOICES/<набор>/; голоса тех моделей, что есть в zip, заменяются целиком,
 голоса другой модели в той же папке остаются (коллекция «модель + источник»: voice-sets/<модель>/<источник>.zip).
 Голос, который у этой модели уже есть в другом наборе или без набора, пропускается. Удаляется набор тоже по модели.
@@ -10,12 +10,12 @@ cosyvoice-server держит открытые .gguf), потом запуска
 import contextlib, json, os, re, shutil, zipfile
 
 from . import paths, store
-from .engines import ENGINES, cosyvoice
+from .engines import ENGINES, cosyvoice, supertonic
 from .i18n import tr
 from .voices import NAME as VOICE_NAME
 
 SET_NAME = re.compile(r"[^a-z0-9_-]+")
-MAX_VOICE = 64 << 20       # голос CosyVoice ~200 КБ, ESpeech с адаптером ~10 МБ; больше — точно не голос
+MAX_VOICE = 64 << 20       # голос CosyVoice ~200 КБ, ESpeech с адаптером ~10 МБ, Supertonic ~300 КБ; больше — не голос
 # Модель по расширению файла голоса. Папка набора (источника) держит голоса обеих моделей: голос с тем же именем у
 # другой модели — в том же наборе (editor.py). Коллекция в zip — голоса одной модели одного источника
 # (voice-sets/<модель>/<источник>.zip, tools/voices/pack-sets.py): её установка и удаление не трогают файлы другой.
@@ -63,7 +63,14 @@ def _existing_voices(skip_set, model):
 
 
 def _check_voice(z, i, ext):
-    """Файл похож на голос своей модели: GGUF — по сигнатуре, .espeech (safetensors) — по заголовку JSON."""
+    """Файл похож на голос своей модели: GGUF — по сигнатуре, .espeech (safetensors) — по заголовку JSON,
+    .supertonic — JSON стиля с ключами style_ttl и style_dp."""
+    if ext == supertonic.VOICE_EXT:
+        try:
+            d = json.loads(z.read(i).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return False
+        return isinstance(d, dict) and all(isinstance(d.get(k), dict) for k in ("style_ttl", "style_dp"))
     with z.open(i) as f:
         head = f.read(9)
     if ext == cosyvoice.VOICE_EXT:
@@ -107,7 +114,7 @@ def _check_zip(path, filename):
             else:
                 ignored.append(i.filename)
         if not voices:
-            raise ValueError(tr("в архиве нет голосов (*.gguf, *.espeech)"))
+            raise ValueError(tr("в архиве нет голосов ({exts})", exts=", ".join("*" + e for e in VOICE_EXTS)))
         meta = {}
         if manifest:
             try:

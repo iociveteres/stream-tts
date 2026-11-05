@@ -6,16 +6,15 @@
 частоте синтеза (last — голос × 1,1, best — × 1,05). Сначала — готовый сервер (STREAM_TTS_TEST_SERVERS) в процессе
 теста, его ручки меняются на ходу. Перезапуски — у встроенного сервера: stream-tts запускает тот же поддельный сервер отдельным
 процессом как «python -m espeech» (пакет-заглушка и venv во временной папке), Docker-версию это не трогает."""
-import os, site, subprocess, sys, urllib.parse, venv
+import os, subprocess, sys, urllib.parse
 
 import numpy as np
 import pytest
 
 from conftest import FAST_ENV, Ctx
-from fake_cosyvoice import ADAPTER_HZ, VOICES, FakeCosy
+from fake_cosyvoice import ADAPTER_HZ, VOICES, FakeCosy, fake_python
 from harness import SR, StreamTTS, decode, dominant_hz, make_app, make_wav, read_wav, sine, wait_for
 
-E2E = os.path.dirname(os.path.abspath(__file__))
 VOICE = "alpha"
 
 
@@ -253,27 +252,10 @@ def test_unsaved_restart_and_oom(tr):
 
 
 # --- перезапуски встроенного сервера ---
-def fake_espeech(root):
-    """Пакет-заглушка espeech (python -m espeech запускает fake_cosyvoice.serve) и venv рядом: запуск ESpeech
-    (engines/espeech/launch.py) ищет пакет вверх от интерпретатора. Пакеты — из окружения тестов."""
-    pkg = os.path.join(root, "espeech")
-    os.makedirs(pkg)
-    open(os.path.join(pkg, "__init__.py"), "w").close()
-    open(os.path.join(pkg, "server.py"), "w").close()
-    with open(os.path.join(pkg, "__main__.py"), "w", encoding="utf-8") as f:
-        f.write("import asyncio, site, sys\n"
-                f"sys.path.insert(0, {E2E!r})\n"
-                f"for p in {site.getsitepackages()!r}:\n    site.addsitedir(p)\n"
-                "import fake_cosyvoice\nasyncio.run(fake_cosyvoice.serve(sys.argv[1:]))\n")
-    env_dir = os.path.join(root, ".venv")
-    venv.create(env_dir, with_pip=False)
-    return os.path.join(env_dir, "Scripts", "python.exe") if os.name == "nt" else os.path.join(env_dir, "bin", "python")
-
-
 @pytest.fixture(scope="module")
 def managed(loop, tmp_path_factory):
     wd = str(tmp_path_factory.mktemp("train-managed"))
-    python = fake_espeech(os.path.join(wd, "fake"))
+    python = fake_python(os.path.join(wd, "fake"), "espeech", "espeech")   # пакет-заглушка espeech и venv
     os.makedirs(os.path.join(wd, "models", "espeech"))
     open(os.path.join(wd, "models", "espeech", "espeech_fp16.safetensors"), "wb").close()
     server = StreamTTS(wd, None, dict(FAST_ENV, ESPEECH_SERVER=python, FAKE_TRAIN_RATE="1")).start()

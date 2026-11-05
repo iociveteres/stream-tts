@@ -4,6 +4,9 @@ params (схема nfe_steps), POST /accent, словарь ударений п�
 перекрывает разметку, синтез записывает в tts «accented» — как прочитал бы текст), поток кусками по SPEECH_PIECE с,
 chunk_tokens не нужен, nfe_steps проверяется по схеме (400, как у настоящего). Голос из образца у espeech — без
 фронтенда; извлечение записывает поля tempo и title, текст без «+» размечается, как в /accent.
+FakeCosy(engine="supertonic") — supertonic-server (supertonic/server.py): /status по контракту (device cpu,
+capabilities.extract = false, схема total_step и speed), голоса из записи нет (POST /speaker?type=extract и
+/speaker/save — 501), total_step и speed проверяются по схеме (400), поток кусками по SPEECH_PIECE с.
 
 У каждого голоса своя частота и громкость (voices, сначала VOICES): по частоте тест узнаёт, каким голосом прозвучала
 фраза, а разная громкость проверяет выравнивание до −16 LUFS. Длина звука — как у речи, 12 символов в секунду
@@ -89,7 +92,13 @@ def dominant_hz(x):
 ESPEECH_PARAMS = {"nfe_steps": {"type": "choice", "choices": [12, 16, 32], "default": 16, "title": "Качество синтеза",
                                  "help": "12 — быстрее, но заметно теряется качество; 16 — оптимально; "
                                          "32 — наибольшее качество, но вдвое медленнее"}}
-SPEECH_PIECE = 1.0   # с звука в куске потока espeech
+SUPERTONIC_PARAMS = {
+    "total_step": {"type": "choice", "choices": [5, 8, 12, 16], "default": 8, "title": "Качество синтеза",
+                   "help": "Шагов модели на фразу: 5 — быстрее всего; 8 — оптимально; 12 и 16 — чуть чище звук, "
+                           "но синтез в полтора-два раза дольше"},
+    "speed": {"type": "choice", "choices": [0.9, 1.0, 1.05, 1.15, 1.3], "default": 1.05, "title": "Скорость речи",
+              "help": "Темп речи: 1 — обычный, меньше — медленнее, больше — быстрее; 1,05 — как у авторов модели"}}
+SPEECH_PIECE = 1.0   # с звука в куске потока espeech и supertonic
 VOWELS = "аеёиоуыэюя"
 WORD = re.compile(r"[А-Яа-яЁё+]+")
 
@@ -196,6 +205,10 @@ class FakeCosy:
                                        voice_formats=["espeech"], user_accents=True),
                      training=dict(state=self.tr["state"], voice=self.tr["voice"], step=self.tr["step"],
                                    steps=self.tr["steps"]))
+        elif self.engine == "supertonic":
+            d = dict(engine="supertonic", api_version=1, model_loaded=True, device="cpu", params=SUPERTONIC_PARAMS,
+                     capabilities=dict(stream=True, extract=False, accent=False, train=False,
+                                       voice_formats=["supertonic"]))
         return web.json_response(d)
 
     def _accent(self, text):
@@ -270,6 +283,9 @@ class FakeCosy:
         """POST /speaker?type=extract, multipart: name, text, audio (WAV)."""
         if request.query.get("type") != "extract":
             return web.Response(status=400, text="only type=extract")
+        if self.engine == "supertonic":   # своего клонирования у модели нет
+            self.calls.append(dict(call="extract", name="", ts=time.time()))
+            return web.Response(status=501, text="supertonic: no voice extraction")
         form = await request.post()
         with self._busy():
             name, text, f = form.get("name", ""), form.get("text", ""), form.get("audio")
@@ -298,6 +314,8 @@ class FakeCosy:
 
     async def speaker_save(self, request):
         body = await request.json()
+        if self.engine == "supertonic":
+            return web.Response(status=501, text="supertonic: no voice extraction")
         with self._busy():
             self.calls.append(dict(call="save", name=body.get("name"), path=body.get("path"), ts=time.time()))
             await asyncio.sleep(self.save_delay)
@@ -344,6 +362,10 @@ class FakeCosy:
             steps = ESPEECH_PARAMS["nfe_steps"]["choices"]
             if self.engine == "espeech" and body.get("nfe_steps") not in (None, *steps):
                 return web.Response(status=400, text="nfe_steps: 16 / 32 / 12")
+            if self.engine == "supertonic":
+                for k, sp in SUPERTONIC_PARAMS.items():
+                    if body.get(k, sp["default"]) not in sp["choices"]:
+                        return web.Response(status=400, text=f"{k}: {sp['choices']}")
             if voice not in self.voices:
                 return web.Response(status=404, text=f"unknown voice {voice}")
             if self.fail and self.fail in text:
@@ -370,7 +392,8 @@ class FakeCosy:
             resp = web.StreamResponse(headers={"Content-Type": "audio/wav"})
             await resp.prepare(request)
             await resp.write(stream_header())
-            step = int(SPEECH_PIECE * SR) if self.engine == "espeech" else                 int(int(body.get("chunk_tokens") or 28) / TOKENS_PER_SEC * SR)
+            step = int(SPEECH_PIECE * SR) if self.engine in ("espeech", "supertonic") else \
+                int(int(body.get("chunk_tokens") or 28) / TOKENS_PER_SEC * SR)
             for i in range(0, len(x), step):
                 if self._stop:
                     rec["stopped"] = True
@@ -546,15 +569,46 @@ class FakeCosy:
         return web.json_response(self._train_status())
 
 
-async def serve(argv):
+async def serve(argv, engine="espeech"):
     """python -m espeech --port N …: поддельный espeech-server с обучением отдельным процессом (режим managed в
-    test_train.py: stream-tts запускает его вместо настоящего). Скорость шагов — FAKE_TRAIN_RATE."""
-    import argparse, os
+    test_train.py: stream-tts запускает его вместо настоящего). Скорость шагов — FAKE_TRAIN_RATE.
+    engine="supertonic" — python -m supertonic --models … --voices … (test_engines.py): без onnx/tts.json модели —
+    выход с кодом 2; голоса — файлы *.supertonic в --voices и подпапках (звучат как alpha)."""
+    import argparse, glob, os, sys
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=0)
+    ap.add_argument("--models", default="")
+    ap.add_argument("--voices", default="")
     args, _ = ap.parse_known_args(argv)
-    fake = FakeCosy(engine="espeech", train=True)
-    fake.train_rate = int(os.environ.get("FAKE_TRAIN_RATE", "10"))
+    if engine == "supertonic":
+        if not os.path.isfile(os.path.join(args.models, "onnx", "tts.json")):
+            print(f"нет модели в {args.models}", flush=True)
+            sys.exit(2)
+        files = glob.glob(os.path.join(args.voices, "*.supertonic")) + \
+            glob.glob(os.path.join(args.voices, "*", "*.supertonic"))
+        fake = FakeCosy(engine="supertonic",
+                        voices={os.path.splitext(os.path.basename(f))[0]: VOICES["alpha"] for f in files})
+    else:
+        fake = FakeCosy(engine="espeech", train=True)
+        fake.train_rate = int(os.environ.get("FAKE_TRAIN_RATE", "10"))
     await fake.start(args.port)
-    print(f"fake espeech-server: {fake.url}", flush=True)
+    print(f"fake {engine}-server: {fake.url} {' '.join(argv)}", flush=True)
     await asyncio.Event().wait()
+
+
+def fake_python(root, package, engine):
+    """Пакет-заглушка package (python -m <package> запускает serve(engine=…)) и venv рядом: запуск движка
+    (engines/<id>/launch.py) ищет пакет вверх от интерпретатора. Пакеты — из окружения тестов. → путь к python."""
+    import os, site, venv
+    pkg = os.path.join(root, package)
+    os.makedirs(pkg)
+    open(os.path.join(pkg, "__init__.py"), "w").close()
+    open(os.path.join(pkg, "server.py"), "w").close()
+    with open(os.path.join(pkg, "__main__.py"), "w", encoding="utf-8") as f:
+        f.write("import asyncio, site, sys\n"
+                f"sys.path.insert(0, {os.path.dirname(os.path.abspath(__file__))!r})\n"
+                f"for p in {site.getsitepackages()!r}:\n    site.addsitedir(p)\n"
+                f"import fake_cosyvoice\nasyncio.run(fake_cosyvoice.serve(sys.argv[1:], {engine!r}))\n")
+    env_dir = os.path.join(root, ".venv")
+    venv.create(env_dir, with_pip=False)
+    return os.path.join(env_dir, "Scripts", "python.exe") if os.name == "nt" else os.path.join(env_dir, "bin", "python")

@@ -28,9 +28,16 @@ ESpeech (`engines/espeech/launch.py`): `python -m espeech` интерпрета�
 (программа для Windows и образ Docker: Python с torch и модель качаются кнопкой на вкладке «Сервер»,
 [espeech.md](espeech.md), «Поставка»; `ESPEECH_RUNTIME` — папка рантайма), иначе `espeech/.venv` проекта;
 `--models <модели>/espeech` (без весов сервер ждёт, причина — в админке), `--voices <голоса>`, `--device cuda`, если
-есть драйвер NVIDIA (`ESPEECH_DEVICE=cpu|cuda` или выбор в админке). Встроенный сервер один: смена модели
-перезапускает его с другим движком на том же порту (`COSYVOICE_PORT` или `ESPEECH_PORT` модели, выбранной при
-запуске, иначе свободный).
+есть драйвер NVIDIA (`ESPEECH_DEVICE=cpu|cuda` или выбор в админке).
+
+Supertonic 3 (`engines/supertonic/launch.py`), пока только из исходников: `python -m supertonic` интерпретатором
+stream-tts с корнем проекта в `PYTHONPATH`, если в проекте есть `supertonic/server.py` (`SUPERTONIC_SERVER` — другой
+python или папка с ним); `--models <модели>/supertonic` (файлы `Supertone/supertonic-3`; без них сервер ждёт,
+причина — в админке), `--voices <голоса>`, `--threads`, если задана `SUPERTONIC_THREADS`. Устройство — только
+процессор.
+
+Встроенный сервер один: смена модели перезапускает его с другим движком на том же порту (`COSYVOICE_PORT`,
+`ESPEECH_PORT` или `SUPERTONIC_PORT` модели, выбранной при запуске, иначе свободный).
 
 ## Первый запуск
 
@@ -150,6 +157,9 @@ Windows медленная.
 | `ESPEECH_RUNTIME` | `espeech-runtime` рядом с программой, `/espeech-runtime/python` в Docker | куда кнопка «Скачать» ставит Python с torch для ESpeech |
 | `ESPEECH_DEVICE` | `auto` | `cuda` или `cpu` для ESpeech |
 | `ESPEECH_PORT`, `ESPEECH_HOST` | свободный, `127.0.0.1` | как `COSYVOICE_PORT` и `COSYVOICE_HOST`, если при запуске выбрана ESpeech |
+| `SUPERTONIC_SERVER` | python stream-tts, если в проекте есть `supertonic/` | python для supertonic-server или папка с ним |
+| `SUPERTONIC_THREADS` | — | потоков процессора у Supertonic 3 (`--threads`) |
+| `SUPERTONIC_PORT`, `SUPERTONIC_HOST` | свободный, `127.0.0.1` | как `COSYVOICE_PORT` и `COSYVOICE_HOST`, если при запуске выбрана Supertonic 3 |
 | `COSYVOICE_SERVER` | `runtime/cosyvoice-server(.exe)` | путь к серверу или его папке |
 | `COSYVOICE_BACKEND` | `auto` | `cuda`, `vulkan` или `cpu` |
 | `COSYVOICE_PORT` | свободный, `8080` в Docker | порт сервера |

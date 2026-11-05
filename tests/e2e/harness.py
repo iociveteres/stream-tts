@@ -182,12 +182,13 @@ class StreamTTS:
                                      stdout=self.log, stderr=subprocess.STDOUT)
         return self
 
-    def start(self, password=None, timeout=30):
-        """Запустить и дождаться, когда он ответит и увидит cosyvoice."""
+    def start(self, password=None, timeout=30, synth=True):
+        """Запустить и дождаться, когда он ответит и увидит cosyvoice (synth=False — сервер синтеза не ждать:
+        встроенный может ждать модель)."""
         self.spawn()
         api = Api(self.base)
-        wait_for(lambda: self._up(api) and self._login(api, password) and api.state()["cosy"]["ok"], timeout,
-                 f"запуск stream-tts\n{self.tail()}")
+        wait_for(lambda: self._up(api) and self._login(api, password) and (not synth or api.state()["cosy"]["ok"]),
+                 timeout, f"запуск stream-tts\n{self.tail()}")
         return self
 
     def _up(self, api):

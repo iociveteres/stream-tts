@@ -34,6 +34,7 @@ def tempo_of(samples, accented):
 class Maker:
     ENGINE = "espeech"
     EXT = ".espeech"
+    EXTRACT = True
     SAMPLE_MIN, SAMPLE_MAX = 4.0, 12.0
     SAMPLE_OK = (6, 7)
     PACKAGES = ("music",)

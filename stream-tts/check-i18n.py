@@ -7,8 +7,8 @@
   textarea и translate="no" — мимо;
 - константы модулей, которые переводятся при показе: причины возврата R_*, ответы зрителю REPLIES и ACCESS_WHO,
   подсказки Helix HELIX_HINTS, группы голосов GROUPS, подписи примеров SAMPLES, названия и описания пакетов PACKAGES;
-- схема настроек модели: title и help в PARAMS сервера модели (espeech/*.py) и в DEFAULT_PARAMS клиентов
-  (streamtts/engines/), их переводит web/state.py при отдаче /api/state.
+- схема настроек модели: title и help в PARAMS серверов моделей (espeech/*.py, supertonic/*.py) и в DEFAULT_PARAMS
+  клиентов (streamtts/engines/), их переводит web/state.py при отдаче /api/state.
 Константы ищутся по имени во всех модулях, а не в конкретном файле: перенос в другой модуль проверку не выключает.
 Если известная константа не найдена нигде (переименована или задана не так, как ждёт разбор), это ошибка: иначе её
 строки молча выпали бы из проверки, а их переводы — из словаря как лишние.
@@ -27,7 +27,8 @@ from html.parser import HTMLParser
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(HERE, "streamtts")
 STATIC = os.path.join(PKG, "static")
-ESPEECH = os.path.join(os.path.dirname(HERE), "espeech")   # сервер модели: схема PARAMS
+# серверы моделей: схема PARAMS
+SERVERS = [os.path.join(os.path.dirname(HERE), d) for d in ("espeech", "supertonic")]
 STR = r'"((?:[^"\\]|\\.)*)"'
 RU = re.compile("[а-яё]", re.I)
 norm = lambda s: " ".join(s.split())
@@ -110,8 +111,9 @@ def python_keys(found):
             if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "tr" and n.args:
                 keys.update(consts(n.args[0]))
         keys |= module_consts(tree, found) | schema_keys(tree, found)
-    for p in glob.glob(os.path.join(ESPEECH, "*.py")):   # без подпапок: там .venv
-        keys |= schema_keys(ast.parse(open(p, encoding="utf-8").read()), found)
+    for d in SERVERS:
+        for p in glob.glob(os.path.join(d, "*.py")):   # без подпапок: там .venv
+            keys |= schema_keys(ast.parse(open(p, encoding="utf-8").read()), found)
     return keys
 
 

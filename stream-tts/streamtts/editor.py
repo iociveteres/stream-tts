@@ -18,8 +18,9 @@ _draft-<ключ>, где ключ — хеш параметров: изменё
 Особенности модели — в engines/<id>/editor.py (Maker): пределы длины образца, свои поля варианта и общие для всех
 вариантов поля черновика (Maker.SHARED, у ESpeech — отрезок и поправка темпа; в ключ и регистрацию идут вместе с
 вариантом, _full), проверка (у CosyVoice — ONNX-фронтенд), регистрация образца (у ESpeech — ударения и темп), путь
-файла голоса. Черновик общий; ключ варианта и кэш сравнения с голосом у каждой модели свои (голос с тем же именем
-звучит у них по-разному), ключ CosyVoice — как до второй модели.
+файла голоса. У Supertonic 3 голоса из записи нет (Maker.EXTRACT): синтез вариантов и сохранение отказывают, админка
+показывает вместо редактора подсказку. Черновик общий; ключ варианта и кэш сравнения с голосом у каждой модели свои
+(голос с тем же именем звучит у них по-разному), ключ CosyVoice — как до второй модели.
 
 Сохранение: образец регистрируется под настоящим именем, POST /speaker/save пишет файл голоса модели (.gguf,
 .espeech) в paths.VOICES/<набор>/ (путь — Maker.target), набор — в manifest.json той же папки. Имя занято, если у выбранной модели уже есть голос с ним;
@@ -120,7 +121,8 @@ class Editor:
         d["music"] = separate.available()
         d["sets"] = self.sets()
         d["engine"] = dict(id=m.ENGINE, title=self.tts.title, min=m.SAMPLE_MIN, max=m.SAMPLE_MAX, ok=list(m.SAMPLE_OK),
-                           packages=list(m.PACKAGES), accent=bool(self.tts.capabilities.get("accent")))
+                           packages=list(m.PACKAGES), accent=bool(self.tts.capabilities.get("accent")),
+                           extract=m.EXTRACT)
         return d
 
     def sets(self):

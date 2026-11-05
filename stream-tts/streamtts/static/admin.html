@@ -218,6 +218,9 @@
       речи, одна-две целые фразы.<br>
       Модель повторяет манеру образца во всех фразах.<br>
       Сделайте несколько вариантов и сравните их на тестовых фразах.</p>
+    <p class="warn" data-engine="supertonic" hidden data-t>У модели Supertonic 3 только готовые голоса: голос из
+      записи она не делает. Чтобы сделать голос, выберите другую модель на вкладке <a href="#server">«Сервер»</a>.
+      Черновик сохранится.</p>
     <ul id="ed-packages" class="setlist"></ul>
   </div>
   <div class="card">
@@ -424,8 +427,9 @@
       <div class="card managed">
         <h2>Устройство синтеза</h2>
         <form id="backend-form" class="radios"></form>
-        <p class="muted small">Для стрима нужна видеокарта: процессор обычно не успевает за реальным временем.
-          Vulkan подходит для видеокарт NVIDIA, AMD и Intel.</p>
+        <p class="muted small" id="backend-about">Для стрима нужна видеокарта: процессор обычно не успевает за
+          реальным временем. Vulkan подходит для видеокарт NVIDIA, AMD и Intel.</p>
+        <p class="muted small" id="backend-only" hidden></p>
         <p id="backend-lock" class="warn small" hidden></p>
         <ul id="cuda" class="setlist mt" hidden></ul>
       </div>

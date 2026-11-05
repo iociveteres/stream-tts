@@ -124,8 +124,7 @@ def main():
     ctx.engine.twitch = ctx.twitch
     ctx.load = stats.Load()
     # Первый запуск через админку (модель, устройство, наборы голосов); в тестах с готовым сервером их нет
-    ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set,
-                                    launchers.get("cosyvoice"), launchers.get("espeech")) if ctx.runtime else None
+    ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set, launchers) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.tts, ctx.voices, ctx.runtime)
     ctx.train = lora.Training(ctx.settings, ctx.tts, ctx.voices, ctx.editor)   # обучение LoRA голоса ESpeech
     ctx.bench = bench.Bench(ctx.settings, ctx.tts, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None

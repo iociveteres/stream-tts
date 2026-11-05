@@ -62,8 +62,9 @@
 │       │                  # прочитает», ударения), server.py (встроенный сервер, наборы, пакеты, CUDA, ESpeech),
 │       │                  # editor.py (/api/draft*), train.py (/api/train*)
 │       ├── engines/       # модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент и
-│       │                  # очередь к серверу; cosyvoice/ и espeech/ — описание (__init__.py), запуск
-│       │                  # (launch.py), клиент (client.py), особенности редактора голоса (editor.py);
+│       │                  # очередь к серверу; cosyvoice/, espeech/ и supertonic/ — описание (__init__.py),
+│       │                  # запуск (launch.py), клиент (client.py), особенности редактора голоса (editor.py;
+│       │                  # у supertonic/ — отказ: голоса из записи у Supertonic 3 нет);
 │       │                  # espeech/train.py — обучение LoRA голоса: набор реплик и запросы /train;
 │       │                  # espeech/download.py — загрузка рантайма и модели ESpeech по кнопке
 │       ├── install.py     # Installer: задачи загрузок из админки и их состояние
@@ -261,7 +262,8 @@ docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/c
 | 8099 | `stream-tts-ui-edit` — правка строк интерфейса на поддельном сервере (`stream-tts/ui-edit.py`) |
 | 8765, 8766, 8767 | `review`, `pick`, `emotion-eval` — страницы инструментов |
 
-Встроенный espeech-server (выбрана ESpeech) — на свободном порту или `ESPEECH_PORT`.
+Встроенный espeech-server (выбрана ESpeech) — на свободном порту или `ESPEECH_PORT`, supertonic-server (выбрана
+Supertonic 3) — или `SUPERTONIC_PORT`.
 
 ## stream-tts из исходников
 
