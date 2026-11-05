@@ -287,6 +287,9 @@ def test_supertonic_managed(loop, tmp_path):
     (wd / "voices" / "supertonic").mkdir(parents=True)
     for v in ("F1", "M1"):
         (wd / "voices" / "supertonic" / f"{v}.supertonic").write_text("{}")
+    # Модель — заранее: из исходников stream-tts находит и espeech/.venv проекта, и первой доступной была бы ESpeech
+    (wd / "data").mkdir()
+    (wd / "data" / "settings.json").write_text('{"engine": "supertonic"}', encoding="utf-8")
     server = StreamTTS(str(wd), None, dict(FAST_ENV, SUPERTONIC_SERVER=python)).start(synth=False)
     ctx = Ctx(loop, server, None)
     try:

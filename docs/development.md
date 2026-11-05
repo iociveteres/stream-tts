@@ -31,6 +31,12 @@
 │                          # POST /train), voices.py (формат .espeech), prepare.py (папка модели из файлов Hugging
 │                          # Face; её запускает и программа для Windows); requirements.txt — окружение
 │                          # espeech/.venv, THIRD-PARTY.txt — лицензии перенесённого кода
+├── supertonic/            # supertonic-server — синтез Supertonic 3 на onnxruntime, только CPU (docs/supertonic.md):
+│                          # __main__.py (python -m supertonic), server.py (HTTP API как у cosyvoice-server),
+│                          # model.py (перенос helper.py авторов: текст, нарезка, четыре ONNX-модели), text.py
+│                          # (ударения «+» прочь, русский — нормализатором espeech/normalize.py), voices.py
+│                          # (формат .supertonic); THIRD-PARTY.txt — лицензия перенесённого кода; окружение —
+│                          # stream-tts/.venv (numpy и onnxruntime)
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
 │   ├── check-i18n.py      # английский словарь: ключи без перевода и лишние; --missing — строки для en.json
 │   ├── ui-edit.py         # режим правки строк интерфейса (в разработке): админка на поддельном сервере, :8099
@@ -136,10 +142,13 @@
 │                          # test_normalize_corpus.py (эталонный корпус нормализатора),
 │                          # test_server.py (сервер с настоящей моделью), test_train.py (обучение LoRA),
 │                          # test_train_api.py (обучение через API сервера)
+│   └── supertonic/        # supertonic-server в stream-tts/.venv: test_text.py (текст, нарезка, 44,1 → 24 кГц),
+│                          # test_server.py (сервер с настоящей моделью models/supertonic)
 ├── docs/                  # index.md (задача → файлы, для ИИ-агентов), development.md (этот файл),
 │                          # voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
 │                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план),
+│                          # supertonic.md (Supertonic 3 как третья модель: supertonic-server, замеры, лицензии),
 │                          # refactor-brief.md (ТЗ на структурный рефакторинг для внешнего исполнителя),
 │                          # refactor-plan.md (план и порядок коммитов этого рефакторинга)
 │
@@ -412,6 +421,13 @@ stream-tts сам запускает свой cosyvoice-server из `runtime/` �
 «последний» и «без LoRA», вопрос перед перезапуском, сохранение в голос и синтез им), а если есть и cosyvoice-server с
 Q5_K_M — смена модели туда и обратно со своими голосами у каждой. Время синтеза и первого звука выводится в конце
 прогона («замеры с настоящей моделью»), без порогов; весь уровень идёт ~3 мин.
+
+**supertonic-server** — `tests/supertonic/`, pytest в `stream-tts/.venv` (~40 с; `test_server.py` пропускается без
+`models/supertonic`, путь — `SUPERTONIC_MODELS`):
+
+```bash
+stream-tts/.venv/Scripts/python -m pytest tests/supertonic
+```
 
 **espeech-server** — `tests/espeech/`, pytest в `espeech/.venv` (`espeech/requirements.txt`):
 
