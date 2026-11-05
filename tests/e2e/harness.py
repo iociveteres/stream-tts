@@ -204,8 +204,8 @@ class StreamTTS:
             and api.get("/api/state").status == 200
 
     def stop(self):
-        """Остановка без on_cleanup: на Windows terminate — это TerminateProcess. Корректную остановку (награда на
-        паузу) проверят тесты Twitch."""
+        """Остановка без on_cleanup: на Windows terminate — это TerminateProcess. Корректная остановка (награда на
+        паузу) тестами не проверяется."""
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
             self.proc.wait(10)

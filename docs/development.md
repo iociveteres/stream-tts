@@ -116,7 +116,8 @@
 ├── tests/                 # автотесты (раздел «Тесты»); requirements.txt — pytest для stream-tts/.venv
 │   └── e2e/               # e2e stream-tts: fake_cosyvoice.py (поддельный сервер cosyvoice или espeech),
 │                          # fake_irc.py (поддельный IRC
-│                          # Twitch), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
+│                          # Twitch), fake_twitch.py (поддельный Twitch: вход, Helix, EventSub; сценарии —
+│                          # test_twitch.py), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
 │                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
@@ -317,14 +318,27 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
   `STREAM_TTS_IRC_IDLE`, `STREAM_TTS_IRC_PONG_WAIT` (`chat_irc.py`, только для тестов). Что сообщение
   проигнорировано, проверяется после `chat.sync()`: поддельный IRC шлёт PING с меткой и ждёт PONG, а stream-tts
   разбирает строки одного соединения по очереди, так что к ответу всё прежнее уже обработано.
-- Процесс останавливается `terminate`, то есть без `on_cleanup`: корректную остановку проверят тесты Twitch.
+- Twitch-приложение — поддельный Twitch (`fake_twitch.py`, фикстура `twitch`: процесс на модуль, перед тестом
+  выход, чистый канал и новый вход по Device Code Flow). Адрес — `STREAM_TTS_TEST_TWITCH` (`config.py`, только для
+  тестов): вход — `<адрес>/oauth2`, Helix — `<адрес>/helix`, EventSub — `ws://…/ws`. Тест шлёт от имени Twitch
+  погашения (`redeem`, с `deliver=False` — без уведомления, как за время обрыва) и сообщения чата (`say`), управляет
+  входом (`authorize`, `expire_tokens`, `refresh_ok`), наградой (`affiliate`, `rewards`) и EventSub
+  (`session_reconnect`, `drop`, `mute`, `keepalive`, `revoke_access`); запросы stream-tts записываются (`statuses`,
+  `chat`, `calls`, `revoked`, `refreshes`). Пропущенное уведомление проверяется после следующего, дошедшего до
+  оверлея: соединение EventSub stream-tts разбирает по очереди.
+- Процесс останавливается `terminate`, то есть без `on_cleanup`: корректная остановка (награда на паузу) тестами
+  не проверяется.
 
 Сценарии: `test_access.py` — запуск, голоса и примеры, пароль, защита POST, `STREAM_TTS_BIND` без пароля,
 настройки после перезапуска, пропажа cosyvoice; `test_queue.py` — очередь через `/api/test`: голос и порядок,
 громкость, отказы, фильтры, стриминг и `chunk_tokens`, обрезка, ошибка синтеза, пропуск и очистка, оверлеи;
 `test_chat.py` — режим «Только чтение чата»: подключение и «канал не найден», команда озвучки (доступ по бейджам,
 кулдауны, «Всегда доступно», своё имя), «все сообщения», что из сообщения читается, `!ttssf`, команды модера,
-`CLEARMSG`/`CLEARCHAT`, переподключение по `RECONNECT` и по тишине; `test_voices.py` — голос по хешу ника и после
+`CLEARMSG`/`CLEARCHAT`, переподключение по `RECONNECT` и по тишине; `test_twitch.py` — Twitch-приложение: вход и
+выход, неверный Client ID, вход из токена после перезапуска с возвратом зависших погашений, награда из админки
+(создание, правка, удаление, ошибки Twitch, пауза), погашение → FULFILLED или CANCELED с ответом зрителю, повтор
+уведомления, команда и сообщения чата через EventSub, `session_reconnect`, обрыв с догоном погашений, тишина без
+keepalive, обновление токена, истёкший вход, отозванный доступ; `test_voices.py` — голос по хешу ника и после
 выключения, новый и удалённый голос на сервере, «Включить/Выключить все», страница голосов и `voices.zip`,
 `gain_db`, смена фразы примеров, живая фраза прерывает пример, приоритет «послушать», разделы по наборам (папки
 обеих моделей), эффекты `post` и отказ скриптам не из `effects/`; `test_voicesets.py` — наборы из zip без процесса

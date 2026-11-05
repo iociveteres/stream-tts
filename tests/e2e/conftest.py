@@ -4,6 +4,8 @@
   (настройки по умолчанию, очередь пуста, примеры голосов готовы). После теста проверяется, что к cosyvoice ни разу
   не шли два синтеза одновременно.
 - chat — то же в режиме «Только чтение чата»: stream-tts читает канал testchan поддельного IRC (fake_irc.py).
+- twitch — процесс на модуль с поддельным Twitch (fake_twitch.py), вошедший в канал testchan через Device Code
+  Flow: награды на канале нет, состояние — как у tts.
 - spawn — отдельный процесс со своими данными и своим поддельным cosyvoice: для тестов, которым нужно другое
   окружение (пароль, адрес) или перезапуск.
 - editor — процесс на модуль с поддельным cosyvoice, у которого есть ONNX-фронтенд (голоса из записи), черновик
@@ -19,6 +21,7 @@ sys.path.insert(0, HERE)
 
 from fake_cosyvoice import FakeCosy  # noqa: E402
 from fake_irc import FakeIrc  # noqa: E402
+from fake_twitch import CHAT, CLIENT_ID, REDEMPTION, FakeTwitch  # noqa: E402
 from harness import Api, Loop, Overlay, StreamTTS, wait_for  # noqa: E402
 
 # Настройки, которые тесты меняют (умолчания — store.DEFAULTS)
@@ -119,11 +122,11 @@ def shared(loop, irc, tmp_path_factory):
     loop.run(cosy.close())
 
 
-@pytest.fixture
-def tts(shared):
-    ctx, api = shared, shared.api
+def reset(ctx):
+    """Настройки по умолчанию, озвучка включена, очередь и баны пусты, голоса включены, примеры готовы."""
+    api = ctx.api
     ctx.cosy.reset()
-    ctx.api.ok("/api/settings", DEFAULTS)
+    api.ok("/api/settings", DEFAULTS)
     api.ok("/api/enabled", dict(on=True))
     api.ok("/api/clear")
     state = api.state()
@@ -137,6 +140,12 @@ def tts(shared):
         api.ok("/api/source", dict(src, source=name))
     ctx.idle()
     ctx.cosy.reset()   # запросы примеров голосов из прошлых тестов тесту не нужны
+
+
+@pytest.fixture
+def tts(shared):
+    ctx = shared
+    reset(ctx)
     yield ctx
     ctx.close()
     assert ctx.cosy.max_active <= 1, "к cosyvoice шли параллельные синтезы"
@@ -181,6 +190,78 @@ def chat(tts, irc):
     c.connected()
     yield c
     tts.api.ok("/api/twitch/mode", dict(mode="app"))
+
+
+class Twitch:
+    """Twitch-приложение stream-tts на поддельном Twitch: вход, награда, погашения и чат от имени Twitch."""
+
+    def __init__(self, ctx, fake):
+        self.ctx, self.fake, self.api, self.run = ctx, fake, ctx.api, ctx.loop.run
+
+    def state(self):
+        return self.api.state()["twitch"]
+
+    def login(self):
+        """Вход, как из админки: Client ID → код → стример вводит его на twitch.tv/activate."""
+        self.api.ok("/api/twitch/client_id", dict(client_id=CLIENT_ID))
+        assert self.state()["state"] == "device"
+        self.fake.authorize()
+        self.connected()
+
+    def connected(self, timeout=10):
+        """Вход есть, EventSub подключён, подписки созданы."""
+        def done():
+            s = self.state()
+            return (s["state"] == "ok" and s["ws"] == "connected" and self.fake.subscribed(CHAT)
+                    and (not s["reward"]["id"] or self.fake.subscribed(REDEMPTION)))
+        wait_for(done, timeout, "вход в Twitch и подключение EventSub")
+
+    def reward(self, **kw):
+        """Награда из админки (кнопка «Создать» или «Сохранить»). → награда на поддельном Twitch."""
+        self.api.ok("/api/reward", dict(dict(title="Озвучка", cost=100, cooldown=0, prompt="Текст"), **kw))
+        return self.fake.rewards[self.state()["reward"]["id"]]
+
+    def redeem(self, login, text, **kw):
+        """Зритель погасил награду. → ID погашения (он же ID фразы в очереди)."""
+        return self.run(self.fake.redeem(login, text, **kw))
+
+    def say(self, login, text, badges=(), **kw):
+        """Сообщение в чат через EventSub. → ID сообщения."""
+        return self.run(self.fake.say(login, text, badges, **kw))
+
+
+@pytest.fixture(scope="session")
+def fake_twitch(loop):
+    fake = loop.run(FakeTwitch().start())
+    yield fake
+    loop.run(fake.close())
+
+
+@pytest.fixture(scope="module")
+def twitch_shared(loop, fake_twitch, tmp_path_factory):
+    cosy = _fake(loop)
+    server = StreamTTS(str(tmp_path_factory.mktemp("twitch")), cosy.url,
+                       dict(FAST_ENV, STREAM_TTS_TEST_TWITCH=fake_twitch.url)).start()
+    ctx = Ctx(loop, server, cosy)
+    ctx.idle(30)
+    yield ctx
+    server.stop()
+    loop.run(cosy.close())
+
+
+@pytest.fixture
+def twitch(twitch_shared, fake_twitch):
+    ctx = twitch_shared
+    ctx.api.ok("/api/reward/delete")
+    ctx.api.ok("/api/twitch/logout")
+    wait_for(lambda: not fake_twitch.sessions, 5, "закрытия EventSub после выхода")
+    fake_twitch.reset()
+    reset(ctx)
+    t = Twitch(ctx, fake_twitch)
+    t.login()
+    yield t
+    ctx.close()
+    assert ctx.cosy.max_active <= 1, "к cosyvoice шли параллельные синтезы"
 
 
 @pytest.fixture

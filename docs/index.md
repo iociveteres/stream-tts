@@ -22,7 +22,7 @@
 | З2 | Новый POST-роут админки | `stream-tts/streamtts/web/__init__.py` (MODULES, POSTS), `stream-tts/streamtts/web/common.py` (json_post, _restart_guard), `stream-tts/streamtts/web/admin.py` (POSTS — таблица модуля), `stream-tts/streamtts/static/admin.js` (api), `tests/e2e/test_train.py` (группа роута) | `stream-tts/streamtts/web.py` (make_app, POSTS), `stream-tts/streamtts/static/admin.js`, `tests/e2e/test_train.py` (группа роута) | `tests/e2e/test_train.py`, `tests/e2e/test_routes.py` |
 | З3 | Новый запрос к серверу синтеза | `stream-tts/streamtts/engines/client.py`, `espeech/server.py`, `tests/e2e/fake_cosyvoice.py` (оба режима) | = | `tests/e2e/test_engines.py` |
 | З4 | Фильтр текста (ссылки, мат, ники) | `stream-tts/streamtts/filters.py`, `stream-tts/streamtts/engine.py` (chat_message) | = | `tests/e2e/test_queue.py` |
-| З5 | Новое поле события чата | `stream-tts/streamtts/twitch.py` (EventSub), `stream-tts/streamtts/chat_irc.py` (теги IRC), `stream-tts/streamtts/engine.py`, `tests/e2e/fake_irc.py` | = | `tests/e2e/test_chat.py` |
+| З5 | Новое поле события чата | `stream-tts/streamtts/twitch.py` (EventSub), `stream-tts/streamtts/chat_irc.py` (теги IRC), `stream-tts/streamtts/engine.py`, `tests/e2e/fake_irc.py`, `tests/e2e/fake_twitch.py` (say) | `stream-tts/streamtts/twitch.py` (EventSub), `stream-tts/streamtts/chat_irc.py` (теги IRC), `stream-tts/streamtts/engine.py`, `tests/e2e/fake_irc.py` | `tests/e2e/test_chat.py`, `tests/e2e/test_twitch.py` |
 | З6 | Редактор голоса (новый голос из записи) | `stream-tts/streamtts/editor.py`, `stream-tts/streamtts/engines/cosyvoice/editor.py`, `stream-tts/streamtts/engines/espeech/editor.py`, `stream-tts/streamtts/static/editor.js` | = | `tests/e2e/test_editor.py`, `tests/e2e/test_editor_espeech.py` |
 | З7 | Голоса: список, группы наборов, примеры | `stream-tts/streamtts/voices.py` (GROUPS) | = | `tests/e2e/test_voices.py` |
 | З8 | Статистика и база SQLite | `stream-tts/streamtts/stats.py`, `stream-tts/streamtts/store.py` | = | `tests/e2e/test_stats.py` |
@@ -30,6 +30,7 @@
 | З10 | Нормализация текста ESpeech (числа, латиница, ники) | `espeech/normalize.py` (normalize), `espeech/numbers.py`, `espeech/latin.py`, `espeech/pipeline.py` | `espeech/normalize.py`, `espeech/pipeline.py` | `tests/espeech/test_text.py`, `tests/espeech/test_normalize_corpus.py` |
 | З11 | Обучение LoRA голоса ESpeech | `stream-tts/streamtts/engines/espeech/train.py`, `stream-tts/streamtts/static/train.js`, `espeech/trainjob.py`, `espeech/train.py` | = | `tests/e2e/test_train.py`, `tests/espeech/test_train_api.py` |
 | З12 | Загрузка ESpeech по кнопке: рантайм torch и модель | `stream-tts/streamtts/engines/espeech/download.py` (Steps), `stream-tts/streamtts/partzip.py`, `stream-tts/streamtts/fetch.py`, `packaging/pin-espeech.py` (закрепления пишет в downloads.json) | `stream-tts/streamtts/engines/espeech/download.py`, `stream-tts/streamtts/install.py`, `stream-tts/streamtts/partzip.py`, `packaging/pin-espeech.py` | `tests/e2e/test_espeech_download.py` |
+| З13 | Twitch-приложение: вход, награда, статусы погашений, EventSub | `stream-tts/streamtts/twitch.py` (begin_login, refresh, api, save_reward, set_status, _eventsub), `stream-tts/streamtts/web/admin.py` (post_login, post_reward), `stream-tts/streamtts/engine.py` (redemption, resolve), `stream-tts/streamtts/config.py` (TEST_TWITCH), `tests/e2e/fake_twitch.py` | `stream-tts/streamtts/twitch.py`, `stream-tts/streamtts/web.py` (post_login, post_reward), `stream-tts/streamtts/engine.py` (redemption, resolve) | `tests/e2e/test_twitch.py` |
 
 ## Куда смотреть
 
@@ -45,7 +46,7 @@
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: страница выбора, синтез, оценки, коллекции наборов; реплики WC3 и других источников | [voice-pipeline.md](voice-pipeline.md), [voices-wc3.md](voices-wc3.md), [voices.md](voices.md) |
 | `tools/espeech/` | папка модели ESpeech, голоса `.espeech`, обучение LoRA из командной строки | [espeech.md](espeech.md) |
 | `effects/` | эффекты поверх синтеза (`post`) | [stream-tts.md](stream-tts.md), «Синтез и воспроизведение» |
-| `tests/e2e/`, `tests/espeech/` | e2e stream-tts на поддельном сервере; тесты espeech-server | [development.md](development.md), «Тесты» |
+| `tests/e2e/`, `tests/espeech/` | e2e stream-tts на поддельных сервере синтеза, IRC и Twitch; тесты espeech-server | [development.md](development.md), «Тесты» |
 
 ## Данные (не в git)
 
@@ -87,4 +88,5 @@
   слоя выше — в модуль ниже обоих (как `fetch.py`), а не ленивым импортом.
 - **`Engine.chat`** принимает событие в форме EventSub `channel.chat.message`; режим «Только чтение чата»
   (`chat_irc.py`) собирает такое же из тегов IRC: новое поле события — в обоих местах, новый тег IRC — и в
-  `tests/e2e/fake_irc.py`.
+  `tests/e2e/fake_irc.py`, новое поле EventSub — и в `tests/e2e/fake_twitch.py`. Новый запрос `twitch.py` к Twitch —
+  и в `fake_twitch.py`: иначе `tests/e2e/test_twitch.py` получит 404.
