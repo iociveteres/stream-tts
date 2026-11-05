@@ -17,6 +17,7 @@ FRONTEND_IDLE = 600
 class Maker:
     ENGINE = "cosyvoice"
     EXT = ".gguf"
+    EXTRACT = True                       # голос из записи делается (у Supertonic — нет)
     SAMPLE_MIN, SAMPLE_MAX = 2.0, 30.0   # с; длиннее синтез медленнее
     SAMPLE_OK = (10, 20)
     PACKAGES = ("frontend", "music")     # пакеты в редакторе: без фронтенда голос не создать

@@ -98,7 +98,7 @@ class Engine:
         if u and u["voice"] in enabled:
             return u["voice"]
         if u and u["voice"] and u["voice"] not in self.voices.names():
-            # голоса нет у текущей модели (нет файла .gguf/.espeech или удалён с сервера): выбор зрителя сохраняется
+            # голоса нет у текущей модели (нет файла голоса этой модели или удалён с сервера): выбор зрителя сохраняется
             # — вернётся вместе с моделью
             return self.voices.by_hash(login)
         v = self.voices.by_hash(login)   # голос не выбран или его выключили

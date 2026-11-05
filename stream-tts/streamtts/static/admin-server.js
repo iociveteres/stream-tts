@@ -133,6 +133,11 @@ function renderServer() {
         checked: rt.prefer === k, disabled: rt.locked.backend || !have(k) }),
         h("span", {}, name, have(k) ? "" : h("span", { class: "muted small" }, T(" — не найдено"))))));
   }
+  // модель с одним устройством (Supertonic 3 — только процессор): выбирать нечего, совет про видеокарту не к ней
+  const only = rt.devices.length === 1;
+  $("#backend-about").hidden = only;
+  $("#backend-only").hidden = !only;
+  $("#backend-only").textContent = only ? T("{engine} работает только на процессоре.", { engine: c.title }) : "";
   $("#backend-lock").hidden = !rt.locked.backend;
   $("#backend-lock").textContent = T("Устройство задано переменной {var}.", { var: rt.device_env });
   renderCuda(st, d);
@@ -293,7 +298,8 @@ function renderBench(rt) {
   const b = S.bench, running = b.state === "running";
   const rows = [...b.results].sort((x, y) => x.rtf - y.rtf);
   const quant = m => (m.match(/_(Q\w+|F16|BF16)\.gguf$/i) || [, m])[1];
-  const steps = S.cosy.params.find(p => p.param === "nfe_steps");   // у ESpeech замер зависит от числа шагов
+  // у ESpeech и Supertonic замер зависит от числа шагов (bench_info клиента)
+  const steps = S.cosy.params.find(p => p.param === "nfe_steps" || p.param === "total_step");
   $("#bench-table").replaceChildren(rows.length ? h("div", { class: "table-wrap" }, h("table", { class: "bench" },
     h("thead", {}, h("tr", {}, h("th", {}, T("Устройство")), h("th", {}, T("Модель")),
       h("th", { class: "num", title: T("Время синтеза / длина фразы. Меньше — быстрее") }, "RTF"),

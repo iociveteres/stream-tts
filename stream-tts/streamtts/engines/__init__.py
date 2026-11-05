@@ -8,14 +8,14 @@
 держит очередь, пока новый сервер не ответит, — озвучка ждёт, а не падает на перезапуске."""
 import asyncio, logging
 
-from . import cosyvoice, espeech
+from . import cosyvoice, espeech, supertonic
 from .client import LIVE, Lane
 from .. import runtime
 from ..i18n import tr
 
 log = logging.getLogger("tts")
 
-ENGINES = {cosyvoice.ID: cosyvoice, espeech.ID: espeech}
+ENGINES = {cosyvoice.ID: cosyvoice, espeech.ID: espeech, supertonic.ID: supertonic}
 READY_TIMEOUT = 300   # загрузка модели на CPU бывает долгой
 
 

@@ -53,10 +53,14 @@ class Cancelled(Exception):
 
 
 class Installer:
-    def __init__(self, settings, runtime, changed, cosy=None, espeech=None):
+    def __init__(self, settings, runtime, changed, launchers=None):
+        """launchers — запуски найденных движков {id: Launcher}; у кого здесь своих загрузок нет (Supertonic 3 —
+        модель кладётся вручную), тот просто не используется."""
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
-        self.cosy = cosy   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
-        self.espeech = espeech   # запуск ESpeech: у программы для Windows и в Docker рантайм и модель качаются (download.py)
+        launchers = launchers or {}
+        self.cosy = launchers.get("cosyvoice")   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
+        # запуск ESpeech: у программы для Windows и в Docker рантайм и модель качаются (download.py)
+        self.espeech = launchers.get("espeech")
         self.task = None
         self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
         self._last_push = 0.0

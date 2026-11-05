@@ -1,25 +1,34 @@
-"""Модели синтеза (engines/): выбор CosyVoice / ESpeech при двух готовых серверах (STREAM_TTS_TEST_SERVERS), настройки модели
-по схеме params из /status, голоса без файла для текущей модели, свои примеры у каждой модели, «как прочитает».
+"""Модели синтеза (engines/): выбор CosyVoice / ESpeech / Supertonic 3 при готовых серверах (STREAM_TTS_TEST_SERVERS),
+настройки модели по схеме params из /status, голоса без файла для текущей модели, свои примеры у каждой модели,
+«как прочитает»; запуск встроенного supertonic-server (пакет-заглушка) и отказ редактора голоса у Supertonic.
 
-Два поддельных сервера: cosyvoice (alpha, bravo, charlie) и espeech (alpha, charlie — у bravo нет .espeech)."""
-import sys
+Три поддельных сервера: cosyvoice (alpha, bravo, charlie), espeech (alpha, charlie — у bravo нет .espeech) и
+supertonic (alpha, bravo)."""
+import asyncio, os, sys
 
 import pytest
 
 from conftest import FAST_ENV, Ctx
-from fake_cosyvoice import VOICES, FakeCosy
+from fake_cosyvoice import VOICES, FakeCosy, fake_python
 from harness import STREAM_TTS, StreamTTS, voice_of, wait_for
+from test_editor import add_source, set_variants, synth, variant
 
 sys.path.insert(0, STREAM_TTS)
+from streamtts import paths  # noqa: E402
 from streamtts.engines.espeech import launch  # noqa: E402
+from streamtts.engines.supertonic import launch as st_launch  # noqa: E402
+from streamtts.runtime import Unavailable  # noqa: E402
 
 ESPEECH_VOICES = {k: VOICES[k] for k in ("alpha", "charlie")}
+SUPERTONIC_VOICES = {k: VOICES[k] for k in ("alpha", "bravo")}
+ST_REFUSAL = ("модель Supertonic 3 не делает голос из записи: у неё только готовые голоса. Чтобы сделать голос, "
+              "выберите другую модель на вкладке «Сервер»")
 
 
 class Two(Ctx):
-    def __init__(self, loop, server, cosy, esp):
+    def __init__(self, loop, server, cosy, esp, st=None):
         super().__init__(loop, server, cosy)
-        self.esp = esp
+        self.esp, self.st = esp, st
 
     def use(self, engine):
         self.api.ok("/api/engine", dict(engine=engine))
@@ -32,14 +41,16 @@ class Two(Ctx):
 def two_shared(loop, tmp_path_factory):
     cosy = loop.run(FakeCosy().start())
     esp = loop.run(FakeCosy(engine="espeech", voices=ESPEECH_VOICES).start())
+    st = loop.run(FakeCosy(engine="supertonic", voices=SUPERTONIC_VOICES).start())
+    servers = f"cosyvoice={cosy.url},espeech={esp.url},supertonic={st.url}"
     server = StreamTTS(str(tmp_path_factory.mktemp("engines")), None,
-                       dict(FAST_ENV, STREAM_TTS_TEST_SERVERS=f"cosyvoice={cosy.url},espeech={esp.url}")).start()
-    ctx = Two(loop, server, cosy, esp)
+                       dict(FAST_ENV, STREAM_TTS_TEST_SERVERS=servers)).start()
+    ctx = Two(loop, server, cosy, esp, st)
     ctx.idle()
     yield ctx
     server.stop()
-    loop.run(cosy.close())
-    loop.run(esp.close())
+    for fake in (cosy, esp, st):
+        loop.run(fake.close())
 
 
 @pytest.fixture
@@ -52,15 +63,17 @@ def two(two_shared):
     ctx.idle()
     ctx.cosy.reset()
     ctx.esp.reset()
+    ctx.st.reset()
     yield ctx
     ctx.close()
-    assert ctx.cosy.max_active <= 1 and ctx.esp.max_active <= 1, "к серверу синтеза шли параллельные запросы"
+    assert all(f.max_active <= 1 for f in (ctx.cosy, ctx.esp, ctx.st)), "к серверу синтеза шли параллельные запросы"
 
 
 def test_engines_listed(two):
     c = two.api.state()["cosy"]
     assert c["engine"] == "cosyvoice" and c["title"] == "CosyVoice3"
-    assert [(e["id"], e["available"]) for e in c["engines"]] == [("cosyvoice", True), ("espeech", True)]
+    assert [(e["id"], e["available"]) for e in c["engines"]] == \
+        [("cosyvoice", True), ("espeech", True), ("supertonic", True)]
     assert c["params"] == [] and not c["capabilities"].get("accent")   # у cosyvoice-server схемы нет
 
 
@@ -165,6 +178,138 @@ def test_accent(two):
     r = two.api.ok("/api/accent", dict(text="Привет, 2 мира https://example.com"))
     assert r["normalized"] == "Привет, два мира" and r["accented"] == "Пр+ивет, дв+а м+ира"
     assert [c["text"] for c in two.esp.called("accent")] == ["Привет, 2 мира"]   # ссылка вырезана фильтром
+
+
+def test_supertonic(two):
+    """Supertonic 3: голоса — с его сервера, настройки модели по схеме (шаги и скорость речи) — в каждом запросе, без
+    полей других моделей; значение не из схемы — отказ. Голоса из записи у модели нет: кнопки редактора нет."""
+    two.use("supertonic")
+    two.api.ok("/api/settings", dict(supertonic_steps=8, supertonic_speed=1.05))
+    s = two.api.state()
+    c = s["cosy"]
+    assert c["title"] == "Supertonic 3" and sorted(v["name"] for v in s["voices"]) == ["alpha", "bravo"]
+    assert not c["capabilities"]["extract"] and not c["capabilities"]["accent"]
+    assert [(x["key"], x["param"], x["value"], x["choices"]) for x in c["params"]] == [
+        ("supertonic_steps", "total_step", 8, [5, 8, 12, 16]),
+        ("supertonic_speed", "speed", 1.05, [0.9, 1.0, 1.05, 1.15, 1.3])]
+    assert [x["title"] for x in c["params"]] == ["Качество синтеза", "Скорость речи"]
+    ov = two.overlay()
+    rid = two.api.test("Фраза моделью Supertonic.", voice="bravo")
+    assert voice_of(ov.played(rid)) == "bravo"
+    req = two.st.tts[-1]
+    assert (req["voice"], req["total_step"], req["speed"]) == ("bravo", 8, 1.05)
+    assert "chunk_tokens" not in req and "nfe_steps" not in req
+    two.api.ok("/api/settings", dict(supertonic_steps=16, supertonic_speed=1.3))
+    for bad in (dict(supertonic_steps=7), dict(supertonic_speed=1.2)):
+        assert not two.api.post("/api/settings", bad).json()["ok"]
+    assert [x["value"] for x in two.api.state()["cosy"]["params"]] == [16, 1.3]
+    rid = two.api.test("Фраза с шестнадцатью шагами.", voice="alpha")
+    ov.played(rid)
+    assert (two.st.tts[-1]["total_step"], two.st.tts[-1]["speed"]) == (16, 1.3)
+    two.api.ok("/api/settings", dict(supertonic_steps=8, supertonic_speed=1.05))
+
+
+def test_supertonic_stream_threshold(two):
+    """Supertonic стримит с 10 с расчётного звука (120 символов): короче фраза пришла бы одним куском текста, а целиком
+    она ещё и выравнивается по громкости."""
+    mid = "Средняя фраза для проверки порога стриминга Supertonic: длиннее порога ESpeech, но короче своего."
+    long = mid + " А эта уже длиннее ста двадцати символов и идёт потоком."
+    assert 72 < len(mid) < 120 < len(long)
+    two.use("supertonic")
+    ov = two.overlay()
+    for text, stream in ((mid, False), (long, True)):
+        rid = two.api.test(text, voice="alpha")
+        ov.played(rid)
+        assert two.st.tts[-1]["text"] == text and two.st.tts[-1]["stream"] is stream
+
+
+def test_supertonic_editor_refuses(two):
+    """Редактор голоса у Supertonic 3 отказывает понятно: черновик знает, что голоса из записи нет (админка показывает
+    подсказку вместо редактора), синтез варианта и сохранение — отказ без запросов к серверу; черновик остаётся."""
+    two.use("supertonic")
+    api = two.api
+    api.ok("/api/draft/discard")
+    try:
+        d = api.get("/api/draft").json()["engine"]
+        assert (d["id"], d["title"], d["extract"], d["packages"]) == ("supertonic", "Supertonic 3", False, [])
+        src = add_source(api)
+        set_variants(api, variant(src, "a", 1, 12))
+        r = synth(api, variant="a")
+        assert r.status >= 400 and r.text == ST_REFUSAL
+        r = api.post("/api/draft/save", dict(variant="a", name="Fresh", set="mine")).json()
+        assert r == dict(ok=False, error=ST_REFUSAL)
+        assert not two.st.calls and not [x for x in two.st.tts if x["voice"].startswith("_draft-")]
+        assert [v["id"] for v in api.get("/api/draft").json()["variants"]] == ["a"]
+        two.use("cosyvoice")
+        assert api.get("/api/draft").json()["engine"]["extract"]
+    finally:
+        api.ok("/api/draft/discard")
+
+
+def test_supertonic_launch(tmp_path, monkeypatch):
+    """Запуск supertonic-server: пакет — вверх от интерпретатора SUPERTONIC_SERVER (PYTHONPATH), без файлов модели —
+    Unavailable с папкой модели (причина видна в админке), с моделью — python -m supertonic с папками модели и голосов.
+    Устройство одно — процессор, выбирать нечего."""
+    root = tmp_path / "srv"
+    (root / "supertonic").mkdir(parents=True)
+    (root / "supertonic" / "server.py").write_text("")
+    python = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    python.parent.mkdir(parents=True)
+    python.write_text("")
+    models, voices = tmp_path / "models", tmp_path / "voices"
+    monkeypatch.setattr(paths, "MODELS", str(models))
+    monkeypatch.setattr(paths, "VOICES", str(voices))
+    monkeypatch.setenv("SUPERTONIC_SERVER", str(root / ".venv"))
+    assert st_launch.find_server() == str(python)
+    L = st_launch.Launcher(str(python))
+    assert L.env()["PYTHONPATH"] == str(root)
+    with pytest.raises(Unavailable, match="нет модели Supertonic 3"):
+        asyncio.run(L.args("127.0.0.1", 5))
+    for f in st_launch.MODEL_FILES:
+        p = models / "supertonic" / f
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("{}")
+    (voices / "supertonic").mkdir(parents=True)
+    for v in ("F1", "M1"):
+        (voices / "supertonic" / f"{v}.supertonic").write_text("{}")
+    assert asyncio.run(L.args("127.0.0.1", 5)) == [
+        str(python), "-m", "supertonic", "--models", str(models / "supertonic"), "--voices", str(voices),
+        "--host", "127.0.0.1", "--port", "5"]
+    p = L.public()
+    assert (p["devices"], p["backends"], p["model"], p["voices"], L.DEVICE_KEY) == (["cpu"], [], "Supertonic 3", 2, "")
+
+
+def test_supertonic_managed(loop, tmp_path):
+    """Встроенный supertonic-server (пакет-заглушка, python -m supertonic): без модели ждёт с причиной, модель
+    появилась — запускается сам, голоса — файлы .supertonic, фраза звучит; выбор устройства отказывает."""
+    python = fake_python(str(tmp_path / "fake"), "supertonic", "supertonic")
+    wd = tmp_path / "wd"
+    (wd / "voices" / "supertonic").mkdir(parents=True)
+    for v in ("F1", "M1"):
+        (wd / "voices" / "supertonic" / f"{v}.supertonic").write_text("{}")
+    server = StreamTTS(str(wd), None, dict(FAST_ENV, SUPERTONIC_SERVER=python)).start(synth=False)
+    ctx = Ctx(loop, server, None)
+    try:
+        rt = wait_for(lambda: (lambda c: c["runtime"]["state"] == "waiting" and c)(ctx.api.state()["cosy"]), 30,
+                      f"ожидания модели\n{server.tail()}")
+        assert rt["engine"] == "supertonic" and "нет модели Supertonic 3" in rt["runtime"]["error"]
+        assert rt["runtime"]["devices"] == ["cpu"]
+        for f in st_launch.MODEL_FILES:
+            p = wd / "models" / "supertonic" / f
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("{}")
+        wait_for(lambda: (lambda c: c["ok"] and c["runtime"]["state"] == "running")(ctx.api.state()["cosy"]), 60,
+                 f"запуска поддельного supertonic-server\n{server.tail()}")
+        s = ctx.api.state()
+        assert sorted(v["name"] for v in s["voices"]) == ["F1", "M1"]
+        assert s["cosy"]["runtime"]["model"] == "Supertonic 3" and s["cosy"]["runtime"]["backend"] == "CPU"
+        ov = ctx.overlay()
+        ov.played(ctx.api.test("Встроенный Supertonic.", voice="F1"))
+        r = ctx.api.post("/api/backend", dict(backend="cpu")).json()
+        assert r == dict(ok=False, error="у модели Supertonic 3 устройство не выбирается")
+    finally:
+        ctx.close()
+        server.stop()
 
 
 def test_switch_unknown_model(two):

@@ -15,11 +15,12 @@ DRAFT_PREFIX = "_draft-"   # служебные голоса черновика 
 # «_» в начале — только у служебных голосов (DRAFT_PREFIX), «~» — у образцов редактора ESpeech (ref-<голос>~espeech)
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
 # Группы на странице для зрителей — наборы (источники) voice-refs/<модель>/<набор>/ и <голоса>/<набор>/, в этом
-# порядке (docs/voice-pipeline.md); games — прежний набор игр до разбиения по играм (может стоять у зрителей программы)
+# порядке (docs/voice-pipeline.md); games — прежний набор игр до разбиения по играм (может стоять у зрителей программы);
+# supertonic — готовые голоса Supertonic 3 (M1–M5, F1–F5)
 GROUPS = {
     "wc3": "Warcraft III", "morrowind": "Morrowind", "dota2": "Dota 2", "portal": "Portal 2",
     "stalker": "S.T.A.L.K.E.R.", "minecraft": "Minecraft", "neco-arc": "Neco Arc", "altushka": "Альтушка для скуфа",
-    "games": "Игры", "streamers": "Стримеры",
+    "games": "Игры", "streamers": "Стримеры", "supertonic": "Supertonic 3",
 }
 
 

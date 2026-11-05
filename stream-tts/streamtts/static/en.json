@@ -364,7 +364,6 @@
  "недопустимое имя голоса: {voice}": "invalid voice name: {voice}",
  "{file}: слишком большой для голоса": "{file}: too large for a voice",
  "{file}: не голос {model}": "{file}: not a {model} voice",
- "в архиве нет голосов (*.gguf, *.espeech)": "the archive has no voices (*.gguf, *.espeech)",
  "manifest.json: ожидался объект {голос: {...}}": "manifest.json: expected an object {voice: {...}}",
  "{voice} (уже есть: {where})": "{voice} (already in {where})",
  "все голоса набора уже установлены в других наборах: {voices}": "all voices of the pack are already installed in other packs: {voices}",
@@ -840,5 +839,15 @@
  "снимок: last или best": "snapshot: last or best",
  "снимок: last, best или none": "snapshot: last, best or none",
  "файла голоса больше нет на сервере синтеза": "the voice file is gone from the synthesis server",
- "шагов — от 1 до {n}": "steps — from 1 to {n}"
+ "шагов — от 1 до {n}": "steps — from 1 to {n}",
+ "Шагов модели на фразу: 5 — быстрее всего; 8 — оптимально; 12 и 16 — чуть чище звук, но синтез в полтора-два раза дольше": "Model steps per phrase: 5 — fastest; 8 — optimal; 12 and 16 — slightly cleaner sound, but synthesis takes 1.5–2 times longer",
+ "{engine} работает только на процессоре.": "{engine} runs on the CPU only.",
+ "Темп речи: 1 — обычный, меньше — медленнее, больше — быстрее; 1,05 — как у авторов модели": "Speech pace: 1 — normal, lower — slower, higher — faster; 1.05 — as the model authors use",
+ "Скорость речи": "Speech rate",
+ "У модели Supertonic 3 только готовые голоса: голос из записи она не делает. Чтобы сделать голос, выберите другую модель на вкладке <a href=\"#server\">«Сервер»</a>. Черновик сохранится.": "Supertonic 3 has only built-in voices: it can't make a voice from a recording. To make a voice, pick another model on the <a href=\"#server\">Server</a> tab. The draft will be kept.",
+ "в архиве нет голосов ({exts})": "the archive has no voices ({exts})",
+ "модель {engine} не делает голос из записи: у неё только готовые голоса. Чтобы сделать голос, выберите другую модель на вкладке «Сервер»": "{engine} can't make a voice from a recording: it has only built-in voices. To make a voice, pick another model on the Server tab",
+ "нет модели Supertonic 3: положите файлы Supertone/supertonic-3 в {dir}": "no Supertonic 3 model: put the Supertone/supertonic-3 files into {dir}",
+ "рядом с {path} нет пакета supertonic": "no supertonic package next to {path}",
+ "у модели {engine} устройство не выбирается": "{engine} has no device choice"
 }

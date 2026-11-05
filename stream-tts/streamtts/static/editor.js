@@ -8,9 +8,10 @@ const pkg = id => (S.packages || []).find(p => p.id === id);
 const musicReady = () => !!(pkg("music") && pkg("music").installed && pkg("music").usable);
 let D = null;
 // Модель черновика (engines/<id>/editor.py): пределы и совет по длине образца, с; пакеты редактора — без фронтенда
-// CosyVoice голос не создать
+// CosyVoice голос не создать; extract — делает ли модель голос из записи (у Supertonic 3 — нет)
 const edEngine = () => (D && D.engine) || { id: S.cosy.engine, min: 2, max: 30, ok: [10, 20],
-  packages: S.cosy.engine === "cosyvoice" ? ["frontend", "music"] : ["music"] };
+  packages: S.cosy.engine === "cosyvoice" ? ["frontend", "music"] : ["music"],
+  extract: S.cosy.engine === "cosyvoice" || !!S.cosy.capabilities.extract };
 const edPackages = () => edEngine().packages;
 const TEMPO_MAX = 60, SPEED_MAX = 30;   // с и %: отрезок и поправка темпа ESpeech (engines/espeech/editor.py)
 const ed = { busy: new Set(), synthAll: false, timer: 0, saving: null };
@@ -275,6 +276,9 @@ function renderEditor() {
   const e = edEngine();
   // подсказки модели: <… data-engine="cosyvoice"> видны только у неё
   for (const el of $("#editor").querySelectorAll("[data-engine]")) el.hidden = el.dataset.engine !== e.id;
+  // модель без голоса из записи: вместо редактора — подсказка (черновик остаётся для другой модели)
+  const parts = $("#editor").querySelectorAll(":scope > .card:not(:first-child), #ed-packages");
+  for (const el of parts) el.hidden = !e.extract;
   $("#ed-title").textContent = T("Новый голос {engine}", { engine: e.title || S.cosy.title });
   edWaves.render(D.sources);
   renderEdVariants();
