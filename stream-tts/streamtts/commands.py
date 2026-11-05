@@ -1,5 +1,5 @@
 """Команды чата: служебные !tts* (голос, пропуск, очистка, бан, вкл/выкл) и команда озвучки. Событие — в форме
-EventSub channel.chat.message (twitch.py) или такое же из тегов IRC (chat_irc.py), приходит через Engine.chat."""
+EventSub channel.chat.message (twitch/eventsub.py) или такое же из тегов IRC (chat_irc.py), приходит через Engine.chat."""
 from .i18n import tr
 from .rules import MODS, R_BAN
 

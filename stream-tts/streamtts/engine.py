@@ -249,7 +249,7 @@ class Engine:
         await self.poke()
 
     async def chat(self, ev):
-        """Сообщение чата (EventSub channel.chat.message; его зовут twitch.py и chat_irc.py) — commands.py."""
+        """Сообщение чата (EventSub channel.chat.message; его зовут twitch/eventsub.py и chat_irc.py) — commands.py."""
         await commands.chat(self, ev)
 
     # --- синтез ---

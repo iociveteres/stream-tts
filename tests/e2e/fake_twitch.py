@@ -1,7 +1,7 @@
 """Поддельный Twitch (id.twitch.tv, api.twitch.tv/helix, eventsub.wss.twitch.tv) для e2e-тестов Twitch-приложения
 stream-tts. Адрес — в STREAM_TTS_TEST_TWITCH (config.TEST_TWITCH, только для тестов).
 
-Отвечает на то, что шлёт twitch.py:
+Отвечает на то, что шлёт streamtts/twitch/:
 - /oauth2: Device Code Flow (device, token: authorization_pending до authorize()), refresh-токен (одноразовый, как у
   публичного клиента), validate, revoke. Неизвестный Client ID — 400, как у Twitch.
 - /helix: награда channel points (создание, чтение, правка, удаление; повтор названия — DUPLICATE_REWARD, канал без

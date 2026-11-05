@@ -23,7 +23,7 @@ def _test_servers():
 
 TEST_SERVERS = _test_servers()
 # Только для тестов (tests/e2e/fake_twitch.py): поддельный Twitch вместо настоящего, STREAM_TTS_TEST_TWITCH=http://…
-# (вход — <адрес>/oauth2, Helix — <адрес>/helix, EventSub — ws://…/ws), см. twitch.py
+# (вход — <адрес>/oauth2, Helix — <адрес>/helix, EventSub — ws://…/ws), см. twitch/common.py
 TEST_TWITCH = env("STREAM_TTS_TEST_TWITCH").rstrip("/")
 TWITCH_CLIENT_ID = env("TWITCH_CLIENT_ID")
 

@@ -48,7 +48,10 @@
 │       ├── voices.py      # голоса: список с сервера, группы наборов, эффекты post, примеры, страница голосов
 │       ├── store.py       # settings.json и SQLite (зрители, баны, история); read_json/write_json
 │       ├── stats.py       # статистика активаций и загрузка машины
-│       ├── twitch/        # __init__.py — вход Device Code Flow, Helix, EventSub
+│       ├── twitch/        # Twitch-приложение: __init__.py — класс Twitch из примесей, режим, запуск и остановка;
+│       │                  # auth.py — вход Device Code Flow и токены, helix.py — Helix (награда, статусы
+│       │                  # активаций, ответ в чат, HELIX_HINTS), eventsub.py — EventSub WebSocket; common.py —
+│       │                  # адреса (STREAM_TTS_TEST_TWITCH), права, ошибки
 │       ├── chat_irc.py    # режим «Только чтение чата»: анонимный IRC
 │       ├── i18n.py        # язык интерфейса, tr()
 │       ├── runtime.py     # встроенный сервер: процесс, порт, перезапуски, paused, выгрузка
