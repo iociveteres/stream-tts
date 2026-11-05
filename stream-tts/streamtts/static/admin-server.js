@@ -75,11 +75,12 @@ function renderServer() {
   $$("#tab-server .managed").forEach(el => el.hidden = !st);
   if (!st) return;
   $("#quants-card").hidden = c.engine !== "cosyvoice";
-  // ESpeech: карточка у выбранной модели, а у программы для Windows ещё и пока он не скачан — предложение скачать
-  $("#espeech-card").hidden = c.engine !== "espeech" && !(st.espeech.offer && !st.espeech.installed);
+  // Карточки ESpeech и Supertonic 3 — только у выбранной модели: обе выбираются и до загрузки (сервер ждёт модель).
+  // Идущая загрузка держит свою карточку, чтобы её можно было отменить и после смены модели.
+  const loading = p => st.download.package === p && st.download.state === "running";
+  $("#espeech-card").hidden = c.engine !== "espeech" && !loading("espeech");
   $("#espeech-dir").textContent = st.espeech.model_dir || rt.models_dir || "";
-  // Supertonic 3: так же — у выбранной модели и пока не скачан
-  $("#supertonic-card").hidden = !st.supertonic.offer || c.engine !== "supertonic" && st.supertonic.installed;
+  $("#supertonic-card").hidden = !st.supertonic.offer || c.engine !== "supertonic" && !loading("supertonic");
   $("#supertonic-dir").textContent = st.supertonic.model_dir || "";
   $("#models-dir").textContent = st.models_dir;
   $("#voices-dir").textContent = st.voices_dir;
@@ -327,12 +328,10 @@ function renderSupertonic(st, d) {
   $("#supertonic").replaceChildren(h("li", { class: e.installed ? "" : "on" }, h("div", { class: "grow" },
     h("b", {}, "Supertonic 3"), " ", h("span", { class: "muted small" }, size),
     e.installed ? h("span", { class: "tag" }, T("установлен")) : null,
-    h("div", { class: "small muted" }, T("Лёгкая модель: работает только на процессоре, видеокарта остаётся игре. " +
-      "Голоса — только 10 готовых ({names}), своих голосов из записи у неё нет.", { names: e.names.join(", ") })),
-    h("div", { class: "small muted" }, h("a", { href: e.license, target: "_blank", rel: "noopener" },
-      T("Лицензия весов: BigScience OpenRAIL-M")), " — ",
-      T("нельзя выдавать себя за другого человека без его согласия, травить и порочить людей; озвучку нужно " +
-        "помечать как созданную машиной, например в описании канала.")),
+    h("div", { class: "small muted" }, T("Лёгкая модель для генерации речи на процессоре в реальном времени, без " +
+      "возможности добавлять новые голоса. Поставляется с 10 голосами.")),
+    h("div", { class: "small muted" }, T("Лицензия:") + " ", h("a", { href: e.license, target: "_blank", rel: "noopener" },
+      "BigScience OpenRAIL-M")),
     partial, status), action));
 }
 

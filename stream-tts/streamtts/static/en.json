@@ -854,15 +854,14 @@
  "Supertonic 3 уже скачан": "Supertonic 3 is already downloaded",
  "Веса Supertonic 3 распространяются по лицензии OpenRAIL-M с ограничениями использования (ссылка — в карточке модели). Скачивая модель, вы принимаете эти условия.": "Supertonic 3 weights are distributed under the OpenRAIL-M license with use restrictions (link in the model card). By downloading the model you accept these terms.",
  "Готовых голосов: {n} из {total}. «Поставить голоса» вернёт недостающие.": "Ready-made voices: {n} of {total}. \"Install voices\" restores the missing ones.",
- "Лицензия весов: BigScience OpenRAIL-M": "Weights license: BigScience OpenRAIL-M",
- "Лёгкая модель: работает только на процессоре, видеокарта остаётся игре. Голоса — только 10 готовых ({names}), своих голосов из записи у неё нет.": "A light model: runs on the CPU only, leaving the graphics card to the game. Only 10 ready-made voices ({names}); it cannot make voices from a recording.",
  "Модель Supertonic 3": "Supertonic 3 model",
  "Поставить голоса": "Install voices",
  "Принимаю, скачать": "Accept and download",
  "Удалить Supertonic 3": "Delete Supertonic 3",
  "Удалить Supertonic 3 ({size}) вместе с его готовыми голосами? Скачать можно будет снова.": "Delete Supertonic 3 ({size}) together with its ready-made voices? You can download it again.",
  "для Supertonic 3 нужно {need} МБ свободного места, а есть {free} МБ": "Supertonic 3 needs {need} MB of free space, only {free} MB available",
- "нельзя выдавать себя за другого человека без его согласия, травить и порочить людей; озвучку нужно помечать как созданную машиной, например в описании канала.": "you may not impersonate another person without their consent, harass or defame people; the speech must be disclosed as machine-generated, for example in the channel description.",
  "нет модели Supertonic 3: скачайте её на вкладке «Сервер»": "no Supertonic 3 model: download it on the \"Server\" tab",
- "скачать {size}": "download {size}"
+ "скачать {size}": "download {size}",
+ "Лицензия:": "License:",
+ "Лёгкая модель для генерации речи на процессоре в реальном времени, без возможности добавлять новые голоса. Поставляется с 10 голосами.": "A lightweight model for real-time speech generation on the CPU; new voices cannot be added. Comes with 10 voices."
 }

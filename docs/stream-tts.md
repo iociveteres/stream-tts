@@ -224,6 +224,7 @@ ESpeech программа для Windows и образ Docker качают од
 stream-tts): программа для Windows запускает его сама (`StreamTTS.exe --supertonic`), Docker и исходники —
 интерпретатором stream-tts (`engines/supertonic/launch.py`, [stream-tts-deploy.md](stream-tts-deploy.md)). Модель
 и 10 готовых голосов везде качает кнопка «Скачать» в карточке «Модель Supertonic 3» на вкладке «Сервер»
+(карточки ESpeech и Supertonic 3 видны только у выбранной модели — выбрать её можно и до загрузки)
 (`engines/supertonic/download.py`): сначала — условия лицензии весов (OpenRAIL-M) и ссылка на неё, потом файлы
 `Supertone/supertonic-3` закреплённой ревизии (раздел `supertonic` в `downloads.json`, 383 МБ, докачка и sha256) в
 `<модели>/supertonic/` в раскладке Hugging Face; без модели сервер ждёт с причиной «нет модели Supertonic 3», после

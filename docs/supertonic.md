@@ -161,7 +161,7 @@ Ryzen 5 5600G (6 ядер, 12 потоков), Windows 10, onnxruntime 1.31.0 CP
 ## Поставка
 
 Везде одинаково — у программы для Windows, в Docker и из исходников: модель качает кнопка «Скачать» в карточке
-«Модель Supertonic 3» на вкладке «Сервер» (`stream-tts/streamtts/engines/supertonic/download.py`, Installer в
+«Модель Supertonic 3» на вкладке «Сервер» — она видна, когда Supertonic 3 выбрана в «Модели синтеза» (`stream-tts/streamtts/engines/supertonic/download.py`, Installer в
 `install.py`, `POST /api/supertonic/download` и `/delete` — через `_restart_guard`). Веса в установщик и образ не
 кладутся (OpenRAIL-M, «Лицензии»): перед загрузкой админка показывает условия и ссылку на `LICENSE` закреплённой
 ревизии и спрашивает согласие.
