@@ -25,6 +25,7 @@ ROUTES = {
     "POST /api/voicesets/delete", "POST /api/voicesets/import",
     "POST /api/package/download", "POST /api/package/delete", "POST /api/cuda/download",
     "POST /api/espeech/download", "POST /api/espeech/delete",
+    "POST /api/supertonic/download", "POST /api/supertonic/delete",
     "POST /api/models/unload", "POST /api/models/load", "POST /api/update/check", "POST /api/update/dismiss",
     # редактор голоса
     "GET /api/draft", "POST /api/draft", "GET /api/draft/source/{id}.wav", "GET /api/draft/sample",

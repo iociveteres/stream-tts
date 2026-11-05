@@ -19,7 +19,8 @@ NVIDIA (nvcuda.dll), а ggml-cuda.dll рядом с cosyvoice-server нет, в�
 
 ESpeech (рантайм с torch и модель) программа для Windows и образ Docker качают по кнопке на вкладке «Сервер» —
 engines/espeech/download.py; CUDA (программе для Windows), если её нет, качается вместе с ним (torch берёт cuBLAS
-оттуда).
+оттуда). Supertonic 3 (модель и 10 готовых голосов) — тоже по кнопке, везде, где найден supertonic-server:
+engines/supertonic/download.py; после загрузки ждущий модель сервер запускается.
 
 Набор голосов из zip (voicesets.py) ставится и удаляется при остановленном сервере синтеза: на Windows
 cosyvoice-server держит открытые .gguf; потом он запускается с новым списком голосов."""
@@ -32,6 +33,7 @@ from .downloads import (BASE, CUDA, CUDA_VERSION_FILE, DEFAULT_QUANT, PACKAGES, 
                         cuda_archives, package_files)
 from .engines import cosyvoice
 from .engines.espeech import download as espeech_download, launch as espeech_launch
+from .engines.supertonic import download as supertonic_download
 from .fetch import CHUNK
 from .i18n import tr
 
@@ -54,13 +56,14 @@ class Cancelled(Exception):
 
 class Installer:
     def __init__(self, settings, runtime, changed, launchers=None):
-        """launchers — запуски найденных движков {id: Launcher}; у кого здесь своих загрузок нет (Supertonic 3 —
-        модель кладётся вручную), тот просто не используется."""
+        """launchers — запуски найденных движков {id: Launcher}: у каждого свои загрузки."""
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
         launchers = launchers or {}
         self.cosy = launchers.get("cosyvoice")   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
         # запуск ESpeech: у программы для Windows и в Docker рантайм и модель качаются (download.py)
         self.espeech = launchers.get("espeech")
+        # запуск Supertonic 3: модель и готовые голоса качаются везде, где он есть (engines/supertonic/download.py)
+        self.supertonic = launchers.get("supertonic")
         self.task = None
         self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
         self._last_push = 0.0
@@ -74,7 +77,8 @@ class Installer:
                     models=installed_models(),
                     model=os.path.basename(model) if model else self.s.get("model", ""),
                     models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=voicesets.list_sets(),
-                    packages=packages(), cuda=self.cuda_state(), espeech=self.espeech_state())
+                    packages=packages(), cuda=self.cuda_state(), espeech=self.espeech_state(),
+                    supertonic=self.supertonic_state())
 
     # --- CUDA ---
     def cuda_state(self):
@@ -192,6 +196,51 @@ class Installer:
         async with self.runtime.paused() if busy else contextlib.nullcontext():
             await asyncio.to_thread(espeech_download.remove)
         log.info("ESpeech удалён")
+
+    # --- Supertonic 3 ---
+    def supertonic_state(self):
+        return supertonic_download.state(bool(self.supertonic))
+
+    def start_supertonic(self):
+        st = self.supertonic_state()
+        if not st["offer"]:
+            raise ValueError(tr("Supertonic 3 здесь не скачивается"))
+        if st["installed"]:
+            raise ValueError(tr("Supertonic 3 уже скачан"))
+        if self.task and not self.task.done():
+            raise ValueError(tr("загрузка уже идёт"))
+        supertonic_download.check_space()
+        self.dl = dict(state="running", quant="", package="supertonic", file="", done=0, total=0, speed=0.0, error="")
+        self.task = asyncio.create_task(self._download_supertonic())
+
+    async def _download_supertonic(self):
+        try:
+            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                await supertonic_download.download(self, session)
+            self.dl.update(state="done", file="", speed=0.0)
+            log.info("Supertonic 3 скачан, голоса: %s", ", ".join(sorted(supertonic_download.VOICES.values())))
+            # сервер ждёт модель (runtime.Unavailable) или работает со старым списком голосов: запуск сразу
+            if self.runtime.launcher is self.supertonic:
+                await self.runtime.restart()
+        except asyncio.CancelledError:
+            self.dl.update(state="cancelled", speed=0.0, error="")
+            log.info("загрузка Supertonic 3 отменена (докачается со следующей попытки)")
+        except Exception as e:
+            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
+            log.warning("Supertonic 3: %s", self.dl["error"])
+        finally:
+            self._push(force=True)
+
+    async def delete_supertonic(self):
+        if not self.supertonic_state()["offer"]:
+            raise ValueError(tr("Supertonic 3 здесь не скачивается"))
+        if self.task and not self.task.done() and self.dl.get("package") == "supertonic":
+            raise ValueError(tr("загрузка уже идёт"))
+        busy = self.runtime.launcher is self.supertonic   # сервер держит открытыми файлы модели
+        async with self.runtime.paused() if busy else contextlib.nullcontext():
+            await asyncio.to_thread(supertonic_download.remove)
+        log.info("Supertonic 3 удалён вместе с готовыми голосами")
 
     def _push(self, force=False):
         now = time.monotonic()

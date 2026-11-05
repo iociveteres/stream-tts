@@ -34,6 +34,10 @@ FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), BtbN lgpl-shared build —
   Build: https://github.com/BtbN/FFmpeg-Builds
 espeech-server (runtime\espeech) — MIT; its model code follows F5-TTS,
   Vocos and x-transformers (MIT), see runtime\licenses\espeech-THIRD-PARTY.txt
+supertonic-server (inside StreamTTS.exe) — MIT; its text preparation and
+  synthesis are ported from Supertone code (MIT), see
+  licenses\supertonic-THIRD-PARTY.txt
+  https://github.com/supertone-inc/supertonic
 Microsoft Visual C++ 14.51 runtime (msvcp140*.dll, vcruntime140*.dll,
   concrt140.dll in runtime\ and next to StreamTTS.exe) — Microsoft Visual
   Studio distributable code license
@@ -86,3 +90,9 @@ ESpeech model:
   razdel — MIT; safetensors, tokenizers, onnx, ml_dtypes — Apache-2.0;
   typing_extensions — PSF-2.0. License texts are in
   espeech-runtime\Lib\site-packages\*.dist-info
+Supertonic 3 model (ONNX weights and 10 ready-made voices) — BigScience
+  OpenRAIL-M: its use restrictions (Attachment A of the license) apply to
+  everyone who receives the model; the program shows them before the
+  download and puts the license text next to the weights
+  (models\supertonic\LICENSE)
+  https://huggingface.co/Supertone/supertonic-3

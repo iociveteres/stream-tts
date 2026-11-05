@@ -20,6 +20,23 @@ _REPO = os.path.dirname(os.path.dirname(HERE))
 FROM_SOURCE = not FROZEN and os.path.isfile(os.path.join(_REPO, "docker-compose.yml"))
 # Папка программы: у собранной — папка exe, из исходников — корень проекта
 APP = os.path.dirname(os.path.abspath(sys.executable)) if FROZEN else _REPO
+
+
+def _program():
+    """Исполняемый файл, которым запущен stream-tts. У сборки Nuitka sys.executable — python.exe рядом с программой
+    (его нет: так Nuitka изображает обычный Python), настоящий файл знает ОС."""
+    if not FROZEN:
+        return sys.executable
+    if os.name == "nt":
+        import ctypes
+        buf = ctypes.create_unicode_buffer(32768)
+        if ctypes.windll.kernel32.GetModuleFileNameW(None, buf, len(buf)):
+            return buf.value
+    return os.path.abspath(sys.argv[0])
+
+
+# Программа для Windows запускает ею же supertonic-server (engines/supertonic/launch.py)
+PROGRAM = _program()
 # Файлы, которые идут вместе с кодом (effects/): в сборке лежат рядом с exe
 BUNDLE = APP
 STATIC = os.path.join(HERE, "static")
