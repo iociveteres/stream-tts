@@ -102,12 +102,30 @@ ESpeech заново не качает. Удаление программы сп
 при нехватке памяти предлагает «Включить экономию и начать снова». На RTX 3060 Ti 3000 шагов — около 15 минут. На
 процессоре обучение возможно, но очень долгое.
 
+## Supertonic 3
+
+Третья модель ([supertonic.md](supertonic.md)) — лёгкая, только на процессоре: видеокарта остаётся игре, памяти —
+~0,5 ГБ. Своего рантайма у неё нет: код supertonic-server (пакет `supertonic/` и нормализатор русского текста из
+`espeech/`, чистый Python) скомпилирован в `StreamTTS.exe`, а numpy и onnxruntime в программе уже есть, поэтому
+сервер запускает сама программа — `StreamTTS.exe --supertonic --models … --voices … --port …`
+(`packaging/windows/StreamTTS.py`, `engines/supertonic/launch.py`). Веса в установщик не входят (лицензия
+OpenRAIL-M требует передавать условия использования вместе с моделью): кнопка «Скачать» в карточке «Модель Supertonic
+3» на вкладке «Сервер» сначала показывает условия лицензии и ссылку на неё, потом качает 17 файлов
+`Supertone/supertonic-3` закреплённой ревизии с Hugging Face (раздел `supertonic` в `downloads.json`, 383 МБ, с
+докачкой и проверкой sha256) в `{app}\models\supertonic\` и ставит 10 готовых голосов набором `supertonic` в
+`{app}oices\supertonic\`. Карточка видна, пока модель не скачана, и у выбранной Supertonic 3; выбрать её можно и
+до загрузки — сервер ждёт с причиной «нет модели», а после загрузки запускается сам. Своих голосов у модели нет
+(редактор голоса для неё отказывает); пропавшие готовые голоса возвращает кнопка «Поставить голоса», «✕» удаляет
+модель вместе с готовыми голосами.
+
 ## Сборка
 
 Закреплённые загрузки — `stream-tts/streamtts/downloads.json`: CUDA (версия, нужные файлы и их размер, архивы
 llama.cpp — адрес, размер, распакованный размер, sha256 и какие файлы из него берутся) и кванты модели (адрес
 Hugging Face на конкретной ревизии, размеры, sha256), а ещё ESpeech (раздел `espeech`: рантаймы Windows и Linux и модель, его пишет
-`packaging/pin-espeech.py`). Его читают `downloads.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
+`packaging/pin-espeech.py`) и Supertonic 3 (раздел `supertonic`: ревизия Hugging Face, файлы с размером и sha256 —
+таблица в [supertonic.md](supertonic.md); `tests/e2e/test_supertonic_download.py` сверяет, что закреплены все
+нужные серверу файлы и стили). Его читают `downloads.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
 ESpeech) и `build-exe.py` (передаёт значения в `StreamTTS.iss` через `/D`). Переход на другую сборку
 llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая запись `cuda` здесь (`build-runtime.py` не
 соберётся, если CUDA не из сборки ядра). Файлы — в `packaging/windows/`:
@@ -131,7 +149,14 @@ llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая
   `--linux-torch-wheel`, `--checkpoint` или загрузка в `build/cache`.
 - `build-exe.py` — `StreamTTS.exe` через Nuitka (standalone, консольное приложение) в `dist/StreamTTS/` (113 МБ, из
   них 38 МБ — onnxruntime для очистки от музыки; его инструменты с onnx, sympy и protobuf не включаются):
-  пакет `streamtts` со `static/` и `profanity.txt`, `effects/villager-fx.py`. Нужен сборочный venv
+  пакет `streamtts` со `static/` и `profanity.txt`, `effects/villager-fx.py`, а ещё supertonic-server — пакет
+  `supertonic` и модули `espeech/` из `ESPEECH_MODULES` (нормализатор, ударения «+», WAV; без torch: RUAccent не
+  включается). Их Nuitka берёт из корня проекта (`PYTHONPATH`), запускает сервер ключ `--supertonic` главного модуля
+  `StreamTTS.py` — до импорта desktop, так что у копии-сервера нет ни блокировки одной копии, ни браузера. Новый
+  импорт из `espeech/` в `supertonic/` — в `ESPEECH_MODULES` (сторож — `tests/e2e/test_supertonic_download.py`). У
+  собранной программы `sys.executable` — несуществующий `python.exe` рядом с ней (так Nuitka изображает Python),
+  настоящий путь к exe — `paths.PROGRAM`. Уведомление о коде Supertone (MIT) — `licenses\supertonic-THIRD-PARTY.txt`.
+  Нужен сборочный venv
   (`requirements.txt`: зависимости stream-tts и Nuitka) на Python 3.14 и MSVC (Visual Studio или Build Tools с C++):
   MinGW Nuitka для Python 3.13+ не поддерживает. Первая сборка ~6 мин, повторные быстрее за счёт кэша компилятора.
   `--runtime core|all` кладёт рантайм рядом с exe для запуска без установщика, `--setup` собирает установщик.
@@ -144,7 +169,7 @@ llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая
   выше). Запущенную программу установщик и деинсталлятор видят по мьютексу `StreamTTS` и просят закрыть. Строка в
   `[Code]` не должна начинаться с `[`: Inno принимает её за заголовок секции. Языки — русский и английский: свои тексты в `[CustomMessages]`, список
   сторонних лицензий (`THIRD-PARTY.txt`, `THIRD-PARTY.en.txt`: что входит в установщик и что программа качает по
-  кнопкам — модель, фронтенд, CUDA, Demucs, ESpeech) — страница «Информация», без принятия соглашения; в админке
+  кнопкам — модель, фронтенд, CUDA, Demucs, ESpeech, Supertonic 3) — страница «Информация», без принятия соглашения; в админке
   лицензий нет,
   а полные тексты (MIT, BSD и Apache требуют их прикладывать) ставятся в папку программы: `runtime\licenses\` —
   cosyvoice.cpp и встроенные в него библиотеки, GGML, ONNX Runtime, ICU, FFmpeg, OpenMP (`build-runtime.py`: из

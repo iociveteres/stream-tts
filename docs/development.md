@@ -65,17 +65,20 @@
 │       │                  # common.py — ответы, обёртка POST, приём файла сырым телом (upload), _restart_guard;
 │       │                  # роуты по модулям, у каждого своя таблица POSTS: state.py (состояние админки),
 │       │                  # admin.py (настройки, голоса, очередь, баны, Twitch), model.py (модель, «как
-│       │                  # прочитает», ударения), server.py (встроенный сервер, наборы, пакеты, CUDA, ESpeech),
+│       │                  # прочитает», ударения), server.py (встроенный сервер, наборы, пакеты, CUDA, ESpeech,
+│       │                  # Supertonic 3),
 │       │                  # editor.py (/api/draft*), train.py (/api/train*)
 │       ├── engines/       # модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент и
 │       │                  # очередь к серверу; cosyvoice/, espeech/ и supertonic/ — описание (__init__.py),
 │       │                  # запуск (launch.py), клиент (client.py), особенности редактора голоса (editor.py;
 │       │                  # у supertonic/ — отказ: голоса из записи у Supertonic 3 нет);
 │       │                  # espeech/train.py — обучение LoRA голоса: набор реплик и запросы /train;
-│       │                  # espeech/download.py — загрузка рантайма и модели ESpeech по кнопке
+│       │                  # espeech/download.py — загрузка рантайма и модели ESpeech по кнопке;
+│       │                  # supertonic/download.py — загрузка Supertonic 3 и его 10 готовых голосов
 │       ├── install.py     # Installer: задачи загрузок из админки и их состояние
 │       ├── downloads.py   # downloads.json: CUDA, кванты, пакеты (PACKAGES), примеры (SAMPLES)
-│       ├── downloads.json # закреплённые загрузки: CUDA из llama.cpp, кванты модели, рантайм и модель ESpeech
+│       ├── downloads.json # закреплённые загрузки: CUDA из llama.cpp, кванты модели, рантайм и модель ESpeech,
+│       │                  # модель Supertonic 3
 │       ├── fetch.py       # файл по HTTP с докачкой, повторами и sha256
 │       ├── partzip.py     # часть zip по HTTP диапазонами
 │       ├── voicesets.py   # наборы голосов из zip: проверка, установка, удаление по модели
@@ -97,7 +100,8 @@
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
 │                          # espeech-server и DLL-заглушки из stubs/*.def), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
 │                          # ничего не качает: модель и CUDA — в админке),
-│                          # StreamTTS.py (главный модуль Nuitka: зовёт streamtts.desktop), requirements.txt
+│                          # StreamTTS.py (главный модуль Nuitka: зовёт streamtts.desktop, с --supertonic —
+│                          # supertonic-server), requirements.txt
 │                          # (окружение сборки), release.py (latest.json релиза), THIRD-PARTY.txt и
 │                          # THIRD-PARTY.en.txt (сторонние лицензии);
 │                          # сборка и релиз в CI — .github/workflows/windows.yml
@@ -130,6 +134,7 @@
 │                          # test_twitch.py), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
+│                          # загрузка Supertonic 3 и его запуск программой и в Docker — test_supertonic_download.py,
 │                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
 │                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py, роуты —
 │                          # test_routes.py, скрипты админки и она сама в браузере — test_admin_scripts.py,
@@ -360,7 +365,12 @@ stream-tts (`voicesets.py` напрямую): коллекции CosyVoice и ES
 занятые имена, битые архивы; `test_espeech_download.py` — загрузка ESpeech без сети (`partzip.py`,
 `engines/espeech/download.py` напрямую, локальный HTTP-сервер с Range): только нужные файлы zip диапазонами, докачка
 после обрыва без повторной загрузки, выбор по списку, подмена хвоста или файла, распаковка колёс и Python из tar.gz,
-состояние рантайма, закреплённое в `downloads.json` для обеих систем (и заглушки к нему); `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
+состояние рантайма, закреплённое в `downloads.json` для обеих систем (и заглушки к нему);
+`test_supertonic_download.py` — загрузка Supertonic 3 без сети (stream-tts с поддельным встроенным supertonic-server,
+файлы с локального HTTP-сервера по закреплению из `STREAM_TTS_TEST_SUPERTONIC` — только тестам): докачка после обрыва,
+неверный sha256, готовые голоса в группе страницы голосов с примерами, запуск ждущего сервера, «Поставить голоса»,
+удаление модели с голосами; закрепление настоящей модели; командная строка сервера у собранной программы и в Docker,
+`StreamTTS.py --supertonic` и модули `espeech/` в сборке exe; `test_editor.py` — редактор голоса: загрузка записей (ffmpeg, ошибки,
 предел), варианты и их проверки, синтез ячеек (фронтенд, `_draft-*`, перерегистрация, кэш, сравнение), сохранение
 (имя, путь в `<голоса>/<набор>/`, manifest, образец, ошибка сервера), черновик после перезапуска и его удаление, сервер
 без фронтенда, очередь с живой озвучкой, выгрузка фронтенда, «убрать музыку» без пакета; `test_stats.py` —
