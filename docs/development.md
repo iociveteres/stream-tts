@@ -48,7 +48,7 @@
 │       ├── voices.py      # голоса: список с сервера, группы наборов, эффекты post, примеры, страница голосов
 │       ├── store.py       # settings.json и SQLite (зрители, баны, история); read_json/write_json
 │       ├── stats.py       # статистика активаций и загрузка машины
-│       ├── twitch.py      # вход Device Code Flow, Helix, EventSub
+│       ├── twitch/        # __init__.py — вход Device Code Flow, Helix, EventSub
 │       ├── chat_irc.py    # режим «Только чтение чата»: анонимный IRC
 │       ├── i18n.py        # язык интерфейса, tr()
 │       ├── runtime.py     # встроенный сервер: процесс, порт, перезапуски, paused, выгрузка

@@ -4,9 +4,9 @@ import asyncio, collections, contextlib, json, logging, os, time
 
 import aiohttp
 
-from . import config, store
-from .chat_irc import ChatReader, parse_channel
-from .i18n import tr
+from .. import config, store
+from ..chat_irc import ChatReader, parse_channel
+from ..i18n import tr
 
 log = logging.getLogger("twitch")
 
