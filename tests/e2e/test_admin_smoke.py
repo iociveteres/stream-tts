@@ -100,8 +100,10 @@ async def smoke(cdp, base, switch):
                 seen[engine] = await visit_tabs(page, base)
             missing = await page.js("[...I18N_MISSING]")
             lang = await page.js("document.documentElement.lang")
+            # подсказка у поля с translate="no" не переводилась, хотя перевод в en.json был
+            hint = await page.js("document.querySelector('#ed-save [name=name]').placeholder")
             page.reader.cancel()
-            return seen, missing, lang, page.errors
+            return seen, missing, lang, hint, page.errors
 
 
 @pytest.fixture(scope="module")
@@ -142,12 +144,13 @@ def test_admin_tabs_english(browser, loop, tmp_path):
                 await asyncio.to_thread(api.ok, "/api/engine", dict(engine=engine))
             await asyncio.to_thread(wait_for, ready, 15, f"смены модели на {engine}")
 
-        seen, missing, lang, errors = asyncio.run(smoke(browser, server.base, switch))
+        seen, missing, lang, hint, errors = asyncio.run(smoke(browser, server.base, switch))
     finally:
         server.stop()
         loop.run(cosy.close())
         loop.run(esp.close())
     assert lang == "en"
+    assert hint == "e.g. game-hero"
     for engine, tabs in seen.items():
         assert {"queue", "twitch", "voices", "settings", "stats"} <= set(tabs), (engine, tabs)
     assert "server" in seen["espeech"], seen   # настройки модели ESpeech — на вкладке «Сервер»
