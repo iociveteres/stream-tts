@@ -201,7 +201,7 @@ def main():
         if items:
             print(f"{title} ({len(items)}):", *items, sep="\n  ")
     print(f"ключей в источниках: {len(keys)}, в en.json: {len(en)}")
-    return 1 if lost or missing or cyrillic or mismatch else 0
+    return 1 if lost or missing or unused or cyrillic or mismatch else 0
 
 
 if __name__ == "__main__":

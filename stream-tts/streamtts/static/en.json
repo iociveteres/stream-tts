@@ -331,7 +331,6 @@
  "голос выключен или не найден": "the voice is disabled or not found",
  "ник?": "nick?",
  "[писк]": "[beep]",
- "ожидалось auto, cuda, vulkan или cpu": "expected auto, cuda, vulkan or cpu",
  "архив больше 2 ГБ": "the archive is larger than 2 GB",
  "неверный JSON": "invalid JSON",
  "неверный запрос: {e}": "invalid request: {e}",

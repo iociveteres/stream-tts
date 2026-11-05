@@ -2,8 +2,8 @@
 (AGENTS.md, «Инварианты»; docs/refactor-brief.md, §5).
 
 - все .py из git компилируются (вместо python -m py_compile по списку файлов);
-- английский словарь полон (stream-tts/check-i18n.py), --missing печатает недостающие ключи для вставки в конец
-  en.json;
+- английский словарь полон и без лишних ключей (stream-tts/check-i18n.py), --missing печатает недостающие ключи
+  для вставки в конец en.json;
 - compose-файлы разбираются (docker compose config -q; без docker — пропуск);
 - флаги GPU cosyvoice-server: GGML_CUDA_DISABLE_GRAPHS=1 у встроенного сервера и в образе, --llm-flash-attn 0 на CUDA
   у встроенного сервера и у профиля server-only — без них тихий шум вместо речи и без ошибок в логах (test_real.py
@@ -75,6 +75,22 @@ def test_i18n_missing_recipe(tmp_path, monkeypatch, capsys):
     assert text.endswith("\n}")
     patched = json.loads(text[:-2] + ",\n" + out + "\n}")
     assert sorted(k for k, v in patched.items() if v == "") == sorted(drop)
+
+
+def test_i18n_unused_key(tmp_path, monkeypatch, capsys):
+    """Лишний ключ en.json (строки нет ни в одном источнике) — ошибка check-i18n.py."""
+    spec = importlib.util.spec_from_file_location("check_i18n", os.path.join(STREAM_TTS, "check-i18n.py"))
+    ci = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ci)
+    static = tmp_path / "static"
+    shutil.copytree(ci.STATIC, static)
+    en = json.loads((static / "en.json").read_text(encoding="utf-8"))
+    en["строки такой нет нигде"] = "no such string"
+    (static / "en.json").write_text(json.dumps(en, ensure_ascii=False, indent=1), encoding="utf-8")
+    monkeypatch.setattr(ci, "STATIC", str(static))
+    monkeypatch.setattr(sys, "argv", ["check-i18n.py"])
+    assert ci.main() == 1
+    assert "строки такой нет нигде" in capsys.readouterr().out
 
 
 def test_compose_config():
