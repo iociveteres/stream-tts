@@ -32,7 +32,7 @@
 │                          # Face; её запускает и программа для Windows); requirements.txt — окружение
 │                          # espeech/.venv, THIRD-PARTY.txt — лицензии перенесённого кода
 ├── stream-tts/            # озвучка наград Twitch (docs/stream-tts.md), основной сервис docker-compose.yml
-│   ├── check-i18n.py      # проверка английского словаря: строки из кода без перевода
+│   ├── check-i18n.py      # английский словарь: ключи без перевода и лишние; --missing — строки для en.json
 │   ├── ui-edit.py         # режим правки строк интерфейса (в разработке): админка на поддельном сервере, :8099
 │   ├── requirements.txt   # окружение stream-tts/.venv и образа
 │   └── streamtts/         # пакет; слои — docs/index.md, «Связи» (держит tests/e2e/test_layers.py)
