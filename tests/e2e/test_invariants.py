@@ -2,7 +2,8 @@
 (AGENTS.md, «Инварианты»; docs/refactor-brief.md, §5).
 
 - все .py из git компилируются (вместо python -m py_compile по списку файлов);
-- английский словарь полон (stream-tts/check-i18n.py);
+- английский словарь полон (stream-tts/check-i18n.py), --missing печатает недостающие ключи для вставки в конец
+  en.json;
 - compose-файлы разбираются (docker compose config -q; без docker — пропуск);
 - флаги GPU cosyvoice-server: GGML_CUDA_DISABLE_GRAPHS=1 у встроенного сервера и в образе, --llm-flash-attn 0 на CUDA
   у встроенного сервера и у профиля server-only — без них тихий шум вместо речи и без ошибок в логах (test_real.py
@@ -13,7 +14,7 @@
 - espeech: RUAccent.load не вызывается (сеть и ~1 ГБ RuleEngine), espeech/__init__.py не импортирует torch (он
   подключает библиотеки CUDA до torch);
 - архив для внешнего исполнителя (scripts/pack-handoff.py) не берёт данные и окружения Python."""
-import ast, importlib.util, os, re, shutil, subprocess, sys
+import ast, importlib.util, json, os, re, shutil, subprocess, sys
 
 import pytest
 
@@ -49,6 +50,31 @@ def test_i18n_complete():
     r = subprocess.run([sys.executable, os.path.join(STREAM_TTS, "check-i18n.py")], cwd=ROOT,
                        capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_i18n_missing_recipe(tmp_path, monkeypatch, capsys):
+    """Рецепт docs/index.md, В7 (en.json целиком не читать): check-i18n.py --missing печатает недостающие ключи
+    строками, которые после запятой у последнего ключа и вставки в конец en.json дают правильный JSON. Ключи — из
+    разных источников: tr(), текст и data-t разметки, схема params сервера модели."""
+    spec = importlib.util.spec_from_file_location("check_i18n", os.path.join(STREAM_TTS, "check-i18n.py"))
+    ci = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ci)
+    static = tmp_path / "static"
+    shutil.copytree(ci.STATIC, static)
+    en = json.loads((static / "en.json").read_text(encoding="utf-8"))
+    drop = ["ожидалось {values}", "Войти", "Качество синтеза",
+            next(k for k in en if k.startswith("Пароль задаётся переменной <code>"))]
+    for k in drop:
+        del en[k]
+    (static / "en.json").write_text(json.dumps(en, ensure_ascii=False, indent=1), encoding="utf-8")
+    monkeypatch.setattr(ci, "STATIC", str(static))
+    monkeypatch.setattr(sys, "argv", ["check-i18n.py", "--missing"])
+    assert ci.main() == 0
+    out = capsys.readouterr().out.strip()
+    text = (static / "en.json").read_text(encoding="utf-8").rstrip()
+    assert text.endswith("\n}")
+    patched = json.loads(text[:-2] + ",\n" + out + "\n}")
+    assert sorted(k for k, v in patched.items() if v == "") == sorted(drop)
 
 
 def test_compose_config():
