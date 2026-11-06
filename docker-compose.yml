@@ -33,22 +33,3 @@ services:
       COSYVOICE_BACKEND: "${COSYVOICE_BACKEND:-}"  # auto | cuda | cpu, иначе выбор в админке
       TWITCH_CLIENT_ID: "${TWITCH_CLIENT_ID:-}"
     restart: unless-stopped
-
-  # Только cosyvoice-server, без stream-tts: docker compose up -d cosyvoice. С stream-tts не запускать: оба займут
-  # порт 8080 и видеокарту. Голоса из подпапок /voices получают имя через "_" (entrypoint.sh), модель — MODEL
-  # или единственный *.gguf в models/.
-  cosyvoice:
-    profiles: [server-only]
-    build:
-      context: .
-      target: cosyvoice
-    image: cosyvoice-server:cpu
-    init: true
-    ports:
-      - "127.0.0.1:${PORT:-8080}:8080"
-    volumes:
-      - ./models:/models:ro
-      - ./voices:/voices
-    environment:
-      MODEL: "${MODEL:-}"
-    restart: unless-stopped

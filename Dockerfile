@@ -1,12 +1,10 @@
 # syntax=docker/dockerfile:1
-# Два образа из готовых релизов cosyvoice.cpp и llama.cpp (цель выбирает docker-compose.yml):
-# - stream-tts (по умолчанию): озвучка наград Twitch со встроенным cosyvoice-server (runtime.py и
-#   engines/cosyvoice/launch.py);
-# - cosyvoice: только cosyvoice-server (профиль server-only), аргументы собирает entrypoint.sh.
-# GPU=cuda добавляет CUDA-бэкенд в образ — это нужно цели cosyvoice. stream-tts собирается без него: CUDA (~590 МБ)
-# качает кнопка на вкладке «Загрузки» в том /cuda (STREAM_TTS_CUDA, install.py), если контейнер видит видеокарту
-# NVIDIA, — образ один для всех. Обе цели на ubuntu 26.04: бинарники собраны в CI на ubuntu-26.04 (glibc 2.43,
-# ICU 78), а в python:*-slim glibc 2.41.
+# Образ stream-tts из готовых релизов cosyvoice.cpp и llama.cpp: озвучка наград Twitch со встроенным cosyvoice-server
+# (runtime.py и engines/cosyvoice/launch.py). Он же сервер для scripts/ и tools/ — порт 8080 контейнера.
+# Собирается без CUDA: её (~590 МБ) качает кнопка на вкладке «Загрузки» в том /cuda (STREAM_TTS_CUDA, install.py), если
+# контейнер видит видеокарту NVIDIA, — образ один для всех. GPU=cuda кладёт CUDA-бэкенд в сам образ (по умолчанию не
+# нужно; CUDA_VERSION сверяет с downloads.json test_cuda_download.py). ubuntu 26.04: бинарники собраны в CI на
+# ubuntu-26.04 (glibc 2.43, ICU 78), а в python:*-slim glibc 2.41.
 
 ARG UBUNTU=ubuntu:26.04
 
@@ -59,7 +57,7 @@ FROM ${UBUNTU} AS base
 
 # GGML_CUDA_DISABLE_GRAPHS: с CUDA Graphs cosyvoice.cpp молча считает неверно
 # (тихий шумный звук, мусор вместо речи; ср. Lourdle/cosyvoice.cpp#15). На CPU ни на что не влияет.
-# engines/cosyvoice/launch.py задаёт его серверу и сам, здесь — для запуска сервера и cosyvoice-cli вручную.
+# engines/cosyvoice/launch.py задаёт его серверу и сам, здесь — для запуска cosyvoice-cli вручную.
 ENV DEBIAN_FRONTEND=noninteractive \
     GGML_CUDA_DISABLE_GRAPHS=1
 
@@ -69,20 +67,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=fetch /opt/cosyvoice /opt/cosyvoice
-
-# --- Только сервер (профиль server-only) ---
-FROM base AS cosyvoice
-
-ENV LD_LIBRARY_PATH=/opt/cosyvoice
-COPY cosyvoice/entrypoint.sh /usr/local/bin/entrypoint.sh
-# sed: страховка от CRLF, если файл сохранили на Windows
-RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
-
-WORKDIR /opt/cosyvoice
-EXPOSE 8080
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["--host", "0.0.0.0", "--port", "8080", "--webui"]
 
 # --- stream-tts со встроенным сервером ---
 FROM base AS stream-tts

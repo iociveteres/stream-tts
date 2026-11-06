@@ -6,8 +6,8 @@
   для вставки в конец en.json;
 - compose-файлы разбираются (docker compose config -q; без docker — пропуск);
 - флаги GPU cosyvoice-server: GGML_CUDA_DISABLE_GRAPHS=1 у встроенного сервера и в образе, --llm-flash-attn 0 на CUDA
-  у встроенного сервера и у профиля server-only — без них тихий шум вместо речи и без ошибок в логах (test_real.py
-  ловит это только на видеокарте);
+  у встроенного сервера — без них тихий шум вместо речи и без ошибок в логах (test_real.py ловит это только на
+  видеокарте);
 - keep-alive к серверу синтеза короче 5 с, через которые cosyvoice-server закрывает простаивающее соединение;
 - версия программы задаётся только в streamtts/__init__.py;
 - ключ варианта CosyVoice в черновике редактора прежний (иначе у пользователей пропадает синтез черновиков);
@@ -110,8 +110,6 @@ def test_gpu_flags():
     args = launch.backend_args("CUDA0")
     assert args[args.index("--llm-flash-attn") + 1] == "0", args
     assert re.search(r"^\s*GGML_CUDA_DISABLE_GRAPHS=1\b", read("Dockerfile"), re.M), "Dockerfile: GGML_CUDA_DISABLE_GRAPHS=1"
-    command = re.search(r"^\s*command:\s*(\[.*\])", read("docker-compose.gpu.yml"), re.M)
-    assert command and '"--llm-flash-attn", "0"' in command.group(1), "docker-compose.gpu.yml: --llm-flash-attn 0"
 
 
 def test_keepalive_shorter_than_server():

@@ -64,9 +64,8 @@ docker compose down      # остановить
 docker compose up -d     # запустить снова (модель — выбранная в админке)
 ```
 
-Сервер без stream-tts — профиль `server-only`: `docker compose stop stream-tts && docker compose up -d cosyvoice`
-(подробнее — [docs/stream-tts-deploy.md](docs/stream-tts-deploy.md#docker)). Оба сервиса сразу не запускаются: им
-нужны один порт и одна видеокарта.
+Инструменты подготовки голосов (`scripts/`, `tools/`) работают с сервером внутри контейнера stream-tts — порт 8080,
+отдельный сервис не нужен. Пока они работают, не заказывайте озвучку: сервер выполняет запросы строго по одному.
 
 Порт открыт только на `127.0.0.1`. Доступ из локальной сети: [docs/development.md](docs/development.md#образы), «Сеть».
 
@@ -106,8 +105,7 @@ models/
     └── speech_tokenizer_v3.int8.onnx (или speech_tokenizer_v3.onnx)
 ```
 
-Если в `models/` лежит несколько `.gguf`, нужная выбирается в админке stream-tts (вкладка «Сервер»); в профиле
-`server-only` — переменной `MODEL` в `.env`.
+Если в `models/` лежит несколько `.gguf`, нужная выбирается в админке stream-tts (вкладка «Сервер»).
 
 ## Использование
 
@@ -122,8 +120,7 @@ models/
 Все файлы из `./voices` подключаются автоматически при старте под именами файлов, вместе с одним уровнем подпапок
 (наборов): `voices/wc3/thrall.gguf` станет голосом `thrall`. Если два файла дают одно имя, подключается первый, а
 второй пропускается с предупреждением в логе. В **Save speaker** можно указать путь в подпапке, например
-`/voices/wc3/thrall.gguf`; саму подпапку создайте заранее. В профиле `server-only` подпапки просматриваются на любую
-глубину, а слэши в пути заменяются на `_`: `voices/wc3/orc/thrall.gguf` станет голосом `wc3_orc_thrall`.
+`/voices/wc3/thrall.gguf`; саму подпапку создайте заранее.
 
 ### Режимы синтеза
 
@@ -304,7 +301,7 @@ docker compose up -d --build   # после git pull: пересобрать и 
 | `CPU без AVX2` | Процессор не поддерживается рантаймом. |
 | `bash\r: No such file or directory` | Скрипты сохранены с CRLF. Исправить: `sed -i 's/\r$//' *.sh`. Репозиторий защищён `.gitattributes`. |
 | Извлечение голоса недоступно | Нет файлов в `models/frontend-onnx/`: `scripts/download-model.sh --frontend int8`. |
-| Сервер не стартует, несколько моделей | Выберите модель в админке (вкладка «Сервер»); в профиле `server-only` задайте `MODEL=/models/<файл>.gguf` в `.env`. |
+| Сервер не стартует, несколько моделей | Выберите модель в админке (вкладка «Сервер»). |
 | Модель не качается | Скачайте вручную с Hugging Face в `models/` (см. раздел «Модели»). |
 | `Docker не видит GPU` | Обновите драйвер NVIDIA. В Docker Desktop включите бэкенд WSL2, на Linux поставьте NVIDIA Container Toolkit. Проверка: `docker run --rm --gpus all ubuntu:26.04 nvidia-smi`. |
 | На GPU тихий шумный звук или мусор вместо речи | Нет `GGML_CUDA_DISABLE_GRAPHS=1` или включён `--llm-flash-attn` ([docs/development.md](docs/development.md#образы)). |
