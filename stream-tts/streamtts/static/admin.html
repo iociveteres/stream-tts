@@ -74,7 +74,13 @@
       <div class="card">
         <h2>Страница голосов для зрителей</h2>
         <div class="row"><code id="vurl" class="grow"></code><button data-copy="vurl">Копировать</button></div>
-        <p class="muted small" data-t>Дайте ссылку зрителям (команда бота, панель канала) или
+        <h3 class="mt">В интернете</h3>
+        <div class="row"><span id="tunnel-state" class="grow"></span><button id="tunnel-toggle"></button></div>
+        <div class="row mt" id="tunnel-link" hidden><a id="tunnel-url" class="grow" target="_blank"
+          rel="noopener noreferrer"></a><button data-copy="tunnel-url">Копировать</button></div>
+        <p class="muted small" data-t>Через туннель Cloudflare, без аккаунта и хостинга: страница работает, пока
+          запущена программа. Адрес меняется при каждом запуске — зрители получают текущий командой
+          <code>!ttsvoices</code> (ответ в чат — при входе через приложение Twitch). Постоянный адрес —
           <a href="/voices.zip">скачайте zip</a> и выложите на любой хостинг.</p>
       </div>
       <div class="card">

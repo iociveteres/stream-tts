@@ -11,7 +11,8 @@ import numpy as np
 
 from fake_cosyvoice import VOICES
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))
 STREAM_TTS = os.path.join(ROOT, "stream-tts")
 SR = 24000
 
@@ -151,6 +152,7 @@ class StreamTTS:
         self.port = None
         self.proc = None
         self.log_path = os.path.join(workdir, "stream-tts.log")
+        self.tunnel_dir = os.path.join(workdir, "cloudflared")   # запуски поддельного cloudflared (fake_cloudflared.py)
 
     def env(self):
         env = {k: v for k, v in os.environ.items()
@@ -163,6 +165,9 @@ class StreamTTS:
             # без voice-refs/ проекта: наборы и эффекты голосов задаёт тест
             STREAM_TTS_PROJECT=os.path.join(self.dir, "project"),
             STREAM_TTS_RUNTIME=os.path.join(self.dir, "runtime"),
+            # туннель — всегда поддельный (fake_cloudflared.py): тесты не качают cloudflared и не ходят в Cloudflare
+            STREAM_TTS_CLOUDFLARED=os.path.join(HERE, "fake_cloudflared.py"), FAKE_CLOUDFLARED_DIR=self.tunnel_dir,
+            STREAM_TTS_TUNNEL_RETRY="0.5",
             STREAM_TTS_LANG="ru", PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
         if self.cosy_url:
             env["STREAM_TTS_TEST_SERVERS"] = f"cosyvoice={self.cosy_url}"

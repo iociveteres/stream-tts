@@ -47,6 +47,7 @@
 │       ├── engine.py      # очередь: приём, итог, синтез, воспроизведение
 │       ├── rules.py       # доступ, кулдауны, ответ зрителю об отказе (R_*, REPLIES, ACCESS_WHO)
 │       ├── commands.py    # команды чата !tts*, SERVICE_COMMANDS
+│       ├── tunnel.py      # страница голосов в интернете: cloudflared (быстрый туннель), загрузка, перезапуски
 │       ├── overlay.py     # оверлеи без aiohttp: отправку и проверку «закрыт» передаёт web/
 │       ├── filters.py     # фильтры текста: ссылки, мат (profanity.txt — словарь)
 │       ├── audio.py       # громкость (LUFS), ограничитель пиков, перекодирование ffmpeg
@@ -66,7 +67,8 @@
 │       │                  # admin.py (настройки, голоса, очередь, баны, Twitch), model.py (модель, «как
 │       │                  # прочитает», ударения), server.py (встроенный сервер, наборы, пакеты, CUDA, ESpeech,
 │       │                  # Supertonic 3),
-│       │                  # editor.py (/api/draft*), train.py (/api/train*)
+│       │                  # editor.py (/api/draft*), train.py (/api/train*); public.py — страница голосов и
+│       │                  # примеры, отдельный порт только с ними для туннеля
 │       ├── engines/       # модели синтеза: __init__.py — выбор и смена модели, client.py — общий клиент и
 │       │                  # очередь к серверу; cosyvoice/, espeech/ и supertonic/ — описание (__init__.py),
 │       │                  # запуск (launch.py), клиент (client.py), особенности редактора голоса (editor.py;
@@ -131,7 +133,8 @@
 │   └── e2e/               # e2e stream-tts: fake_cosyvoice.py (поддельный сервер cosyvoice или espeech),
 │                          # fake_irc.py (поддельный IRC
 │                          # Twitch), fake_twitch.py (поддельный Twitch: вход, Helix, EventSub; сценарии —
-│                          # test_twitch.py), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
+│                          # test_twitch.py), fake_cloudflared.py (поддельный туннель; сценарии — test_tunnel.py),
+│                          # harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
 │                          # CUDA по кнопке (программа и том Docker) — test_cuda_download.py, вкладка «Загрузки»
@@ -340,6 +343,10 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
   загрузка и выгрузка фронтенда), `lists` (сколько раз перечитан список голосов).
 - Список голосов stream-tts перечитывает раз в 60 с, сервер проверяет раз в 5 с; в тестах — раз в секунду:
   `STREAM_TTS_VOICES_CHECK`, `STREAM_TTS_COSY_CHECK` (`__main__.py`, только для тестов).
+- Туннель к странице голосов — всегда поддельный cloudflared (`fake_cloudflared.py`, `STREAM_TTS_CLOUDFLARED` в
+  `harness.py`, пауза перезапуска `STREAM_TTS_TUNNEL_RETRY`): тесты не качают cloudflared и не ходят в Cloudflare.
+  `test_tunnel.py` — кнопка, только страница голосов на порту туннеля, перезапуск с новым адресом, ошибка
+  Cloudflare, туннель после перезапуска программы, `!ttsvoices`, загрузка cloudflared с проверкой sha256.
 - Чат Twitch — поддельный IRC (`fake_irc.py`, фикстура `chat`): stream-tts в режиме «Только чтение чата» читает
   канал `testchan`, а тест шлёт от имени Twitch сообщения с тегами (бейджи, эмоуты, биты, ответ), `CLEARMSG`,
   `CLEARCHAT` и `RECONNECT`. Адрес и таймауты — `STREAM_TTS_IRC_URL`, `STREAM_TTS_IRC_JOIN_WAIT`,

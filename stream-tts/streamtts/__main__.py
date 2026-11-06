@@ -3,8 +3,9 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import bench, config, editor, engines, filters, i18n, install, paths, stats, store, updates, web as webapp
-from .web import model as web_model
+from . import (bench, config, editor, engines, filters, i18n, install, paths, stats, store, tunnel, updates,
+               web as webapp)
+from .web import model as web_model, public as web_public
 from .i18n import tr
 from .engine import Engine
 from .engines.espeech import train as lora
@@ -68,6 +69,9 @@ async def on_startup(app):
         await ctx.runtime.start()
     await ctx.tts.start()
     await ctx.twitch.start()
+    ctx.public, ctx.tunnel.port = await web_public.start(ctx)   # порт страницы голосов для туннеля
+    if ctx.settings["tunnel"]:
+        ctx.tunnel.start()
     ctx.tasks = [asyncio.create_task(c) for c in (
         ctx.engine.synth_worker(), ctx.engine.player(), ctx.voices.demo_worker(),
         tts_monitor(ctx), load_monitor(ctx), housekeeping(ctx), ctx.updates.worker())]
@@ -76,6 +80,8 @@ async def on_startup(app):
 async def on_cleanup(app):
     ctx = app["ctx"]
     await ctx.twitch.stop()
+    await ctx.tunnel.stop()
+    await ctx.public.cleanup()
     for t in ctx.tasks:
         t.cancel()
     await asyncio.gather(*ctx.tasks, return_exceptions=True)
@@ -131,6 +137,8 @@ def main():
     ctx.train = lora.Training(ctx.settings, ctx.tts, ctx.voices, ctx.editor)   # обучение LoRA голоса ESpeech
     ctx.bench = bench.Bench(ctx.settings, ctx.tts, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
     ctx.updates = updates.Updates(ctx.settings, ctx.engine.dirty.set)
+    ctx.tunnel = tunnel.Tunnel(ctx.settings, ctx.engine.dirty.set)   # страница голосов в интернете
+    ctx.engine.tunnel = ctx.tunnel   # адрес — ответом на !ttsvoices
 
     app = webapp.make_app(ctx)
     app.on_startup.append(on_startup)

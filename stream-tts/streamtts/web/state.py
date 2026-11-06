@@ -30,6 +30,7 @@ def state(ctx, full=True):
         packages=install.packages() if ctx.install else install.packages(dict(frontend=ctx.tts.frontend_ready)),
         bench=ctx.bench.public() if ctx.bench else None,
         update=ctx.updates.public(),
+        tunnel=ctx.tunnel.public(),   # страница голосов в интернете (tunnel.py)
         ts=time.time(),
     )
     if full:

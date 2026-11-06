@@ -38,6 +38,28 @@ $("#vurl").textContent = location.origin + "/voices/";
 $$("[data-copy]").forEach(b => b.onclick = () =>
   navigator.clipboard.writeText($("#" + b.dataset.copy).textContent).then(() => toast(T("Скопировано"))));
 
+// --- страница голосов в интернете (туннель Cloudflare, tunnel.py) ---
+function renderTunnel() {
+  const t = S.tunnel, d = t.download;
+  const mb = n => Math.round(n / 1048576);
+  const text = {
+    off: [T("Выключено"), "muted"],
+    download: [d && d.total ? T("Скачивание cloudflared: {done} из {total} МБ", { done: mb(d.done), total: mb(d.total) })
+      : T("Скачивание cloudflared"), ""],
+    starting: [T("Подключение к Cloudflare…"), ""],
+    on: [T("Открыта для зрителей"), "good"],
+    error: [T("Ошибка: {e}. Повтор через несколько секунд.", { e: t.error }), "bad"],
+  }[t.state] || [t.state, ""];
+  $("#tunnel-state").replaceChildren(h("span", { class: text[1] || null }, text[0]));
+  $("#tunnel-toggle").textContent = t.on ? T("Закрыть")
+    : t.have ? T("Открыть") : T("Открыть (скачать {n} МБ)", { n: mb(t.size) });
+  $("#tunnel-toggle").classList.toggle("primary", !t.on);
+  $("#tunnel-link").hidden = !t.url;
+  $("#tunnel-url").href = t.url || "#";
+  $("#tunnel-url").textContent = t.url;
+}
+$("#tunnel-toggle").onclick = () => api("/api/tunnel", { on: !S.tunnel.on });
+
 function renderTestVoices() {
   const sel = $("#test select[name=voice]"), cur = sel.value;
   sel.replaceChildren(h("option", { value: "" }, T("как у зрителя (по нику)")),

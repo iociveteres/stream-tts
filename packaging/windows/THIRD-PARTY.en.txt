@@ -96,3 +96,7 @@ Supertonic 3 model (ONNX weights and 10 ready-made voices) — BigScience
   download and puts the license text next to the weights
   (models\supertonic\LICENSE)
   https://huggingface.co/Supertone/supertonic-3
+Voices page on the internet: cloudflared 2026.10.7 — Apache-2.0
+  https://github.com/cloudflare/cloudflared; the quick tunnel
+  *.trycloudflare.com is a Cloudflare service with no account and no
+  uptime guarantee, under Cloudflare's terms: https://www.cloudflare.com/website-terms/

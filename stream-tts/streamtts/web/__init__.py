@@ -1,4 +1,5 @@
-"""HTTP: админка (под паролем), оверлей и страница голосов (открыты), API и WebSocket.
+"""HTTP: админка (под паролем), оверлей и страница голосов (открыты), API и WebSocket. Страница голосов для туннеля —
+на отдельном порту (public.py).
 
 Роуты API — в модулях пакета (MODULES): у модуля таблицы GETS, POSTS (тело — JSON, обёртка common.json_post) и RAW
 (файл сырым телом, допустимые типы — в UPLOADS). Здесь — сборка приложения, пароль и защита POST, страницы."""
@@ -8,8 +9,9 @@ from aiohttp import WSMsgType, web
 
 from .. import config, i18n, overlay
 from ..i18n import tr
-from . import admin, editor, model, server, state, train
+from . import admin, editor, model, public, server, state, train
 from .common import json_post
+from .public import demo, voices_page
 
 STATIC = os.path.join(config.HERE, "static")
 COOKIE = "stream_tts"
@@ -128,19 +130,6 @@ async def overlay_ws(request):
     finally:
         await ov.disconnect(c)
     return ws
-
-
-async def voices_page(request):
-    return web.Response(text=request.app["ctx"].voices.page(), content_type="text/html",
-                        headers={"Cache-Control": "no-cache"})
-
-
-async def demo(request):
-    v = request.app["ctx"].voices
-    name = request.match_info["name"]
-    if name not in v.names() or not v.has_demo(name):
-        raise web.HTTPNotFound()
-    return web.FileResponse(v.demo_path(name))
 
 
 async def voices_zip(request):

@@ -18,7 +18,7 @@ ROUTES = {
     "POST /api/twitch/client_id", "POST /api/twitch/mode", "POST /api/twitch/login", "POST /api/twitch/logout",
     "POST /api/reward", "POST /api/reward/delete",
     "POST /api/enabled", "POST /api/skip", "POST /api/clear", "POST /api/remove", "POST /api/test", "POST /api/ban",
-    "POST /api/profanity",
+    "POST /api/profanity", "POST /api/tunnel",
     # модель синтеза и встроенный сервер
     "POST /api/download", "POST /api/download/unqueue", "POST /api/download/cancel", "POST /api/download/delete",
     "POST /api/model/use", "POST /api/backend",

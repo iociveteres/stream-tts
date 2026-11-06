@@ -232,6 +232,12 @@ async def post_profanity(request, ctx, data):
     return ok(sample=ctx.profanity.clean(sample, beep=tr("[писк]")) if sample else "")
 
 
+async def post_tunnel(request, ctx, data):
+    """Страница голосов в интернете (tunnel.py): on — включить (cloudflared скачается при первом включении)."""
+    await ctx.tunnel.set(bool(data["on"]))
+    return ok()
+
+
 async def post_ui_edit(request, ctx, data):
     """Режим правки строк (в разработке, STREAM_TTS_UI_EDITS): text=null — вернуть исходную строку."""
     text = data.get("text")
@@ -263,4 +269,5 @@ POSTS = {
     "/api/test": post_test,
     "/api/ban": post_ban,
     "/api/profanity": post_profanity,
+    "/api/tunnel": post_tunnel,
 }

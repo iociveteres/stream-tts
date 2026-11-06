@@ -94,3 +94,7 @@ CUDA для видеокарт NVIDIA: ggml-cuda.dll — MIT (llama.cpp); CUDA R
   для всех, кто получает модель; программа показывает их перед загрузкой,
   текст лицензии кладёт рядом с весами (models\supertonic\LICENSE)
   https://huggingface.co/Supertone/supertonic-3
+Страница голосов в интернете: cloudflared 2026.10.7 — Apache-2.0
+  https://github.com/cloudflare/cloudflared; быстрый туннель
+  *.trycloudflare.com — сервис Cloudflare без аккаунта, без гарантий
+  доступности, по условиям Cloudflare: https://www.cloudflare.com/website-terms/

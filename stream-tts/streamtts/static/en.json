@@ -33,7 +33,6 @@
  "Оверлей для OBS": "OBS overlay",
  "Копировать": "Copy",
  "Страница голосов для зрителей": "Voices page for viewers",
- "Дайте ссылку зрителям (команда бота, панель канала) или <a href=\"/voices.zip\">скачайте zip</a> и выложите на любой хостинг.": "Share the link with viewers (a bot command, a channel panel) or <a href=\"/voices.zip\">download a zip</a> and put it on any hosting.",
  "Журнал": "Log",
  "Награда за баллы канала": "Channel points reward",
  "Название": "Title",
@@ -880,5 +879,19 @@
  "только процессор": "CPU only",
  "уже в очереди": "already queued",
  "это не удаляется": "this cannot be deleted",
- "этого нет в очереди": "this is not in the queue"
+ "этого нет в очереди": "this is not in the queue",
+ "Cloudflare не выдал адрес за {n} с: {line}": "Cloudflare did not provide an address within {n} s: {line}",
+ "cloudflared завершился: {line}": "cloudflared exited: {line}",
+ "В интернете": "On the internet",
+ "Выключено": "Off",
+ "Закрыть": "Close",
+ "Открыта для зрителей": "Open to viewers",
+ "Открыть (скачать {n} МБ)": "Open (download {n} MB)",
+ "Ошибка: {e}. Повтор через несколько секунд.": "Error: {e}. Retrying in a few seconds.",
+ "Подключение к Cloudflare…": "Connecting to Cloudflare…",
+ "Скачивание cloudflared": "Downloading cloudflared",
+ "Скачивание cloudflared: {done} из {total} МБ": "Downloading cloudflared: {done} of {total} MB",
+ "Через туннель Cloudflare, без аккаунта и хостинга: страница работает, пока запущена программа. Адрес меняется при каждом запуске — зрители получают текущий командой <code>!ttsvoices</code> (ответ в чат — при входе через приложение Twitch). Постоянный адрес — <a href=\"/voices.zip\">скачайте zip</a> и выложите на любой хостинг.": "Through a Cloudflare tunnel, with no account or hosting: the page works while the program is running. The address changes on every start — viewers get the current one with the <code>!ttsvoices</code> command (the chat reply needs the Twitch app login). For a permanent address, <a href=\"/voices.zip\">download the zip</a> and upload it to any hosting.",
+ "голоса и примеры звучания: {url}": "voices and samples: {url}",
+ "страница голосов для туннеля не запущена": "the voices page for the tunnel is not running"
 }

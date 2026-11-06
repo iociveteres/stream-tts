@@ -110,7 +110,7 @@ function renderAll() {
   renderLive();
 }
 function renderLive() {
-  renderHeader(); renderQueue(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
+  renderHeader(); renderQueue(); renderTunnel(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
   renderStreamNote(); renderServer(); renderDownloads(); renderSets(); renderReplyNote(); renderUpdate(); edSync(); trSync();
 }
 

@@ -960,5 +960,18 @@
     "sha256": "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f"
    }
   ]
+ },
+ "cloudflared": {
+  "version": "2026.10.7",
+  "windows": {
+   "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe",
+   "size": 55390512,
+   "sha256": "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343"
+  },
+  "linux": {
+   "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-linux-amd64",
+   "size": 40274445,
+   "sha256": "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872"
+  }
  }
 }
