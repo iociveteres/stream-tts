@@ -20,12 +20,10 @@ ROUTES = {
     "POST /api/enabled", "POST /api/skip", "POST /api/clear", "POST /api/remove", "POST /api/test", "POST /api/ban",
     "POST /api/profanity",
     # модель синтеза и встроенный сервер
-    "POST /api/model/download", "POST /api/model/cancel", "POST /api/model/use", "POST /api/backend",
+    "POST /api/download", "POST /api/download/unqueue", "POST /api/download/cancel", "POST /api/download/delete",
+    "POST /api/model/use", "POST /api/backend",
     "POST /api/engine", "POST /api/accent", "POST /api/accents", "POST /api/accents/delete", "POST /api/bench",
     "POST /api/voicesets/delete", "POST /api/voicesets/import",
-    "POST /api/package/download", "POST /api/package/delete", "POST /api/cuda/download",
-    "POST /api/espeech/download", "POST /api/espeech/delete",
-    "POST /api/supertonic/download", "POST /api/supertonic/delete",
     "POST /api/models/unload", "POST /api/models/load", "POST /api/update/check", "POST /api/update/dismiss",
     # редактор голоса
     "GET /api/draft", "POST /api/draft", "GET /api/draft/source/{id}.wav", "GET /api/draft/sample",

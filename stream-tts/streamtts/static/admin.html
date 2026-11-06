@@ -24,6 +24,7 @@
   <button data-tab="twitch">Twitch</button>
   <button data-tab="voices">Голоса</button>
   <button data-tab="server" hidden>Сервер</button>
+  <button data-tab="downloads" hidden>Загрузки<span id="dl-badge"></span></button>
   <button data-tab="settings">Настройки</button>
   <button data-tab="stats">Статистика</button>
 </nav>
@@ -194,6 +195,17 @@
     </form>
     <p id="demo-progress" class="muted small"></p>
   </div>
+  <div class="card" id="sets-card" hidden>
+    <h2>Наборы голосов</h2>
+    <p class="muted small">Набор голосов — zip-архив. Повторная установка обновляет голоса набора.
+      Папка: <code id="voices-dir"></code></p>
+    <ul id="sets" class="setlist"></ul>
+    <div class="row mt">
+      <input type="file" id="set-file" accept=".zip,application/zip" class="grow" aria-label="zip с набором">
+      <button id="set-import" class="primary">Установить</button>
+    </div>
+    <p id="set-result" class="small"></p>
+  </div>
  </div>
 
  <!-- Новый голос из записи (editor.py): черновик хранится на сервере, закрытие редактора его не удаляет -->
@@ -221,7 +233,7 @@
     <p class="warn" data-engine="supertonic" hidden data-t>У модели Supertonic 3 только готовые голоса: голос из
       записи она не делает. Чтобы сделать голос, выберите другую модель на вкладке <a href="#server">«Сервер»</a>.
       Черновик сохранится.</p>
-    <ul id="ed-packages" class="setlist"></ul>
+    <ul id="ed-packages" class="setlist dlist"></ul>
   </div>
   <div class="card">
     <h2 class="step">Записи</h2>
@@ -363,7 +375,7 @@
  </div>
 </section>
 
-<!-- ============ Сервер (модель синтеза; встроенный сервер: модель, устройство, наборы голосов) ============ -->
+<!-- ============ Сервер (модель синтеза и её вариант, устройство, скорость, состояние встроенного сервера) ============ -->
 <section id="tab-server" class="tab">
   <div class="grid2">
     <div>
@@ -372,8 +384,10 @@
         <form id="engine-form" class="radios"></form>
         <p class="muted small">При смене модели озвучка ненадолго остановится. Если у голоса нет версии для выбранной
           модели, зритель временно услышит другой. Когда версия появится, снова зазвучит выбранный.</p>
+        <label class="mt" id="variant-box" hidden>Вариант CosyVoice3 <select id="variant"></select></label>
         <div id="model-params"></div>
         <p id="engine-state" class="small"></p>
+        <div id="engine-hint" class="hint small mt" hidden></div>
       </div>
       <div class="card" id="accents-card" hidden>
         <h2>Словарь ударений</h2>
@@ -386,47 +400,6 @@
         <input id="accents-filter" class="mt" type="search" placeholder="Поиск по словарю" aria-label="Поиск по словарю">
         <ul id="accents-list" class="chips mt"></ul>
       </div>
-      <div class="card managed" id="quants-card">
-        <h2>Модель</h2>
-        <p class="muted small">Более лёгкие варианты могут давать немного больше артефактов.</p>
-        <ul id="models" class="setlist quants"></ul>
-        <div class="row end mt">
-          <details class="grow">
-            <summary class="muted small">Дополнительно</summary>
-            <p class="muted small">Папка: <code id="models-dir"></code></p>
-            <p class="muted small" data-t>Дополнительные пакеты (например, для создания голосов) — в
-              <a href="#settings">настройках</a>.</p>
-          </details>
-          <button type="button" id="model-cancel" class="danger" hidden>Отменить загрузку</button>
-        </div>
-        <div id="dl" class="dl mt" hidden>
-          <div class="track"><div class="fill" id="dl-fill"></div></div>
-          <p id="dl-text" class="small"></p>
-        </div>
-      </div>
-      <div class="card managed" id="espeech-card" hidden>
-        <h2>Модель ESpeech</h2>
-        <ul id="espeech" class="setlist"></ul>
-        <p class="muted small mt">Папка модели: <code id="espeech-dir"></code></p>
-        <p class="muted small" id="espeech-prepare" data-t>Её собирает <code>tools/espeech/prepare.py</code> из файлов
-          Hugging Face.</p>
-      </div>
-      <div class="card managed" id="supertonic-card" hidden>
-        <h2>Модель Supertonic 3</h2>
-        <ul id="supertonic" class="setlist"></ul>
-        <p class="muted small mt">Папка модели: <code id="supertonic-dir"></code></p>
-      </div>
-      <div class="card managed">
-        <h2>Наборы голосов</h2>
-        <p class="muted small">Набор голосов — zip-архив. Повторная установка обновляет голоса набора.
-          Папка: <code id="voices-dir"></code></p>
-        <ul id="sets" class="setlist"></ul>
-        <div class="row mt">
-          <input type="file" id="set-file" accept=".zip,application/zip" class="grow">
-          <button id="set-import" class="primary">Установить</button>
-        </div>
-        <p id="set-result" class="small"></p>
-      </div>
     </div>
     <div>
       <div class="card managed">
@@ -436,7 +409,7 @@
           реальным временем. Vulkan подходит для видеокарт NVIDIA, AMD и Intel.</p>
         <p class="muted small" id="backend-only" hidden></p>
         <p id="backend-lock" class="warn small" hidden></p>
-        <ul id="cuda" class="setlist mt" hidden></ul>
+        <div id="backend-hint" class="hint small mt" hidden></div>
       </div>
       <div class="card managed">
         <h2>Скорость синтеза</h2>
@@ -452,6 +425,33 @@
       <div class="card managed">
         <h2>Состояние сервера</h2>
         <div id="runtime-info" class="small"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Загрузки (install.py, admin-downloads.js): модели синтеза, CUDA, пакеты; очередь и место на диске ============ -->
+<section id="tab-downloads" class="tab">
+  <div id="dl-strip" class="strip" hidden></div>
+  <div class="grid2">
+    <div id="dl-models"></div>
+    <div>
+      <div class="card">
+        <h2>На диске</h2>
+        <div id="dl-sum"></div>
+        <p id="dl-free" class="free"></p>
+        <details class="mt">
+          <summary class="muted small" id="dl-dirs-title">Папки</summary>
+          <div id="dl-dirs" class="paths small muted"></div>
+        </details>
+      </div>
+      <div class="card" id="dl-cuda-card">
+        <h2>Видеокарта NVIDIA</h2>
+        <ul id="dl-cuda" class="setlist dlist"></ul>
+      </div>
+      <div class="card">
+        <h2>Создание голосов</h2>
+        <ul id="packages" class="setlist dlist"></ul>
       </div>
     </div>
   </div>
@@ -501,12 +501,6 @@
           <button id="prof-save" class="primary">Сохранить и проверить</button>
         </div>
         <p id="prof-out" class="muted"></p>
-      </div>
-      <div class="card">
-        <h2>Дополнительные пакеты</h2>
-        <p class="muted small">Сторонние модели, которые нужны не для озвучки, а для отдельных функций. Качаются с
-          Hugging Face по кнопке и лежат в папке моделей.</p>
-        <ul id="packages" class="setlist"></ul>
       </div>
       <div class="card">
         <h2>Обновления</h2>
@@ -583,6 +577,7 @@
 <script src="/static/admin-twitch.js"></script>
 <script src="/static/admin-voices.js"></script>
 <script src="/static/admin-server.js"></script>
+<script src="/static/admin-downloads.js"></script>
 <script src="/static/admin-settings.js"></script>
 <script src="/static/admin-stats.js"></script>
 <script src="/static/admin-start.js"></script>

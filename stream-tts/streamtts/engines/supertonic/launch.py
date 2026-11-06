@@ -11,7 +11,7 @@
   espeech — рядом с кодом espeech-server (<paths.RUNTIME>/espeech/espeech): оба — в PYTHONPATH;
 - из исходников — sys.executable, если в корне проекта есть supertonic/server.py.
 
-Модель качается по кнопке на вкладке «Сервер» (download.py) в paths.MODELS/supertonic. Аргументы: --models эта папка
+Модель качается по кнопке на вкладке «Загрузки» (download.py) в paths.MODELS/supertonic. Аргументы: --models эта папка
 (раскладка Hugging Face Supertone/supertonic-3: onnx/*.onnx, onnx/tts.json, onnx/unicode_indexer.json, voice_styles/;
 без модели сервер ждёт загрузки — причина видна в админке), --voices paths.VOICES (голоса <имя>.supertonic и
 <набор>/<имя>.supertonic; сервер перечитывает папку сам), --threads SUPERTONIC_THREADS (если задана). Устройство
@@ -112,6 +112,9 @@ class Launcher:
     def models(self):
         return os.path.join(paths.MODELS, "supertonic")
 
+    def has_model(self):
+        return model_ready(self.models)
+
     def public(self):
         return dict(backend=self.backend, prefer="cpu", model=self.model, voices=self.voices, backends=[],
                     devices=list(DEVICES), models_dir=self.models, device_env=self.DEVICE_ENV,
@@ -150,7 +153,7 @@ class Launcher:
         if not (self.frozen or self.bundled or package_root(self.server)):
             raise Unavailable(tr("рядом с {path} нет пакета supertonic", path=self.server))
         if not model_ready(self.models):
-            raise Unavailable(tr("нет модели Supertonic 3: скачайте её на вкладке «Сервер»"))
+            raise Unavailable(tr("нет модели Supertonic 3: скачайте её на вкладке «Загрузки»"))
         self.model = MODEL_NAME
         self.voices = len(glob.glob(os.path.join(paths.VOICES, "*.supertonic")) +
                           glob.glob(os.path.join(paths.VOICES, "*", "*.supertonic")))

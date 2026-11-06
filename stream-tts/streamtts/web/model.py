@@ -3,6 +3,7 @@
 import asyncio, logging
 
 from .. import filters
+from ..engines import ENGINES
 from ..i18n import tr
 from .common import _restart_guard, fail, ok
 
@@ -13,20 +14,27 @@ async def post_engine(request, ctx, data):
     engine = str(data.get("engine", ""))
     if engine not in ctx.tts.available:
         return fail(tr("модель {engine} недоступна", engine=engine))
+    if not ctx.tts.ready(engine):
+        return fail(tr("модель {engine} не скачана: скачайте её на вкладке «Загрузки»", engine=ENGINES[engine].TITLE))
     if ctx.bench and ctx.bench.task and not ctx.bench.task.done():
         return fail(tr("идёт проверка скорости"))
     if stop := await _restart_guard(ctx, data):
         return stop
+    switch(ctx, engine)
+    return ok()
 
-    async def switch():
+
+def switch(ctx, engine):
+    """Сменить модель задачей: смена ждёт текущий запрос и готовности нового сервера. Её же зовёт install.py, когда
+    скачана первая модель."""
+    async def run():
         try:
             await ctx.tts.use(engine, ctx.voices.refresh)
         except Exception as e:
             log.warning("смена модели: %s", e)
         ctx.voices.changed()
         ctx.engine.dirty.set()
-    asyncio.create_task(switch())
-    return ok()
+    asyncio.create_task(run())
 
 
 async def post_accent(request, ctx, data):

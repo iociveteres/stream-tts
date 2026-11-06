@@ -149,7 +149,7 @@ def test_offer(tmp_path, monkeypatch):
     st = inst.cuda_state()
     assert st["offer"] is False and st["installed"] is True and st["version"] == "13.4-test"
     with pytest.raises(ValueError):
-        inst.start_cuda()
+        inst.enqueue("cuda")
 
 
 def test_download(tmp_path, monkeypatch):
@@ -179,7 +179,7 @@ def test_download(tmp_path, monkeypatch):
             for (n, b), a in zip(blobs.items(), downloads.CUDA["archives"])])
         try:
             L.backends = [("CPU", False)]
-            inst.start_cuda()
+            inst.enqueue("cuda")
             await asyncio.wait_for(inst.task, 30)
         finally:
             await files.close()

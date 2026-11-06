@@ -1,5 +1,5 @@
 "use strict";
-/** Вкладка «Голоса»: список, прослушивание, включение, примеры голосов. */
+/** Вкладка «Голоса»: список, прослушивание, включение, примеры голосов, наборы голосов (zip) встроенного сервера. */
 // --- голоса ---
 let pctx = null, psrc = null, pbtn = null;
 async function preview(v, btn) {
@@ -84,3 +84,49 @@ function renderDemoProgress() {
     : T("Примеры всех включённых голосов готовы.");
   if (d.error) $("#demo-progress").append(h("span", { class: "bad" }, "  " + T("Ошибка: {e}", { e: d.error })));
 }
+
+// --- наборы голосов (voicesets.py): zip ставит и удаляет встроенный сервер, в тестах с готовым сервером их нет ---
+// Набор — по записи на модель: коллекция «модель + источник» ставится и удаляется отдельно
+let setsKey = "";
+function renderSets() {
+  const st = S.setup;
+  $("#sets-card").hidden = !st;
+  const key = JSON.stringify(st && [st.sets, st.voices_dir]);
+  if (!st || key === setsKey) return;
+  setsKey = key;
+  $("#voices-dir").textContent = st.voices_dir;
+  $("#sets").replaceChildren(...(st.sets.length ? st.sets.map(s => h("li", {},
+    h("span", { class: "grow" }, h("b", {}, s.name), h("span", { class: "muted" }, " · " + s.title),
+      h("span", { class: "muted small" }, T(" — голосов: {n}: {voices}", { n: s.voices.length,
+        voices: s.voices.slice(0, 8).join(", ") + (s.voices.length > 8 ? "…" : "") }))),
+    h("button", { class: "icon danger", title: T("Удалить набор"), onclick: () =>
+      ask(T("Удалить набор «{name}» (голосов: {n})?", { name: `${s.name} · ${s.title}`, n: s.voices.length }),
+        T("Удалить"), true)
+        .then(yes => yes && api("/api/voicesets/delete", { name: s.name, model: s.model }))
+    }, "✕"))) : [h("li", { class: "muted" }, T("Наборов нет."))]));
+}
+$("#set-import").onclick = async () => {
+  const f = $("#set-file").files[0], out = $("#set-result");
+  if (!f) { toast(T("Выберите zip с набором"), true); return; }
+  const btn = $("#set-import");
+  btn.disabled = true;
+  out.className = "small muted";
+  out.textContent = T("Устанавливаю {file}…", { file: f.name });
+  try {
+    const send = force => fetch("/api/voicesets/import", { method: "POST", body: f, headers: { "Content-Type": "application/zip",
+      "X-Filename": encodeURIComponent(f.name), ...(force ? { "X-Force": "1" } : {}) } });
+    let r = await send(false), j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    // несохранённые результаты обучения LoRA: установка перезапустит сервер синтеза
+    if (j.confirm && await ask(j.error, T("Продолжить"), true)) {
+      r = await send(true);
+      j = await r.json().catch(() => ({ ok: false, error: r.statusText }));
+    }
+    if (!j.ok) { out.className = "small bad"; out.textContent = j.error || T("Ошибка"); return; }
+    out.className = "small good";
+    out.textContent = T("Набор «{name}»: установлено голосов {n}", { name: j.name, n: j.added.length }) +
+      (j.skipped.length ? T(", пропущено {n}: {voices}", { n: j.skipped.length, voices: j.skipped.join(", ") }) : "") +
+      (j.ignored.length ? T(". Не голоса, пропущены: {files}", { files: j.ignored.join(", ") }) : "") + ".";
+    $("#set-file").value = "";
+  } catch (e) { out.className = "small bad"; out.textContent = T("Сервер недоступен: {e}", { e: e.message }); }
+  finally { btn.disabled = false; }
+};

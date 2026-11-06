@@ -111,7 +111,7 @@ function renderAll() {
 }
 function renderLive() {
   renderHeader(); renderQueue(); renderLogin(); renderRewardState(); renderDemoProgress(); renderLiveStats();
-  renderStreamNote(); renderServer(); renderReplyNote(); renderPackages(); renderUpdate(); edSync(); trSync();
+  renderStreamNote(); renderServer(); renderDownloads(); renderSets(); renderReplyNote(); renderUpdate(); edSync(); trSync();
 }
 
 // --- подсказки: <… data-hint="id"> закрываются крестиком, «Показать подсказки» в шапке возвращает все.
@@ -170,9 +170,9 @@ function renderHeader() {
   if (t.state === "expired") banner.push(T("Вход в Twitch истёк: войдите заново на вкладке Twitch. Пока входа нет, " +
     "активации не обрабатываются, баллы за них вернутся после входа."));
   if (c.switching) banner.push(T("Смена модели синтеза: сервер перезапускается, озвучка ждёт в очереди."));
-  else if (c.ok === false && S.setup && c.engine === "cosyvoice" && !S.setup.models.length)
-    banner.push(h("span", {}, T("Модель синтеза не установлена: скачайте её на вкладке "),
-      h("a", { href: "#server" }, T("«Сервер»")), "."));
+  else if (c.ok === false && S.setup && !engineReady(c.picked))
+    banner.push(h("span", {}, T("Модель синтеза не скачана: скачайте её на вкладке "),
+      h("a", { href: "#downloads" }, T("«Загрузки»")), "."));
   else if (c.ok === false && c.runtime && c.runtime.unloaded)
     banner.push(h("span", {}, T("Модель синтеза выгружена, озвучка не работает. Загрузить — на вкладке "),
       h("a", { href: "#stats" }, T("«Статистика»")), "."));

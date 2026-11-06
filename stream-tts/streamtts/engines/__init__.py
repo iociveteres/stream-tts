@@ -5,7 +5,11 @@
 Модель одна единовременно (settings.engine): Tts — сервер синтеза выбранной модели для ядра stream-tts. Смена модели —
 другой клиент и перезапуск встроенного сервера с запуском другого движка на том же порту (в тестах с готовыми
 серверами, config.TEST_SERVERS, — сервер того движка). Очередь к серверу (lane) общая: смена ждёт текущий запрос и
-держит очередь, пока новый сервер не ответит, — озвучка ждёт, а не падает на перезапуске."""
+держит очередь, пока новый сервер не ответит, — озвучка ждёт, а не падает на перезапуске.
+
+До первой скачанной модели settings.engine пуст: модель не выбрана (picked — ""), сервер первой найденной ждёт модель,
+а первую скачанную install.py делает выбранной. Прежние установки с уже скачанной моделью и пустым engine при запуске
+получают её в engine — так пустой engine всегда значит «ещё ничего не скачано»."""
 import asyncio, logging
 
 from . import cosyvoice, espeech, supertonic
@@ -28,7 +32,14 @@ class Tts:
         self.lane = Lane()
         have = self.launchers or self.servers
         self.available = [i for i in ENGINES if i in have]
-        self.id = settings.get("engine") if settings.get("engine") in self.available else self.available[0]
+        want = settings.get("engine")
+        if want in self.available:
+            self.id = want
+        else:   # не выбрана или её сервера нет: первая скачанная, иначе первая найденная (сервер ждёт модель)
+            ready = [i for i in self.available if self.ready(i)]
+            self.id = (ready or self.available)[0]
+            if self.launchers and ready:
+                settings.update(engine=self.id)
         self.runtime = runtime.Managed(self.launchers[self.id]) if self.launchers else None
         self.client = self._client(self.id)
         self.switches = 0          # сколько раз сменилась модель: tts_monitor перечитывает голоса
@@ -45,6 +56,15 @@ class Tts:
     ok = property(lambda self: self.client.ok, lambda self, v: setattr(self.client, "ok", v))
     error = property(lambda self: self.client.error, lambda self, v: setattr(self.client, "error", v))
 
+    def ready(self, engine):
+        """Модель движка скачана; у готовых серверов в тестах — всегда."""
+        return engine in self.launchers and self.launchers[engine].has_model() if self.launchers else True
+
+    @property
+    def picked(self):
+        """Выбранная модель для админки: "" — ещё ни одна не скачана и не выбрана."""
+        return self.id if not self.launchers or self.s.get("engine") == self.id else ""
+
     @property
     def title(self):
         return ENGINES[self.id].TITLE
@@ -57,8 +77,9 @@ class Tts:
         """Модели для выбора в админке."""
         out = []
         for i, E in ENGINES.items():
-            why = "" if i in self.available else tr("нет {name}", name=E.Launcher.NAME)
-            out.append(dict(id=i, title=E.TITLE, available=i in self.available, why=why))
+            ready = i in self.available and self.ready(i)
+            why = tr("нет {name}", name=E.Launcher.NAME) if i not in self.available else "" if ready else tr("не скачана")
+            out.append(dict(id=i, title=E.TITLE, available=i in self.available, ready=ready, why=why))
         return out
 
     async def start(self):

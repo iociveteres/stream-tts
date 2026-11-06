@@ -17,7 +17,8 @@ def state(ctx, full=True):
         cosy=dict(ok=ctx.tts.ok, error=ctx.tts.error, url=ctx.tts.url,
                   busy=ctx.tts.lane.holder[1] if ctx.tts.lane.holder else "", waiting=ctx.tts.lane.queued(),
                   runtime=ctx.runtime.public() if ctx.runtime else None,
-                  engine=ctx.tts.id, title=ctx.tts.title, engines=ctx.tts.engines(), switching=ctx.tts.switching,
+                  engine=ctx.tts.id, picked=ctx.tts.picked, title=ctx.tts.title, engines=ctx.tts.engines(),
+                  switching=ctx.tts.switching,
                   capabilities=ctx.tts.capabilities, params=model_params(ctx),
                   # обучение LoRA на espeech-server: state, voice, step, steps (из /status, раз в COSY_CHECK)
                   training=ctx.tts.info.get("training") if ctx.tts.id == "espeech" else None),
