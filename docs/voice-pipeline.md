@@ -44,6 +44,7 @@
 | `dota2` | Пудж | вики Dota 2 |
 | `portal` | GLaDOS | Portal Wiki |
 | `stalker` | бандит | файлы игры |
+| `postal` | Чувак (Postal 2, озвучка Акеллы) | сборник реплик с YouTube |
 | `minecraft` | житель | примеры JeetBot, звуки игры |
 | `neco-arc` | Neco Arc (пример JeetBot, злая, японский оригинал) | примеры JeetBot, Melty Blood |
 | `altushka` | *** («Альтушка для скуфа») | летсплей |
@@ -51,8 +52,8 @@
 
 Это наборы CosyVoice (`voice-clips/cosyvoice/`). Голоса ESpeech с адаптером LoRA (`voice-clips/espeech/`): `wc3` —
 [voices-wc3.md](voices-wc3.md), «LoRA ESpeech»; `morrowind` (`mw-*`) — `tools/sources/extract-morrowind.py`, ниже;
-игры и стримеры (`dota2`, `stalker`, `portal`, `neco-arc`, `altushka`, `streamers`) — `tools/sources/lora-lines.py`
-([voices.md](voices.md), «Мемные голоса ESpeech»).
+игры и стримеры (`dota2`, `stalker`, `portal`, `postal`, `neco-arc`, `altushka`, `streamers`) —
+`tools/sources/lora-lines.py` ([voices.md](voices.md), «Мемные голоса ESpeech»).
 Игры до 26.10.2026 были одним набором `games`.
 
 Новый набор CosyVoice — это папка `voice-clips/cosyvoice/<набор>/` с `set.json`: `{"title": "…", "phrases": ["…", …]}`.

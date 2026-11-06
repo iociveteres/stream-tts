@@ -19,7 +19,8 @@ NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", re.ASCII)
 # supertonic — готовые голоса Supertonic 3 (M1–M5, F1–F5)
 GROUPS = {
     "wc3": "Warcraft III", "morrowind": "Morrowind", "dota2": "Dota 2", "portal": "Portal 2",
-    "stalker": "S.T.A.L.K.E.R.", "minecraft": "Minecraft", "neco-arc": "Neco Arc", "altushka": "Альтушка для скуфа",
+    "stalker": "S.T.A.L.K.E.R.", "postal": "Postal 2", "minecraft": "Minecraft", "neco-arc": "Neco Arc",
+    "altushka": "Альтушка для скуфа",
     "games": "Игры", "streamers": "Стримеры", "supertonic": "Supertonic 3",
 }
 

@@ -1,18 +1,20 @@
-"""Реплики мемных голосов (Пудж, GLaDOS, бандит, ***, ***, Neco Arc) для LoRA ESpeech и образец ~6 с.
+"""Реплики мемных голосов (Пудж, GLaDOS, бандит, Чувак, ***, ***, Neco Arc) для LoRA ESpeech и образец ~6 с.
 
 Использование (venv проекта: numpy, scipy, onnxruntime, faster-whisper, torch, transformers; японский — pykakasi):
     .venv/Scripts/python.exe tools/sources/lora-lines.py [голос …] [--root <корень>] [--max-min 10]
         [--max-cer 0.15] [--seed 1] [--ref <голос>=<файл>[+<файл>…]] [--candidates N] [--list]
-  голос   ключ VOICES ниже (dota2-pudge, portal-glados, stalker-bandit, ***, ***, neco-arc-ja); по умолчанию все.
+  голос   ключ VOICES ниже (dota2-pudge, portal-glados, stalker-bandit, postal-dude, ***, ***,
+          neco-arc-ja); по умолчанию все.
   --root  корень проекта с voice-origs/, voice-clips/, models/ (по умолчанию этот; из worktree — основная копия).
-  --ref   образец вручную: реплики (ключи clips.json, «<источник>/<файл>») подряд с паузой 0,25 с.
+  --ref   образец вручную: реплики (ключи clips.json, «<источник>/<файл>») подряд с паузой 0,25 с; без него —
+          ref_parts голоса в VOICES, если есть.
   --candidates N  только подобрать образец: N лучших в <голос>/ref-cand/NN.wav + .txt, остальное не трогается.
   --list  показать голоса и источники.
 
 Источники и текст (VOICES): папка с lines.json (fetch-wiki-lines.py, transcribe-lines.py) или папка звуков по глобу.
 Текст бывает трёх видов:
   given — текст вики или игры (Пудж, GLaDOS): сверяется с faster-whisper large-v3, CER > --max-cer — отказ;
-  long  — расшифровка длинной записи transcribe-lines.py (***, ***, Neco Arc): реплика распознаётся ещё раз
+  long  — расшифровка длинной записи transcribe-lines.py (Чувак, ***, ***, Neco Arc): реплика распознаётся ещё раз
           отдельно, при совпадении (CER ≤ --max-cer, у японского — по чтению каной, ≤ 0,25) берётся новый текст —
           у него те же границы, что у звука; иначе отказ (края резали посреди слова, или распознано по-разному);
   asr     — текста нет (бандит S.T.A.L.K.E.R.): текст распознавания, если реплика от 1 с и в ней от двух слов.
@@ -29,7 +31,10 @@
 neco-arc-ja, у них свой только образец (пример JeetBot по-русски).
 
 Образец — спокойная (энергия tools/voices/emotions.py < 0,6) реплика 5–7,5 с или 2–3 соседние реплики одной
-записи, темп 10–15 букв/с, текст сверен с распознаванием; в обучение он не входит.
+записи, темп 10–15 букв/с, текст сверен с распознаванием; в обучение он не входит. ref_parts голоса задаёт
+образец вручную, как --ref. Вариант голоса с parts (postal-dude-angry) — образец из реплик самого голоса, обычно
+напористых: ref.wav варианта, адаптер — базового голоса (make-voice.py --lora). Текст реплики без знака в конце
+получает точку.
 
 Выход voice-clips/espeech/<набор>/<голос>/: lora/<имя>.wav + .txt (вход tools/espeech/train.py), ref.wav + ref.txt,
 clips.json — все реплики с текстом, CER, сходством, причиной отказа; у варианта — только ref.wav + ref.txt.
@@ -52,6 +57,7 @@ REF_SEC = (5.0, 7.5)
 REF_RATE = (10.0, 15.0)  # букв/с: медленный образец даёт лишние слова в конце (docs/espeech.md)
 CALM = 0.6  # энергия спокойной речи (emotions.py)
 JB = "voice-origs/jeetbot"
+PD = "voice-origs/postal-dude/lines"
 
 # src: папка (от корня) с lines.json или dict(dir, glob, until — конец записи, с); prefer — регэкспы ключа по убыванию
 # предпочтения; center — эталоны голоса для CAM++
@@ -71,6 +77,14 @@ VOICES = {
                            prefer=[r"talk/|states/(idle|meet|loot|sleep)|reactions/joke", r"threat/|help/",
                                    r"alife/", r"fight/"],
                            min_sim=0.5),
+    # сборник «Postal 2 Все фразы Чувака» (LZNw8t1k1rI), озвучка Акеллы; transcribe-lines.py
+    "postal-dude": dict(set="postal", title="Чувак (Postal 2)", text="long", src=["voice-origs/postal-dude/lines"],
+                        min_sim=0.6,
+                        # спокойных кусков 5–7,5 с у него один, и тот 9,7 букв/с: образец — две соседние реплики
+                        ref_parts=[f"{PD}/394.wav", f"{PD}/395.wav"],
+                        # злой: самые напористые реплики (энергия 0,93 и 0,80, emotions.py)
+                        variants={"postal-dude-angry": dict(parts=[f"{PD}/298.wav", f"{PD}/295.wav"],
+                                                            title="Злой Чувак (Postal 2)")}),
     "***": dict(set="streamers", title="***", text="long",
                    src=["voice-origs/***-qa", "voice-origs/***-nS29"],
                    center=["voice-origs/***-qa/Q01-093-112.wav", "voice-origs/***-nS29/P01-032-054.wav"],
@@ -450,7 +464,7 @@ def build(name, cfg, a, cam, emb, emo, kana):
     if ref:
         x = join([c["_x"] for c in ref])
         write_wav(os.path.join(vdir, "ref.wav"), x)
-        text = " ".join(c["text"] for c in ref)
+        text = join_text(c["text"] for c in ref)
         open(os.path.join(vdir, "ref.txt"), "w", encoding="utf-8").write(text + "\n")
         for c in ref:
             c["ref"] = True
@@ -477,6 +491,11 @@ def build(name, cfg, a, cam, emb, emo, kana):
     return m
 
 
+def join_text(texts):
+    """Тексты реплик подряд; у реплики без знака в конце (Whisper его опускает) — точка."""
+    return " ".join(t if re.search(r"[.!?…]$", t) else t + "." for t in (t.strip() for t in texts))
+
+
 def join(parts, gap=0.25):
     sil = np.zeros(int(gap * SR), np.float32)
     out = []
@@ -495,7 +514,7 @@ def emo_cpu(emo):
 def pick_ref(name, ok, a, emo, vdir):
     """Образец: одна реплика 5–7,5 с или 2–3 соседние одной записи; спокойный, темп 10–15 букв/с, ближе к центру."""
     byfile = {c["file"]: c for c in ok}
-    manual = dict(r.split("=", 1) for r in a.ref).get(name)
+    manual = dict(r.split("=", 1) for r in a.ref).get(name) or "+".join(VOICES[name].get("ref_parts", []))
     if manual:
         grp = [byfile[k] for k in manual.split("+")]
         emo_cpu(emo)
@@ -547,19 +566,29 @@ def pick_ref(name, ok, a, emo, vdir):
     return calm[0]["grp"]
 
 
-def variant(name, cfg, base, a):
-    """Вариант: свой образец (пример JeetBot с его текстом), адаптер — базового голоса."""
+def variant(name, cfg, base, base_name, a):
+    """Вариант: свой образец, адаптер — базового голоса. Образец — пример JeetBot с его текстом (ref) или реплики
+    самого голоса подряд (parts — ключи clips.json базового голоса, текст оттуда же)."""
     out = os.path.join(a.root, "voice-clips", "espeech", base["set"])
-    lines = {x["file"]: x["text"] for x in json.load(open(os.path.join(a.root, JB, "lines.json"), encoding="utf-8"))}
-    x = trim(common.decode(os.path.join(a.root, cfg["ref"])))
-    text = lines[os.path.basename(cfg["ref"])]
+    if cfg.get("parts"):
+        clips = json.load(open(os.path.join(out, base_name, "clips.json"), encoding="utf-8"))
+        texts = {c["file"]: c["text"] for c in clips if c.get("text")}
+        parts = cfg["parts"]
+        x = join([trim(common.decode(os.path.join(a.root, p))) for p in parts])
+        text = join_text(texts[p] for p in parts)
+    else:
+        lines = {x["file"]: x["text"] for x in json.load(open(os.path.join(a.root, JB, "lines.json"),
+                                                               encoding="utf-8"))}
+        parts = [cfg["ref"]]
+        x = trim(common.decode(os.path.join(a.root, cfg["ref"])))
+        text = lines[os.path.basename(cfg["ref"])]
     vdir = os.path.join(out, name)
     os.makedirs(vdir, exist_ok=True)
     write_wav(os.path.join(vdir, "ref.wav"), x)
     open(os.path.join(vdir, "ref.txt"), "w", encoding="utf-8").write(text + "\n")
     sec = len(x) / SR
     print(f"   вариант {name}: {sec:.1f} с, {ru_letters(text) / sec:.1f} букв/с — {text}")
-    return dict(title=cfg["title"], base=None, ref=dict(parts=[cfg["ref"]], sec=round(sec, 2), text=text,
+    return dict(title=cfg["title"], base=None, ref=dict(parts=parts, sec=round(sec, 2), text=text,
                                                          rate=round(ru_letters(text) / sec, 1)))
 
 
@@ -593,7 +622,7 @@ def main():
         manifest = json.load(open(mpath, encoding="utf-8")) if os.path.exists(mpath) else {}
         manifest[name] = m
         for vn, vc in cfg.get("variants", {}).items():
-            manifest[vn] = variant(vn, vc, cfg, a)
+            manifest[vn] = variant(vn, vc, cfg, name, a)
             manifest[vn]["base"] = name
         json.dump(manifest, open(mpath, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 

@@ -61,7 +61,8 @@ en.json правкой по последней строке (`tail -n 2` — п�
 
 Раскладка голосов — `<модель>/<набор>/<голос>`: модель — `cosyvoice` или `espeech` (id из
 `stream-tts/streamtts/engines/`), набор — источник: `wc3` (`wc3-*`), `morrowind` (`mw-*`, только ESpeech), игры по
-одной (`dota2`, `portal`, `stalker`, `minecraft`, `neco-arc`, `altushka`), `streamers`. Каталог — [voices.md](voices.md).
+одной (`dota2`, `portal`, `stalker`, `postal`, `minecraft`, `neco-arc`, `altushka`), `streamers`. Каталог —
+[voices.md](voices.md).
 
 | Путь | Что |
 |---|---|
