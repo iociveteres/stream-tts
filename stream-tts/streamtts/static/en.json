@@ -893,5 +893,6 @@
  "Скачивание cloudflared: {done} из {total} МБ": "Downloading cloudflared: {done} of {total} MB",
  "Через туннель Cloudflare, без аккаунта и хостинга: страница работает, пока запущена программа. Адрес меняется при каждом запуске — зрители получают текущий командой <code>!ttsvoices</code> (ответ в чат — при входе через приложение Twitch). Постоянный адрес — <a href=\"/voices.zip\">скачайте zip</a> и выложите на любой хостинг.": "Through a Cloudflare tunnel, with no account or hosting: the page works while the program is running. The address changes on every start — viewers get the current one with the <code>!ttsvoices</code> command (the chat reply needs the Twitch app login). For a permanent address, <a href=\"/voices.zip\">download the zip</a> and upload it to any hosting.",
  "голоса и примеры звучания: {url}": "voices and samples: {url}",
- "страница голосов для туннеля не запущена": "the voices page for the tunnel is not running"
+ "страница голосов для туннеля не запущена": "the voices page for the tunnel is not running",
+ "Модель синтеза речи: <b>%MODEL%</b>": "Speech synthesis model: <b>%MODEL%</b>"
 }

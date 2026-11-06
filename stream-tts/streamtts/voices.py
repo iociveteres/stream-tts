@@ -271,7 +271,9 @@ class Voices:
         # {{t:…}} — текст на языке интерфейса (i18n): страница уходит и в zip, без i18n.js
         tpl = re.sub(r"\{\{t:(.*?)\}\}", lambda m: tr(" ".join(m[1].split())), tpl, flags=re.S)
         tpl = tpl.replace('<html lang="ru">', f'<html lang="{i18n.lang}">', 1)
-        return (tpl.replace("%COUNT%", str(len(names)))
+        # Голоса и примеры — текущей модели: у другой модели тот же голос звучит иначе
+        return (tpl.replace("%MODEL%", html.escape(self.tts.title))
+                .replace("%COUNT%", str(len(names)))
                 .replace("%PHRASE%", html.escape(self.s["demo_phrase"]))
                 .replace("%SECTIONS%", "\n".join(sections)))
 

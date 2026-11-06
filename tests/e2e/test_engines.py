@@ -1,6 +1,7 @@
 """Модели синтеза (engines/): выбор CosyVoice / ESpeech / Supertonic 3 при готовых серверах (STREAM_TTS_TEST_SERVERS),
-настройки модели по схеме params из /status, голоса без файла для текущей модели, свои примеры у каждой модели,
-«как прочитает»; запуск встроенного supertonic-server (пакет-заглушка) и отказ редактора голоса у Supertonic.
+настройки модели по схеме params из /status, голоса без файла для текущей модели, свои примеры у каждой модели
+(страница голосов называет модель), «как прочитает»; запуск встроенного supertonic-server (пакет-заглушка) и отказ
+редактора голоса у Supertonic.
 
 Три поддельных сервера: cosyvoice (alpha, bravo, charlie), espeech (alpha, charlie — у bravo нет .espeech) и
 supertonic (alpha, bravo)."""
@@ -142,10 +143,13 @@ def test_demos_per_model(two):
     two.use("espeech")
     assert sorted(r["voice"] for r in two.esp.tts if r["text"] == demo) == ["alpha", "charlie"]
     assert all(v["demo"] for v in two.api.state()["voices"])
+    page = two.api.get("/voices/").text   # страница зрителей называет модель, чьи это голоса и примеры
+    assert "<b>ESpeech</b>" in page and 'data-name="bravo"' not in page
     two.cosy.reset()
     two.use("cosyvoice")
     assert not [r for r in two.cosy.tts if r["text"] == demo]
     assert all(v["demo"] for v in two.api.state()["voices"])
+    assert "<b>CosyVoice3</b>" in two.api.get("/voices/").text
 
 
 def test_espeech_stream_threshold(two):
