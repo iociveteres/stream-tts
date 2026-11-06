@@ -112,9 +112,12 @@ def browser(tmp_path_factory):
     if not exe:
         pytest.skip("нет Edge или Chrome")
     profile = str(tmp_path_factory.mktemp("browser"))
+    # Под root (контейнер) Chromium без --no-sandbox не стартует, на раннере Ubuntu 24.04 песочнице мешает AppArmor;
+    # страница — только локальная админка
+    sandbox = ["--no-sandbox"] if os.environ.get("CI") or getattr(os, "geteuid", lambda: 1)() == 0 else []
     proc = subprocess.Popen([exe, "--headless=new", "--remote-debugging-port=0", f"--user-data-dir={profile}",
                              "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-                             "--disable-gpu", "--mute-audio", "about:blank"],
+                             "--disable-gpu", "--mute-audio", *sandbox, "about:blank"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     port_file = os.path.join(profile, "DevToolsActivePort")
     wait_for(lambda: os.path.isfile(port_file) and open(port_file).read().strip(), 20, "запуска браузера")

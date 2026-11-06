@@ -16,6 +16,8 @@
 ├── AGENTS.md              # заметки для ИИ-агентов (CLAUDE.md ссылается на него)
 ├── .gitattributes         # LF для shell-скриптов, Dockerfile и *.yml; .gitignore — данные не в git
 ├── .claude/launch.json    # конфигурации preview (раздел «Запуск»)
+├── .github/workflows/     # GitHub Actions: tests.yml (тесты на push и PR, раздел «Тесты»), docker.yml (сборка образов,
+│                          # раздел «Образы»), windows.yml (установщик и релиз, docs/stream-tts-windows.md)
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
 ├── cosyvoice/
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
@@ -237,6 +239,11 @@
 
 `--max-llm-len` (по умолчанию 4096) на видеопамять не влияет, а 1024 уже не хватает длинным образцам.
 
+**CI** — `.github/workflows/docker.yml`, на push в main и PR, если менялось то, что попадает в образ: собирает
+`stream-tts`, `cosyvoice` и `cosyvoice` с `GPU=cuda` (кэш слоёв — в GitHub Actions) и проверяет запуск без
+видеокарты: `cosyvoice-server --help`, `ldd` всех библиотек в `/opt/cosyvoice` (кроме `libcuda.so.1` — её даёт
+драйвер), `stream-tts` отвечает на `/overlay` и не пишет `Traceback`. Образы никуда не публикуются.
+
 ## Обновление версий
 
 Версии задаются аргументами в `Dockerfile`:
@@ -361,11 +368,12 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
   (`session_reconnect`, `drop`, `mute`, `keepalive`, `revoke_access`); запросы stream-tts записываются (`statuses`,
   `chat`, `calls`, `revoked`, `refreshes`). Пропущенное уведомление проверяется после следующего, дошедшего до
   оверлея: соединение EventSub stream-tts разбирает по очереди.
-- Процесс останавливается `terminate`, то есть без `on_cleanup`: корректная остановка (награда на паузу) тестами
-  не проверяется.
+- Процесс останавливается `terminate`: на Windows это `TerminateProcess`, без `on_cleanup`, на Linux — SIGTERM, как
+  `docker stop`. Что остановка при открытых админке и оверлее не ждёт их сокетов — `test_access.py` (только Linux, в
+  CI); награда на паузу при остановке тестами не проверяется.
 
 Сценарии: `test_access.py` — запуск, голоса и примеры, пароль, защита POST, `STREAM_TTS_BIND` без пароля,
-настройки после перезапуска, пропажа cosyvoice; `test_queue.py` — очередь через `/api/test`: голос и порядок,
+настройки после перезапуска, пропажа cosyvoice, остановка по SIGTERM с открытыми сокетами; `test_queue.py` — очередь через `/api/test`: голос и порядок,
 громкость, отказы, фильтры, стриминг и `chunk_tokens`, обрезка, ошибка синтеза, пропуск и очистка, оверлеи;
 `test_chat.py` — режим «Только чтение чата»: подключение и «канал не найден», команда озвучки (доступ по бейджам,
 кулдауны, «Всегда доступно», своё имя), «все сообщения», что из сообщения читается, `!ttssf`, команды модера,
@@ -481,3 +489,8 @@ multipart): ошибки запроса, ход, 409 на второй стар�
 шагов по объёму, сброс во время обучения, выгрузка модели во время обучения,
 нехватка видеопамяти (второй сервер с `--vram-limit-mb 1400`: ошибка `oom`, память вернулась, с checkpointing
 идёт). ~2 мин на видеокарте всё вместе.
+
+**CI** — `.github/workflows/tests.yml`, на push в main и PR, на `windows-latest` и `ubuntu-latest` (Python 3.14,
+ffmpeg ставится, Chrome и Node в образах раннеров есть): `tests/e2e`, `tests/supertonic` и
+`tests/espeech/test_normalize_corpus.py` — всё, что идёт без видеокарты, модели и torch; `real` и остальное
+`tests/espeech` — только локально. Checkout со всей историей: `test_index.py` сверяет пути с коммитом базы.

@@ -1,8 +1,12 @@
 """Запуск и доступ: сервис поднимается с поддельным cosyvoice, пароль закрывает админку и API, но не оверлей и страницу
-голосов, POST в API только JSON со своего адреса, настройки (и скрытые подсказки) переживают перезапуск."""
-import re, subprocess
+голосов, POST в API только JSON со своего адреса, настройки (и скрытые подсказки) переживают перезапуск, остановка по
+SIGTERM не ждёт открытых сокетов."""
+import asyncio, os, re, subprocess, time
 
-from harness import Api, wait_for
+import aiohttp
+import pytest
+
+from harness import Api, Overlay, wait_for
 
 
 def test_startup_voices_and_demos(tts):
@@ -111,3 +115,35 @@ def test_hidden_hints(spawn):
     assert api.state()["settings"]["hidden_hints"] == ["ed-save", "ed-transcript"]
     api.ok("/api/settings", dict(hidden_hints=[]))
     assert api.state()["settings"]["hidden_hints"] == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="на Windows terminate — TerminateProcess, корректной остановки нет")
+def test_sigterm_with_open_sockets(spawn, loop):
+    """SIGTERM (docker stop) при открытых админке и оверлее: сокеты закрываются при остановке (web.close_sockets), и
+    процесс выходит сразу. Без этого aiohttp ждал их shutdown_timeout дважды — 10 с, и docker stop добивал SIGKILL."""
+    server, _ = spawn()
+    ov = Overlay(loop, server.base).connect()
+
+    async def admin():
+        session = aiohttp.ClientSession()
+        ws = await session.ws_connect(server.base.replace("http", "ws", 1) + "/api/ws")
+        await ws.receive_json()
+
+        async def read():   # клиент отвечает на закрытие, только пока читает
+            async for _ in ws:
+                pass
+        return session, ws, asyncio.create_task(read())
+    session, ws, reader = loop.run(admin())
+
+    t0 = time.monotonic()
+    server.proc.terminate()
+    server.proc.wait(15)
+    took = time.monotonic() - t0
+    ov.close()
+
+    async def close():
+        reader.cancel()
+        await ws.close()
+        await session.close()
+    loop.run(close())
+    assert took < 3, f"остановка {took:.1f} с\n{server.tail()}"

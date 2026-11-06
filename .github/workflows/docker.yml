@@ -1,0 +1,79 @@
+# Сборка образов из Dockerfile на push в main и PR, если менялось то, что попадает в образ (.dockerignore), — без
+# публикации: проверка, что образ собирается и запускается. stream-tts — без видеокарты (CUDA качает админка),
+# cosyvoice — оба варианта, cpu и cuda (docker-compose.gpu.yml). Проверка запуска: бинарник сервера находит свои
+# библиотеки (--help), stream-tts отвечает на :8090 и не пишет Traceback в лог. Видеокарты на раннере нет.
+name: docker
+
+on:
+  push:
+    branches: [main]
+    paths: [Dockerfile, .dockerignore, "docker-compose*.yml", "cosyvoice/**", stream-tts/requirements.txt,
+            "stream-tts/streamtts/**", "espeech/*.py", "supertonic/*.py", "packaging/linux/**",
+            .github/workflows/docker.yml]
+  # тот же список, что у push
+  pull_request:
+    paths: [Dockerfile, .dockerignore, "docker-compose*.yml", "cosyvoice/**", stream-tts/requirements.txt,
+            "stream-tts/streamtts/**", "espeech/*.py", "supertonic/*.py", "packaging/linux/**",
+            .github/workflows/docker.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: stream-tts, gpu: none }
+          - { target: cosyvoice, gpu: none }
+          - { target: cosyvoice, gpu: cuda }
+    name: ${{ matrix.target }} (${{ matrix.gpu }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IMAGE: ${{ matrix.target }}:ci-${{ matrix.gpu }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Кэш слоёв в GitHub Actions: загрузки cosyvoice.cpp и llama.cpp (стадия fetch) не повторяются, пока не
+      # поменялись их версии в Dockerfile
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          build-args: GPU=${{ matrix.gpu }}
+          tags: ${{ env.IMAGE }}
+          load: true
+          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.gpu }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.gpu }}
+
+      # LD_LIBRARY_PATH — как у сервера: в stream-tts его задаёт engines/cosyvoice/launch.py, в cosyvoice — образ.
+      # --help не подгружает модули libggml-*.so (их сервер грузит при старте), поэтому ещё ldd всех библиотек;
+      # libcuda.so.1 даёт драйвер NVIDIA, в образе её нет и быть не должно
+      - name: cosyvoice-server и его библиотеки
+        run: |
+          docker run --rm -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/cosyvoice/cosyvoice-server "$IMAGE" --help >/dev/null
+          missing=$(docker run --rm -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint sh "$IMAGE" -c \
+            'for f in /opt/cosyvoice/cosyvoice-server /opt/cosyvoice/*.so*; do ldd "$f" | sed -n "s|^\s*\(\S*\) => not found|$f: \1|p"; done' \
+            | grep -v ': libcuda.so.1$' || true)
+          if [ -n "$missing" ]; then echo "не найдены библиотеки:"; echo "$missing"; exit 1; fi
+
+      - name: stream-tts отвечает
+        if: matrix.target == 'stream-tts'
+        run: |
+          docker run -d --name smoke "$IMAGE"
+          for _ in $(seq 30); do
+            if docker exec smoke python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8090/overlay', timeout=2)" 2>/dev/null; then
+              ok=1; break
+            fi
+            sleep 1
+          done
+          logs=$(docker logs smoke 2>&1); echo "$logs"
+          docker rm -f smoke >/dev/null
+          [ "${ok:-}" = 1 ] || { echo "stream-tts не ответил за 30 с"; exit 1; }
+          if grep -q Traceback <<<"$logs"; then echo "Traceback в логе"; exit 1; fi

@@ -3,9 +3,9 @@
 
 Роуты API — в модулях пакета (MODULES): у модуля таблицы GETS, POSTS (тело — JSON, обёртка common.json_post) и RAW
 (файл сырым телом, допустимые типы — в UPLOADS). Здесь — сборка приложения, пароль и защита POST, страницы."""
-import asyncio, hashlib, hmac, json, os, secrets
+import asyncio, hashlib, hmac, json, os, secrets, weakref
 
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
 
 from .. import config, i18n, overlay
 from ..i18n import tr
@@ -36,7 +36,10 @@ def _secret():
 def make_app(ctx):
     app = web.Application(middlewares=[auth_middleware], client_max_size=1 << 20)
     app["ctx"] = ctx
+    app["sockets"] = weakref.WeakSet()
     app.on_response_prepare.append(no_cache)
+    app.on_response_prepare.append(track_socket)
+    app.on_shutdown.append(close_sockets)
     app["token"] = hmac.new(_secret().encode(), config.PASSWORD.encode(), hashlib.sha256).hexdigest()
     r = app.router
     r.add_get("/", page("admin.html", edit=True))
@@ -69,6 +72,20 @@ async def no_cache(request, response):
     # FileResponse отвечает 304 по ETag (mtime и размер), так что сеть почти не тратится.
     if request.path.startswith(REVALIDATE):
         response.headers["Cache-Control"] = "no-cache"
+
+
+async def track_socket(request, response):
+    if isinstance(response, web.WebSocketResponse):
+        request.app["sockets"].add(response)
+
+
+async def close_sockets(app):
+    """Открытые сокеты админки и оверлея сами не кончаются: без этого остановка по SIGTERM (docker stop, Linux) ждала
+    их shutdown_timeout и ещё столько же — 10 с при открытой админке (замер в контейнере)."""
+    socks = list(app["sockets"])
+    app["ctx"].engine.dirty.set()   # admin_ws спит до 2 с в ожидании изменений
+    await asyncio.gather(*(ws.close(code=WSCloseCode.GOING_AWAY, message=b"shutdown") for ws in socks),
+                         return_exceptions=True)
 
 
 def page(name, edit=False):

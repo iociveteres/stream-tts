@@ -15,14 +15,14 @@ jobs:
     permissions:
       contents: write   # gh release create
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # До долгой сборки: тег совпадает с версией программы, репозиторий — с REPO в updates.py
       - name: Версия
         if: startsWith(github.ref, 'refs/tags/v')
         run: python packaging/windows/release.py "${{ github.ref_name }}" --check
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
 
