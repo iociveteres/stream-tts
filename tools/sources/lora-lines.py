@@ -82,9 +82,12 @@ VOICES = {
                         min_sim=0.6,
                         # спокойных кусков 5–7,5 с у него один, и тот 9,7 букв/с: образец — две соседние реплики
                         ref_parts=[f"{PD}/394.wav", f"{PD}/395.wav"],
-                        # злой: самые напористые реплики (энергия 0,93 и 0,80, emotions.py)
+                        # злой: самые напористые реплики (энергия 0,93 и 0,80, emotions.py); в коллекцию
+                        # postal-dude-angry идёт без адаптера (на слух лучше), -lora — тот же образец с адаптером
                         variants={"postal-dude-angry": dict(parts=[f"{PD}/298.wav", f"{PD}/295.wav"],
-                                                            title="Злой Чувак (Postal 2)")}),
+                                                            title="Злой Чувак (Postal 2)"),
+                                  "postal-dude-angry-lora": dict(parts=[f"{PD}/298.wav", f"{PD}/295.wav"],
+                                                                 title="Злой Чувак (Postal 2), с LoRA")}),
     "***": dict(set="streamers", title="***", text="long",
                    src=["voice-origs/***-qa", "voice-origs/***-nS29"],
                    center=["voice-origs/***-qa/Q01-093-112.wav", "voice-origs/***-nS29/P01-032-054.wav"],
