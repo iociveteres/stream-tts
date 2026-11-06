@@ -252,7 +252,12 @@ def test_unpack_tar(tmp_path):
     download._unpack_tar(str(good), str(out), ["python/share/*", "python/lib/python3.14/site-packages/*"])
     found = sorted(os.path.relpath(os.path.join(r, f), out).replace(os.sep, "/")
                    for r, _, fs in os.walk(out) for f in fs)
-    # символическая ссылка — только не на Windows (там tarfile её пропускает, а tar.gz нужен только Linux)
+    # Ссылку проверяем только на Linux: tar.gz нужен только там. На Windows tarfile создаёт её, лишь если есть право
+    # на символические ссылки (у администратора — да, на раннере GitHub), иначе молча пропускает.
+    if os.name == "nt":
+        found = [f for f in found if f != "bin/python3"]
+    else:
+        assert os.readlink(out / "bin" / "python3") == "python3.14"
     assert found == ["bin/python3"] * (os.name != "nt") + ["bin/python3.14", "lib/python3.14/os.py"]
     evil = tmp_path / "evil.tar.gz"
     tgz(evil, [("python/../../evil.py", b"boom", None)])
