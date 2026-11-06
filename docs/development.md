@@ -315,6 +315,17 @@ Supertonic 3) — или `SUPERTONIC_PORT`.
 `stream-tts-data/exe-test/`, ESpeech качается в `dist/StreamTTS/espeech-runtime`). Программа для Windows —
 [stream-tts-windows.md](stream-tts-windows.md).
 
+## Ветки
+
+Работа и вся история коммитов — в `dev`; `main` — по коммиту на выпуск: сквош `dev`, на нём тег релиза
+([stream-tts-windows.md](stream-tts-windows.md), «Сборка»). `main` начат одним коммитом без истории, а в `dev` он
+влит с `-s ours`: без общего предка не было бы ни PR из `dev` в `main`, ни `merge --squash`. Выпуск:
+
+```bash
+git switch main && git merge --squash dev && git commit   # сообщение — что нового с прошлого выпуска
+git switch dev && git merge main                          # main снова предок dev: следующий сквош — от этой точки
+```
+
 ## Тесты
 
 e2e-тесты stream-tts — `tests/e2e/`, pytest в `stream-tts/.venv`:
@@ -490,7 +501,7 @@ multipart): ошибки запроса, ход, 409 на второй стар�
 нехватка видеопамяти (второй сервер с `--vram-limit-mb 1400`: ошибка `oom`, память вернулась, с checkpointing
 идёт). ~2 мин на видеокарте всё вместе.
 
-**CI** — `.github/workflows/tests.yml`, на push в main и PR, на `windows-latest` и `ubuntu-latest` (Python 3.14,
+**CI** — `.github/workflows/tests.yml`, на push в main и dev и на PR, на `windows-latest` и `ubuntu-latest` (Python 3.14,
 ffmpeg ставится, Chrome и Node в образах раннеров есть): `tests/e2e`, `tests/supertonic` и
 `tests/espeech/test_normalize_corpus.py` — всё, что идёт без видеокарты, модели и torch; `real` и остальное
 `tests/espeech` — только локально. Checkout со всей историей: `test_index.py` сверяет пути с коммитом базы.

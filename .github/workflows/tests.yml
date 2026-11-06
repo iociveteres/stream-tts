@@ -1,12 +1,13 @@
-# Тесты без видеокарты и модели на каждый push в main и PR: e2e stream-tts (tests/e2e), supertonic-server без модели
+# Тесты без видеокарты и модели на push в main и dev и на PR: e2e stream-tts (tests/e2e), supertonic-server без модели
 # (tests/supertonic, test_server.py пропускается) и корпус нормализатора ESpeech (без torch). Windows — как у программы,
 # Ubuntu — как в образе Docker. Маркер real (нужны модель и видеокарта) пропускается. Образы — docker.yml.
-# test_index.py сверяет пути с коммитом базы рефакторинга — нужна вся история (fetch-depth: 0).
+# test_index.py сверяет пути с коммитом базы рефакторинга — нужна вся история: fetch-depth: 0 приносит все ветки, а в
+# main базы нет, она в dev (docs/development.md, «Ветки»).
 name: tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
