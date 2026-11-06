@@ -14,7 +14,7 @@
 /packaging/windows/.inno/
 # расшифровки реплик из игр и записей стримеров, ручная разметка: только локально (README, «Лицензии»)
 /voice-clips/
-.venv/
+.venv*/
 /stream-tts-data/
 # локальные доки: рефакторинг, голоса реальных людей (AGENTS.md)
 /docs/local/
