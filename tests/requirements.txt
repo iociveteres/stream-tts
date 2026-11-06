@@ -1,0 +1,2 @@
+# e2e-тесты stream-tts (tests/e2e, docs/development.md): в stream-tts/.venv поверх stream-tts/requirements.txt
+pytest==9.1.1

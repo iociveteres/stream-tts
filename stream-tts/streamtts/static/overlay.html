@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream TTS — оверлей</title>
+<style>
+  /* Фон прозрачный: страница добавляется в OBS как Browser Source */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font-family: "Segoe UI", system-ui, sans-serif; }
+  #status { position: fixed; left: 12px; top: 12px; padding: 6px 12px; border-radius: 8px;
+    background: rgba(10, 10, 14, .72); color: #ddd; font-size: 16px; display: none; }
+  #status.on { display: block; }
+  #unlock { position: fixed; inset: 0; margin: auto; width: max-content; height: max-content;
+    padding: 18px 28px; font-size: 22px; border-radius: 12px; border: 0; cursor: pointer;
+    background: #2a78d6; color: #fff; display: none; }
+  #unlock.on { display: block; }
+</style>
+</head>
+<body>
+<div id="status"></div>
+<button id="unlock">🔊 Включить звук</button>
+<script src="/static/i18n.js"></script>
+<script>
+"use strict";
+// Звук приходит по WebSocket кусками PCM16 и ставится в очередь Web Audio.
+const $status = document.getElementById("status"),
+      $unlock = document.getElementById("unlock");
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const PREBUFFER = 0.3;   // запас на неровный поток в начале и после провала
+let ws = null, cur = null, active = false;
+
+function status(text) { $status.textContent = text || ""; $status.classList.toggle("on", !!text); }
+function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+function reportReady() {
+  const running = ctx.state === "running";
+  $unlock.classList.toggle("on", active && !running);
+  send({ type: "ready", ready: running });
+}
+ctx.onstatechange = reportReady;
+$unlock.onclick = () => ctx.resume().then(reportReady);
+document.addEventListener("click", () => { if (ctx.state !== "running") ctx.resume(); });
+
+function stopAll() {
+  if (!cur) return;
+  for (const s of cur.sources) { s.onended = null; try { s.stop(); } catch (e) {} }
+  cur = null;
+}
+function checkDone() {
+  if (cur && cur.endMsg && cur.sources.size === 0) {
+    send({ type: "ended", id: cur.id });
+    cur = null;
+  }
+}
+function play(buf) {
+  if (!cur) return;
+  const pcm = new Int16Array(buf);
+  if (!pcm.length) return;
+  const ab = ctx.createBuffer(1, pcm.length, cur.sr), ch = ab.getChannelData(0);
+  for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+  const src = ctx.createBufferSource();
+  src.buffer = ab;
+  src.connect(ctx.destination);
+  const now = ctx.currentTime;
+  if (cur.next < now + 0.02) cur.next = now + PREBUFFER;
+  src.start(cur.next);
+  cur.next += ab.duration;
+  cur.sources.add(src);
+  const c = cur;
+  src.onended = () => { c.sources.delete(src); if (c === cur) checkDone(); };
+}
+function onMessage(m) {
+  if (m.type === "active") { active = true; status(""); reportReady(); }
+  else if (m.type === "inactive") { active = false; stopAll(); $unlock.classList.remove("on");
+    status(T("Оверлей неактивен: звук играет в другом окне")); }
+  else if (m.type === "start") {
+    stopAll();
+    cur = { id: m.id, sr: m.sr, next: 0, sources: new Set(), endMsg: false };
+  }
+  else if (m.type === "end") { if (cur && cur.id === m.id) { cur.endMsg = true; checkDone(); } }
+  else if (m.type === "stop") { if (cur && cur.id === m.id) stopAll(); }
+}
+function connect() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/overlay/ws");
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = e => typeof e.data === "string" ? onMessage(JSON.parse(e.data)) : play(e.data);
+  ws.onclose = () => { active = false; stopAll(); status(T("Нет связи с сервером, переподключение…"));
+    setTimeout(connect, 2000); };
+}
+connect();
+</script>
+</body>
+</html>

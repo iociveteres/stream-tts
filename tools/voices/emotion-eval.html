@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Эмоции на слух</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #e3e1dc;
+  --accent: #2f6fdf; --accent-soft: #e6eefc; --warn: #a35f00; --warn-soft: #fdf1df;
+  --ok: #2c7a3f; --ok-soft: #e4f3e7; --chip: #efede8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a; --panel: #212226; --fg: #e9e9e9; --muted: #9a9a9a; --line: #34353a;
+    --accent: #7aa7ff; --accent-soft: #24304a; --warn: #f0b35a; --warn-soft: #3a2f1e;
+    --ok: #74c58a; --ok-soft: #1f3326; --chip: #2c2d31;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button { font: inherit; color: inherit; }
+header {
+  position: sticky; top: 0; z-index: 5; display: flex; gap: 8px 16px; align-items: center; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.progress { color: var(--muted); font-size: 13px; }
+.busy { font-size: 13px; color: var(--warn); }
+main { padding: 16px; max-width: 900px; margin: 0 auto; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.card h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+.top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.top audio { flex: 1; min-width: 240px; }
+.chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+.chip.re { background: var(--warn-soft); color: var(--warn); }
+.scale { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: start; margin: 8px 0; }
+.scale .name { font-weight: 600; padding-top: 6px; }
+.opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.opt {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 10px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; min-width: 76px; line-height: 1.2;
+}
+.opt small { color: var(--muted); font-size: 11px; }
+.opt kbd { font: 11px ui-monospace, monospace; color: var(--muted); }
+.opt.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.opt.on small, .opt.on kbd { color: #fff; opacity: .85; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.btn { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+.btn.main { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:disabled { opacity: .5; cursor: default; }
+.err { color: var(--warn); font-size: 13px; min-height: 1.4em; margin-top: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .ci { color: var(--muted); font-size: 11px; display: block; }
+tr.click { cursor: pointer; }
+tr.click:hover { background: var(--accent-soft); }
+.path { color: var(--muted); font-size: 12px; word-break: break-all; }
+.best { color: var(--ok); font-weight: 600; }
+.scroll { overflow-x: auto; }
+@media (max-width: 560px) {
+  .scale { grid-template-columns: 1fr; }
+  .scale .name { padding-top: 0; }
+  .opt { min-width: 60px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Эмоции на слух</h1>
+  <span class="progress" id="progress"></span>
+  <span class="busy" id="busy"></span>
+</header>
+<main>
+  <p class="hint">Оцените, как фраза <b>звучит</b>, а не что в ней сказано. Текста и имени файла нет специально,
+    видно только источник. Клавиши привязаны к расположению, раскладка не важна: Q — это и Й.
+    Пробел — повтор, Enter — сохранить и дальше, Backspace — не речь или не годится.</p>
+
+  <div class="card" id="cur">
+    <div class="top">
+      <span class="chip" id="group"></span>
+      <span class="chip re" id="re" hidden>уже размечена, правка</span>
+      <audio id="audio" controls preload="auto"></audio>
+    </div>
+    <div id="scales"></div>
+    <div class="actions">
+      <button class="btn main" id="save">Сохранить и дальше <kbd>Enter</kbd></button>
+      <button class="btn" id="bad">Не речь / не годится <kbd>⌫</kbd></button>
+      <button class="btn" id="skip" hidden>К неразмеченным</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card">
+    <h2>Модели против разметки</h2>
+    <p class="hint" id="rephint"></p>
+    <div class="scroll"><table id="report"></table></div>
+    <div class="actions">
+      <button class="btn" id="score">Посчитать модели</button>
+    </div>
+    <div class="err" id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>Последние оценки</h2>
+    <p class="hint">Клик по строке — переслушать и исправить.</p>
+    <div class="scroll"><table id="recent"></table></div>
+  </div>
+</main>
+<script>
+const SCALES = [
+  {key: "a", name: "Энергия", codes: ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"], keys: "12345",
+   words: ["вяло, шёпот", "спокойно", "обычно", "громко, напор", "крик"]},
+  {key: "d", name: "Напор", codes: ["KeyQ", "KeyW", "KeyE", "KeyR", "KeyT"], keys: "QWERT",
+   words: ["робко, просит", "мягко", "обычно", "уверенно", "властно, приказ"]},
+  {key: "v", name: "Тон", codes: ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG"], keys: "ASDFG",
+   words: ["злобно, отчаяние", "недовольно", "нейтрально", "приветливо", "радостно"]},
+];
+const EMO_CODES = ["KeyZ", "KeyX", "KeyC", "KeyV", "KeyB", "KeyN", "KeyM", "Comma"];
+const EMO_KEYS = ["Z", "X", "C", "V", "B", "N", "M", ","];
+const EMO_SHORT = {"нейтрально": "нейтр", "злость": "злость", "радость": "радость", "грусть": "грусть",
+                   "страх": "страх", "удивление": "удивл", "отвращение": "отвращ", "другое": "другое"};
+let st = null, cur = {}, item = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+async function load(path) {
+  const r = await fetch("/api/state" + (path ? "?path=" + encodeURIComponent(path) : ""));
+  st = await r.json();
+  item = st.item;
+  cur = st.rating && !st.rating.bad ? {a: st.rating.a, d: st.rating.d, v: st.rating.v, emo: st.rating.emo} : {};
+  render();
+  if (item) {
+    $("audio").src = "/audio/" + item.split("/").map(encodeURIComponent).join("/");
+    $("audio").play().catch(() => {});  // до первого клика браузер может не дать играть сам
+  }
+}
+
+function render() {
+  const rep = st.report;
+  $("progress").textContent = `размечено ${rep.rated}` + (rep.bad ? ` · не годятся ${rep.bad}` : "")
+    + (Object.keys(rep.groups).length ? " · " + Object.entries(rep.groups).map(([g, n]) => `${g} ${n}`).join(", ") : "");
+  $("busy").textContent = st.busy ? "модели: " + st.busy : "";
+  $("score").disabled = !!st.busy;
+  $("log").textContent = st.busy ? "" : (st.log.filter(l => /код|Error|Traceback/.test(l)).slice(-1)[0] || "");
+  $("group").textContent = item ? st.group : "фраз нет";
+  $("re").hidden = !st.rating;
+  $("skip").hidden = !st.rating;
+  renderScales();
+  renderReport();
+  renderRecent();
+}
+
+function renderScales() {
+  let h = "";
+  for (const s of SCALES) {
+    h += `<div class="scale"><div class="name">${s.name}</div><div class="opts">`;
+    s.words.forEach((w, i) => {
+      h += `<button class="opt${cur[s.key] === i + 1 ? " on" : ""}" data-k="${s.key}" data-val="${i + 1}">
+        <span>${i + 1}</span><small>${w}</small><kbd>${s.keys[i]}</kbd></button>`;
+    });
+    h += `</div></div>`;
+  }
+  h += `<div class="scale"><div class="name">Эмоция</div><div class="opts">`;
+  st.emotions.forEach((e, i) => {
+    h += `<button class="opt${cur.emo === e ? " on" : ""}" data-k="emo" data-val="${esc(e)}">
+      <span>${esc(e)}</span><kbd>${EMO_KEYS[i]}</kbd></button>`;
+  });
+  h += `</div></div>`;
+  $("scales").innerHTML = h;
+}
+
+function fmtRho(s) {
+  if (!s) return "—";
+  return `${s.r >= 0 ? "+" : ""}${s.r.toFixed(2)}<span class="ci">${s.lo.toFixed(2)}…${s.hi.toFixed(2)}, n ${s.n}</span>`;
+}
+
+function renderReport() {
+  const rep = st.report, rows = rep.rows;
+  const missing = Math.max(...rows.map(r => r.missing));
+  $("rephint").textContent = "ρ Спирмена между вашей шкалой и осью модели (под числом 95% интервал); AUC энергии: 1–2 против 4–5; "
+    + "категория: доля совпавших с вашей." + (rep.neutral != null ? ` «Всегда нейтрально» угадало бы ${Math.round(rep.neutral * 100)}%.` : "")
+    + (missing ? ` Модели ещё не слышали ${missing} фраз — нажмите «Посчитать модели».` : "");
+  const best = {};
+  for (const k of ["a", "d", "v"]) best[k] = Math.max(...rows.map(r => r[k] ? r[k].r : -2));
+  best.auc = Math.max(...rows.map(r => r.auc ? r.auc.auc : -1));
+  best.cat = Math.max(...rows.map(r => r.cat ? r.cat.hit : -1));
+  const cls = (k, v) => v != null && v === best[k] && rows.filter(r => r[k]).length > 1 ? "num best" : "num";
+  let h = `<tr><th>модель</th><th>энергия</th><th>напор</th><th>тон</th><th>AUC энергии</th><th>категория</th></tr>`;
+  for (const r of rows) {
+    h += `<tr><td>${esc(r.title)}</td>`
+      + ["a", "d", "v"].map(k => `<td class="${cls(k, r[k] && r[k].r)}">${fmtRho(r[k])}</td>`).join("")
+      + `<td class="${cls("auc", r.auc && r.auc.auc)}">${r.auc ? r.auc.auc.toFixed(2) + `<span class="ci">${r.auc.pos} против ${r.auc.neg}</span>` : "—"}</td>`
+      + `<td class="${cls("cat", r.cat && r.cat.hit)}">${r.cat ? Math.round(r.cat.hit * 100) + "%" + `<span class="ci">n ${r.cat.n}</span>` : "—"}</td></tr>`;
+  }
+  $("report").innerHTML = h;
+}
+
+function renderRecent() {
+  let h = `<tr><th>источник</th><th>энерг</th><th>напор</th><th>тон</th><th>эмоция</th><th>файл</th></tr>`;
+  for (const r of st.recent) {
+    h += `<tr class="click" data-path="${esc(r.path)}"><td>${esc(r.group)}</td>`
+      + (r.bad ? `<td colspan="4">не годится</td>` : `<td class="num">${r.a}</td><td class="num">${r.d}</td><td class="num">${r.v}</td><td>${esc(EMO_SHORT[r.emo] || r.emo)}</td>`)
+      + `<td class="path">${esc(r.path)}</td></tr>`;
+  }
+  $("recent").innerHTML = st.recent.length ? h : "";
+}
+
+function choose(k, val) {
+  cur[k] = k === "emo" ? val : +val;
+  renderScales();
+}
+
+async function send(body) {
+  const r = await fetch("/api/rate", {method: "POST", headers: {"Content-Type": "application/json"},
+                                      body: JSON.stringify({path: item, ...body})});
+  const j = await r.json();
+  if (!j.ok) { $("err").textContent = j.error; return; }
+  $("err").textContent = "";
+  load();
+}
+
+function save() {
+  if (!item) return;
+  const miss = SCALES.filter(s => !cur[s.key]).map(s => s.name.toLowerCase());
+  if (!cur.emo) miss.push("эмоция");
+  if (miss.length) { $("err").textContent = "Не хватает: " + miss.join(", "); return; }
+  send(cur);
+}
+
+$("scales").addEventListener("click", e => {
+  const b = e.target.closest(".opt");
+  if (b) choose(b.dataset.k, b.dataset.val);
+});
+$("save").onclick = save;
+$("bad").onclick = () => item && send({bad: true});
+$("skip").onclick = () => load();
+$("recent").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-path]");
+  if (tr) { load(tr.dataset.path); window.scrollTo({top: 0}); }
+});
+$("score").onclick = async () => {
+  const j = await (await fetch("/api/score", {method: "POST", body: "{}"})).json();
+  if (!j.ok) $("log").textContent = j.error;
+  poll();
+};
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.code === "Space") { e.preventDefault(); const a = $("audio"); a.currentTime = 0; a.play(); return; }
+  if (e.code === "Enter" || e.code === "NumpadEnter") { e.preventDefault(); save(); return; }
+  if (e.code === "Backspace") { e.preventDefault(); if (item) send({bad: true}); return; }
+  for (const s of SCALES) {
+    const i = s.codes.indexOf(e.code);
+    if (i >= 0) { choose(s.key, i + 1); return; }
+  }
+  const i = EMO_CODES.indexOf(e.code);
+  if (i >= 0 && st) choose("emo", st.emotions[i]);
+});
+
+let timer = null;
+function poll() {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const r = await (await fetch("/api/state" + (item ? "?path=" + encodeURIComponent(item) : ""))).json();
+    st.busy = r.busy; st.log = r.log; st.report = r.report;
+    $("busy").textContent = r.busy ? "модели: " + r.busy : "";
+    $("score").disabled = !!r.busy;
+    $("log").textContent = r.busy ? "" : (r.log.filter(l => /код|Error|Traceback/.test(l)).slice(-1)[0] || "");
+    renderReport();
+    if (r.busy) poll();
+  }, 1500);
+}
+
+load().then(() => { if (st.busy) poll(); });
+</script>
+</body>
+</html>

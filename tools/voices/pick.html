@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подбор голосов</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #e3e1dc;
+  --accent: #2f6fdf; --accent-soft: #e6eefc; --warn: #a35f00; --warn-soft: #fdf1df;
+  --ok: #2c7a3f; --ok-soft: #e4f3e7; --chip: #efede8; --ref: #7a3fb0; --ref-soft: #f1e8f8;
+  --calm: #2f7d8f; --loud: #b5462f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a; --panel: #212226; --fg: #e9e9e9; --muted: #9a9a9a; --line: #34353a;
+    --accent: #7aa7ff; --accent-soft: #24304a; --warn: #f0b35a; --warn-soft: #3a2f1e;
+    --ok: #74c58a; --ok-soft: #1f3326; --chip: #2c2d31; --ref: #c9a0f0; --ref-soft: #33283d;
+    --calm: #6cc3d6; --loud: #f08a72;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, textarea, input { font: inherit; color: inherit; }
+header {
+  position: sticky; top: 0; z-index: 5; display: flex; gap: 12px 16px; align-items: center; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 12px; cursor: pointer; font-size: 13px; }
+.tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tab .n { opacity: .7; margin-left: 4px; }
+label.flt { font-size: 13px; color: var(--muted); display: flex; gap: 4px; align-items: center; cursor: pointer; }
+.progress { color: var(--muted); font-size: 13px; }
+.busy { font-size: 13px; color: var(--warn); }
+main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; }
+.card.decided { border-color: var(--ok); }
+.card.contested { border-color: var(--warn); }
+.head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; cursor: pointer; }
+.head b { font-size: 17px; }
+.vid, .setname { color: var(--muted); font-size: 13px; }
+.status { font-size: 13px; margin-left: auto; }
+.status.ok { color: var(--ok); }
+.status.warn { color: var(--warn); }
+.gnote { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.decision { font-size: 13px; margin-top: 4px; color: var(--muted); }
+.decision b { color: var(--fg); font-weight: 600; }
+.grid { display: grid; grid-template-columns: minmax(240px, 1.7fr) repeat(var(--cols), minmax(76px, 1fr)); gap: 6px 10px; align-items: start; margin-top: 10px; }
+.colhead { font-size: 12px; color: var(--muted); line-height: 1.25; }
+.alt { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; }
+.alt.picked { background: var(--accent-soft); }
+.alt.ref { background: var(--ref-soft); }
+.alt .id { font-weight: 600; }
+.alt .meta { font-size: 12px; color: var(--muted); }
+.badge { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); white-space: nowrap; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.auto { background: var(--chip); color: var(--muted); }
+.alt .txt { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.alt .txt:hover { -webkit-line-clamp: unset; }
+.cell { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
+.play { width: 100%; height: 34px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; cursor: pointer; }
+.play:hover { border-color: var(--accent); }
+.play.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.play.refp { border-color: var(--ref); color: var(--ref); }
+.play.refp.on { background: var(--ref); color: #fff; }
+.sc { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.sc .bad { color: var(--warn); }
+.mood { font-size: 11px; white-space: nowrap; }
+.mood.calm { color: var(--calm); }
+.mood.loud { color: var(--loud); }
+.empty { text-align: center; color: var(--muted); font-size: 12px; padding-top: 14px; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.take { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 1px 12px; cursor: pointer; font-size: 13px; }
+.take.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.foot { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; flex-wrap: wrap; font-size: 13px; }
+.foot textarea { flex: 1 1 320px; min-height: 34px; resize: vertical; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.saved { color: var(--ok); font-size: 12px; align-self: center; }
+.collapsed .body { display: none; }
+@media (max-width: 760px) {
+  .grid { grid-template-columns: repeat(var(--cols), 1fr); }
+  .alt { grid-column: 1 / -1; }
+  .corner { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Подбор голосов</h1>
+  <div class="tabs" id="tabs"></div>
+  <label class="flt"><input type="checkbox" id="open-only"> только нерешённые</label>
+  <span class="progress" id="progress"></span>
+  <span class="busy" id="busy"></span>
+</header>
+<main id="main"><p class="hint">Загрузка…</p></main>
+<script>
+let S = null;
+let tab = localStorage.getItem("pick-tab") || "";
+const expanded = new Set();
+const player = new Audio();
+let playing = null;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const enc = p => p.split("/").map(encodeURIComponent).join("/");
+const f2 = x => x == null ? "—" : x.toFixed(2).replace(/^0/, "");
+const key = g => g.set + "/" + g.voice;
+
+// как label() в emotions.py: пороги по ручной разметке WC3
+function mood(e) {
+  if (!e) return "";
+  const word = e.a < 0.6 ? "спокойно" : e.a < 0.78 ? "ровно" : e.v < 0.4 ? "злость" : "напор";
+  const cls = e.a < 0.6 ? "calm" : e.a >= 0.78 ? "loud" : "";
+  return `<span class="mood ${cls}" title="энергия ${f2(e.a)}, тон ${f2(e.v)}">${word} ${f2(e.a)}</span>`;
+}
+
+function play(btn) {
+  if (playing === btn) { player.pause(); return; }
+  if (playing) playing.classList.remove("on");
+  player.src = btn.dataset.src + "?t=" + Date.now();
+  player.play();
+  playing = btn;
+  btn.classList.add("on");
+}
+player.addEventListener("pause", () => { if (playing) playing.classList.remove("on"); playing = null; });
+player.addEventListener("ended", () => { if (playing) playing.classList.remove("on"); playing = null; });
+
+// решено: выбор на слух или ясная автоматика, и с тех пор не появилось новых вариантов
+const decided = g => !g.fresh.length && (g.pick.length > 0 || (g.decision && g.decision.auto));
+
+function status(g) {
+  if (g.fresh.length) return `<span class="status warn">новые варианты: ${esc(g.fresh.join(", "))}</span>`;
+  if (g.pick.length) return `<span class="status ok">✓ ${g.pick[0] === "keep" ? "оставить как есть" : esc(g.pick.join(", "))}</span>`;
+  if (g.decision && g.decision.auto) return `<span class="status ok">авто: ${esc(g.decision.pick)}</span>`;
+  if (g.decision) return `<span class="status warn">спорно</span>`;
+  return `<span class="status warn">не выбрано</span>`;
+}
+
+function sampleScores(a) {
+  const L = S.limits, out = [];
+  if (a.emo) out.push(mood(a.emo) + (a.emo.spread > L.spread ? ` <span class="badge warn" title="разброс энергии по окнам 3 с: ${f2(a.emo.spread)}">подача скачет</span>` : ""));
+  if (a.psim != null) out.push(`<span title="сходство образца с голосом в целом" class="${a.psim < L.psim ? "bad" : ""}">psim ${f2(a.psim)}</span>`);
+  if (a.sim != null) out.push(`<span title="среднее сходство синтеза с голосом (${a.sims.length} фраз)">sim ${f2(a.sim)}</span>`);
+  if (a.cer != null) out.push(`<span title="ошибки разборчивости синтеза" class="${a.cer > L.cer ? "bad" : ""}">cer ${f2(a.cer)}</span>`);
+  if (a.rsim != null) out.push(`<span title="сходство синтеза с эталоном">как эталон ${f2(a.rsim)}</span>`);
+  return out.join(" · ");
+}
+
+function synthScores(f) {
+  const L = S.limits, out = [];
+  if (f.sim != null) out.push(`sim ${f2(f.sim)}`);
+  if (f.cer != null) out.push(`<span class="${f.cer > L.cer ? "bad" : ""}">cer ${f2(f.cer)}</span>`);
+  if (f.rsim != null && f.sim == null) out.push(`эт ${f2(f.rsim)}`);
+  return `<div class="sc">${out.join(" ")}${f.emo ? "<br>" + mood(f.emo) : ""}</div>`;
+}
+
+function card(g) {
+  const n = g.phrases.length;
+  const cols = [`<div class="colhead corner"></div>`, `<div class="colhead">сам образец</div>`]
+    .concat(g.phrases.map((p, i) => `<div class="colhead" title="${esc(p)}">${i + 1}. ${i === 0 && g.ref ? "<b>как у эталона:</b> " : ""}${esc(p.length > 34 ? p.slice(0, 32) + "…" : p)}</div>`));
+  const rows = [];
+  if (g.ref) {
+    rows.push(`<div class="alt ref"><span class="id">Эталон</span>
+      <span class="meta">пример JeetBot: их синтез, оригинал персонажа звучит иначе</span></div>
+      <div class="empty">—</div>
+      <div class="cell"><button class="play refp" data-src="/ref/${enc(key(g))}" title="${esc(g.phrases[0])}">▶</button></div>`
+      + "<div></div>".repeat(n - 1));
+  }
+  const auto = g.decision && !g.pick.length ? g.decision.pick : null;
+  for (const a of g.alts) {
+    const picked = g.pick.includes(a.id);
+    const base = `/audio/${enc(g.set)}/`;
+    const cells = [`<div class="cell"><button class="play" data-src="${base}${enc(a.file)}.wav" title="образец, ${a.dur} с">▶</button></div>`];
+    for (let i = 0; i < n; i++) {
+      const f = a.synth[i];
+      cells.push(f
+        ? `<div class="cell"><button class="play" data-src="${base}${enc(a.ab)}.${i + 1}.wav" title="${esc(g.phrases[i])}">▶</button>${synthScores(f)}</div>`
+        : `<div class="empty">нет синтеза</div>`);
+    }
+    rows.push(`<div class="alt ${picked ? "picked" : ""}">
+        <span><span class="id">${esc(a.id)}</span> ${esc(a.label)}
+          ${a.current ? '<span class="badge">стоит сейчас</span>' : ""}
+          ${g.fresh.includes(a.id) ? '<span class="badge warn">новый</span>' : ""}
+          ${auto === a.id ? '<span class="badge auto">выбор автоматики</span>' : ""}
+          ${a.check ? '<span class="badge warn">сверить текст</span>' : ""}</span>
+        <span class="meta">${a.dur} с${!a.main ? " · ставится как <b>" + esc(a.install) + "</b>" : ""}${a.post ? " · эффект: " + esc(a.post) : ""}</span>
+        <span class="meta">${sampleScores(a)}</span>
+        <span class="txt" title="${esc(a.text)}">${esc(a.text)}</span>
+        <div class="btns"><button class="take ${picked ? "on" : ""}" data-key="${esc(key(g))}" data-id="${esc(a.id)}">${picked ? "✓ Беру" : "Беру"}</button></div>
+      </div>` + cells.join(""));
+  }
+  const missing = g.alts.some(a => a.synth.includes(null));
+  const keep = g.pick[0] === "keep";
+  const open = expanded.has(key(g)) || !decided(g);
+  const cls = g.fresh.length ? "contested" : g.pick.length ? "decided" : g.decision && !g.decision.auto ? "contested" : "";
+  return `<section class="card ${cls} ${open ? "" : "collapsed"}" data-card="${esc(key(g))}">
+    <div class="head" data-toggle="${esc(key(g))}"><b>${esc(g.title)}</b><span class="vid">${esc(g.voice)}</span>
+      ${tab ? "" : `<span class="setname">${esc(S.sets[g.set])}</span>`}${status(g)}</div>
+    <div class="body">
+    ${g.note ? `<div class="gnote">${esc(g.note)}</div>` : ""}
+    ${g.decision ? `<div class="decision">Автоматика: <b>${esc(g.decision.pick)}</b> — ${esc(g.decision.reason)}${g.decision.auto ? "" : " (нужен выбор на слух)"}</div>` : ""}
+    <div class="grid" style="--cols:${n + 1}">${cols.join("")}${rows.join("")}</div>
+    <div class="foot">
+      <textarea data-key="${esc(key(g))}" placeholder="Что не так на слух (шум, не тот актёр, акцент, интонация…)">${esc(g.comment)}</textarea>
+      <button class="take keep ${keep ? "on" : ""}" data-key="${esc(key(g))}">${keep ? "✓ Оставить как есть" : "Оставить как есть"}</button>
+      ${missing ? `<button class="take synth" data-key="${esc(key(g))}">Озвучить недостающее</button>` : ""}
+      <span class="saved" data-saved="${esc(key(g))}"></span>
+    </div>
+    </div>
+  </section>`;
+}
+
+function visible() {
+  const openOnly = document.getElementById("open-only").checked;
+  return S.groups.filter(g => (!tab || g.set === tab) && (!openOnly || !decided(g)))
+    .sort((a, b) => decided(a) - decided(b));  // сначала нерешённые, порядок внутри сохраняется
+}
+
+function render() {
+  const counts = {};
+  for (const g of S.groups) counts[g.set] = (counts[g.set] || 0) + 1;
+  document.getElementById("tabs").innerHTML = [["", "Все", S.groups.length]]
+    .concat(Object.entries(S.sets).map(([k, t]) => [k, t, counts[k] || 0]))
+    .map(([k, t, c]) => `<button class="tab ${tab === k ? "on" : ""}" data-tab="${esc(k)}">${esc(t)}<span class="n">${c}</span></button>`).join("");
+  const scope = S.groups.filter(g => !tab || g.set === tab);
+  document.getElementById("progress").textContent = `решено ${scope.filter(decided).length} из ${scope.length}`;
+  document.getElementById("busy").textContent = S.busy ? "⏳ " + S.busy : (S.log.length ? S.log[S.log.length - 1] : "");
+  const focus = document.activeElement?.dataset?.key;
+  const drafts = {};
+  document.querySelectorAll("textarea").forEach(t => { drafts[t.dataset.key] = t.value; });
+  const list = visible();
+  document.getElementById("main").innerHTML = `
+    <p class="hint">Строки — варианты образца, столбцы — сам образец и синтез одних и тех же фраз (seed один).
+    Под синтезом: sim — похожесть на голос в целом, cer — ошибки разборчивости, подача — энергия по модели эмоций.
+    Решённые карточки свёрнуты, клик по заголовку раскрывает. Можно взять несколько вариантов, если они ставятся под
+    разными именами. Заметка сохраняется сама.</p>` + (list.length ? list.map(card).join("") : `<p class="hint">Здесь всё решено.</p>`);
+  document.querySelectorAll("textarea").forEach(t => {
+    if (t.dataset.key in drafts && drafts[t.dataset.key] !== t.value) t.value = drafts[t.dataset.key];
+    if (t.dataset.key === focus) t.focus();
+  });
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+let wasBusy = false;
+async function load() {
+  S = await (await fetch("/api/state")).json();
+  if (tab && !(tab in S.sets)) tab = "";
+  render();
+  if (S.busy || wasBusy) setTimeout(load, 3000);
+  wasBusy = !!S.busy;
+}
+
+const find = k => S.groups.find(g => key(g) === k);
+
+async function setPick(g, pick) {
+  const j = await post("/api/pick", { set: g.set, voice: g.voice, pick });
+  if (j.ok) { g.pick = j.pick; render(); }
+}
+
+document.getElementById("open-only").addEventListener("change", render);
+
+document.addEventListener("click", async e => {
+  const t = e.target.closest(".tab");
+  if (t) { tab = t.dataset.tab; try { localStorage.setItem("pick-tab", tab); } catch (_) {} return render(); }
+  const p = e.target.closest(".play");
+  if (p) return play(p);
+  const h = e.target.closest("[data-toggle]");
+  if (h) {
+    const k = h.dataset.toggle;
+    expanded.has(k) ? expanded.delete(k) : expanded.add(k);
+    return h.closest(".card").classList.toggle("collapsed");
+  }
+  const b = e.target.closest(".take");
+  if (!b) return;
+  const g = find(b.dataset.key);
+  if (b.classList.contains("synth")) {
+    const j = await post("/api/synth", { set: g.set, voices: [g.voice] });
+    if (!j.ok) alert(j.error);
+    return setTimeout(load, 500);
+  }
+  expanded.add(key(g));  // карточка, где только что выбрали, не сворачивается
+  if (b.classList.contains("keep")) return setPick(g, g.pick[0] === "keep" ? [] : ["keep"]);
+  const cur = g.pick.filter(x => x !== "keep");
+  setPick(g, cur.includes(b.dataset.id) ? cur.filter(x => x !== b.dataset.id) : cur.concat(b.dataset.id));
+});
+
+let timers = {};
+document.addEventListener("input", e => {
+  const t = e.target.closest("textarea");
+  if (!t) return;
+  const g = find(t.dataset.key);
+  clearTimeout(timers[t.dataset.key]);
+  timers[t.dataset.key] = setTimeout(async () => {
+    const j = await post("/api/pick", { set: g.set, voice: g.voice, note: t.value });
+    if (j.ok) {
+      g.comment = j.note;
+      const m = document.querySelector(`[data-saved="${CSS.escape(t.dataset.key)}"]`);
+      if (m) { m.textContent = "сохранено"; setTimeout(() => { m.textContent = ""; }, 1500); }
+    }
+  }, 600);
+});
+
+load();
+</script>
+</body>
+</html>

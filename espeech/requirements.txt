@@ -1,0 +1,18 @@
+# espeech-server для разработки: py -3.14 -m venv espeech/.venv, затем
+#   espeech/.venv/Scripts/python -m pip install -r espeech/requirements.txt
+# torch — сборка с CUDA 13.2 с download.pytorch.org (колесо ~1,9 ГБ; программа для Windows и Docker берут только
+# нужные файлы, docs/espeech.md, «Поставка»). Python 3.14.7 — везде один: stream-tts, образ Docker
+# (Ubuntu 26.04), скачиваемый рантайм ESpeech (Windows и Docker); под cp314 у всех пакетов есть колёса win_amd64 и
+# manylinux x86_64. Версии здесь и в PACKAGES/*_TORCH packaging/pin-espeech.py — одни и те же.
+--extra-index-url https://download.pytorch.org/whl/cu132
+torch==2.14.1+cu132
+numpy==2.4.6
+safetensors==0.8.0
+onnxruntime==1.31.0
+tokenizers==0.23.3
+razdel==0.5.0
+psutil==7.2.2
+# ruaccent 1.5.8.3 ставится без зависимостей (transformers и huggingface_hub ему на этом пути не нужны):
+#   espeech/.venv/Scripts/python -m pip install --no-deps ruaccent==1.5.8.3
+# Для tools/espeech/prepare.py ещё onnx и huggingface_hub, для тестов — pytest:
+#   espeech/.venv/Scripts/python -m pip install onnx==1.23.2 huggingface_hub pytest

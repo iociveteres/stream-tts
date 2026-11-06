@@ -1,0 +1,19 @@
+/* В разработке: режим правки строк интерфейса (ui-edit.js) */
+#ui-edit-panel { position: fixed; left: 12px; bottom: 12px; z-index: 1000; max-width: min(420px, calc(100vw - 24px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / .3); }
+#ui-edit-panel input[type=search] { width: 100%; box-sizing: border-box; margin-top: 8px; }
+.ui-edit-list { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow-y: auto; margin-top: 6px; }
+.ui-edit-list button { text-align: left; border: 0; background: none; padding: 4px 6px; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 6px; }
+.ui-edit-list button:hover { background: var(--surface-2); }
+.ui-edit-list button.edited { color: var(--warn); }
+body.ui-edit-on .ui-edit-hover { outline: 2px dashed var(--warn) !important; outline-offset: 1px; cursor: text !important; }
+#ui-edit-dlg { width: min(640px, calc(100vw - 32px)); max-height: 85vh; }
+#ui-edit-dlg h3 { margin: 0 0 4px; }
+.ui-edit-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+.ui-edit-head { display: flex; gap: 8px; align-items: center; }
+.ui-edit-head button { margin-left: auto; padding: 2px 8px; font-size: 13px; }
+.ui-edit-mark { color: var(--warn); font-size: 13px; }
+.ui-edit-orig { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+.ui-edit-row textarea { font: inherit; min-height: 0; width: 100%; box-sizing: border-box; resize: vertical; }

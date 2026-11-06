@@ -1,0 +1,4 @@
+/* Заглушка libcurand.so.10 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+{
+  local: *;
+};

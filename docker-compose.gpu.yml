@@ -1,0 +1,33 @@
+# Запуск на видеокарте NVIDIA поверх docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+# (или ./setup.sh --gpu, который прописывает оба файла в .env)
+services:
+  # Образ тот же, что без видеокарты: CUDA качает кнопка на вкладке «Загрузки» в том ./cuda (install.py), а этот
+  # файл только даёт контейнеру видеокарту. Встроенный сервер сам выбирает CUDA и добавляет --llm-flash-attn 0
+  # (engines/cosyvoice/launch.py). compute — для CUDA, utility — для nvidia-smi на странице статистики.
+  stream-tts:
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  cosyvoice:
+    build:
+      args:
+        GPU: cuda
+    image: cosyvoice-server:cuda
+    # --llm-flash-attn 0: на CUDA flash attention в LLM даёт лишние звуки в начале фразы
+    # (а вместе с CUDA Graphs — мусор вместо речи); flow flash attention работает нормально.
+    command: ["--host", "0.0.0.0", "--port", "8080", "--webui", "--cuda", "--llm-flash-attn", "0"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

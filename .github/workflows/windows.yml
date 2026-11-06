@@ -1,0 +1,75 @@
+# Установщик StreamTTS для Windows: рантайм (build-runtime.py) → Nuitka (build-exe.py) → Inno Setup.
+# Запуск вручную (Actions → windows → Run workflow) или по тегу v*. Результат — артефакт StreamTTS-Setup, а по тегу
+# ещё и релиз на GitHub: установщик и latest.json, по которому программа узнаёт о новой версии (updates.py).
+# Тег — v<версия> из stream-tts/streamtts/__init__.py, аннотированный: его сообщение — «что нового» (release.py).
+name: windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  setup:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # gh release create
+    steps:
+      - uses: actions/checkout@v5
+
+      # До долгой сборки: тег совпадает с версией программы, репозиторий — с REPO в updates.py
+      - name: Версия
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python packaging/windows/release.py "${{ github.ref_name }}" --check
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      # Загрузки рантайма (~150 МБ, без CUDA: её программа качает сама из релиза llama.cpp) с закреплёнными
+      # sha256: ключ меняется вместе с версиями в build-runtime.py
+      - uses: actions/cache@v4
+        with:
+          path: packaging/windows/build/cache
+          key: runtime-${{ hashFiles('packaging/windows/build-runtime.py') }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ hashFiles('packaging/windows/requirements.txt', 'stream-tts/streamtts/*.py') }}
+          restore-keys: nuitka-
+
+      - name: Зависимости сборки
+        run: python -m pip install -r packaging/windows/requirements.txt
+
+      # Нужен Inno Setup 6.5+ (ExtractArchive, загрузки): на windows-latest — 6.7; если его нет — из Chocolatey
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      # DLL рантайма VC++ 14.51+ берутся из System32 образа (VC++ Redistributable 14.51.36247; redist VS 2022 — 14.44)
+      - name: Рантайм
+        run: python packaging/windows/build-runtime.py
+
+      - name: StreamTTS.exe и установщик
+        run: python packaging/windows/build-exe.py --setup
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StreamTTS-Setup
+          path: packaging/windows/dist/StreamTTS-Setup-*.exe
+          compression-level: 0
+
+      # checkout приносит тег без сообщения: забираем аннотированный тег целиком
+      - name: Релиз на GitHub
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          python packaging/windows/release.py "$TAG"
+          gh release create "$TAG" --title "StreamTTS ${TAG#v}" --notes-file packaging/windows/dist/notes.md \
+            packaging/windows/dist/StreamTTS-Setup-*.exe packaging/windows/dist/latest.json

@@ -1,0 +1,31 @@
+; Заглушка nvrtc64_130_0.dll: экспорт настоящей DLL (packaging/pin-espeech.py), сборка — build-runtime.py
+LIBRARY nvrtc64_130_0.dll
+EXPORTS
+  __nvrtcCPEx=stub_fail
+  __nvrtcNvvmHandle=stub_fail
+  nvrtcAddNameExpression=stub_fail
+  nvrtcCompileProgram=stub_fail
+  nvrtcCreateProgram=stub_fail
+  nvrtcDestroyProgram=stub_fail
+  nvrtcGetCUBIN=stub_fail
+  nvrtcGetCUBINSize=stub_fail
+  nvrtcGetErrorString=stub_str
+  nvrtcGetLTOIR=stub_fail
+  nvrtcGetLTOIRSize=stub_fail
+  nvrtcGetLoweredName=stub_str
+  nvrtcGetNumSupportedArchs=stub_fail
+  nvrtcGetOptiXIR=stub_fail
+  nvrtcGetOptiXIRSize=stub_fail
+  nvrtcGetPCHCreateStatus=stub_fail
+  nvrtcGetPCHHeapSize=stub_fail
+  nvrtcGetPCHHeapSizeRequired=stub_fail
+  nvrtcGetPTX=stub_fail
+  nvrtcGetPTXSize=stub_fail
+  nvrtcGetProgramLog=stub_fail
+  nvrtcGetProgramLogSize=stub_fail
+  nvrtcGetSupportedArchs=stub_fail
+  nvrtcGetTileIR=stub_fail
+  nvrtcGetTileIRSize=stub_fail
+  nvrtcSetFlowCallback=stub_fail
+  nvrtcSetPCHHeapSize=stub_fail
+  nvrtcVersion=stub_fail

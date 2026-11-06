@@ -1,0 +1,100 @@
+StreamTTS — MIT, см. licenses\StreamTTS-LICENSE.txt. Примеры звука
+моделей (streamtts\static\quants) синтезированы голосом из датасета
+ru_RU-denis, CC0: https://github.com/OHF-Voice/voice-datasets
+
+Ниже — всё стороннее, что ставит установщик и что программа может
+скачать по кнопке. Полные тексты лицензий — в папке программы:
+runtime\licenses\ (серверы синтеза и библиотеки рядом с ними) и
+licenses\ (Python и его пакеты).
+
+== В установщике ==
+
+cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, cosyvoice.dll) — MIT,
+  см. runtime\licenses\cosyvoice.cpp-LICENSE и
+  cosyvoice.cpp-THIRD_PARTY_NOTICES.md
+  https://github.com/Lourdle/cosyvoice.cpp
+  В его составе: PCRE2 — BSD-3-Clause WITH PCRE2-exception,
+  см. pcre2-LICENCE.md; cpp-httplib — MIT, см. cpp-httplib-LICENSE;
+  nlohmann/json — MIT, см. nlohmann-json-LICENSE.MIT
+GGML из llama.cpp b11500 (ggml*.dll) — MIT,
+  см. runtime\licenses\llama.cpp-LICENSE
+  https://github.com/ggml-org/llama.cpp
+LLVM OpenMP (libomp.dll) — Apache-2.0 with LLVM exception,
+  см. runtime\licenses\LICENSE-LLVM-OpenMP
+ONNX Runtime 1.30 (onnxruntime*.dll) — MIT,
+  см. runtime\licenses\onnxruntime-LICENSE и
+  onnxruntime-ThirdPartyNotices.txt
+  https://github.com/microsoft/onnxruntime
+ICU 78.3 (icu*.dll) — Unicode License v3,
+  см. runtime\licenses\icu-LICENSE
+  https://github.com/unicode-org/icu
+FFmpeg 8.1 (av*.dll, sw*.dll, ffmpeg.exe), сборка BtbN lgpl-shared —
+  LGPL 2.1 or later, см. runtime\licenses\ffmpeg-LICENSE.txt
+  Исходный код: https://github.com/FFmpeg/FFmpeg (ветка release/8.1)
+  Сборка: https://github.com/BtbN/FFmpeg-Builds
+espeech-server (runtime\espeech) — MIT; код модели в нём — по F5-TTS,
+  Vocos и x-transformers (MIT), см. runtime\licenses\espeech-THIRD-PARTY.txt
+supertonic-server (в StreamTTS.exe) — MIT; подготовка текста и синтез в нём —
+  перенос кода Supertone (MIT), см. licenses\supertonic-THIRD-PARTY.txt
+  https://github.com/supertone-inc/supertonic
+Рантайм Microsoft Visual C++ 14.51 (msvcp140*.dll, vcruntime140*.dll,
+  concrt140.dll в runtime\ и рядом с StreamTTS.exe) — лицензия Microsoft
+  на распространяемый код Visual Studio
+Python 3.14 (python314.dll, *.pyd) — PSF License 2.0,
+  см. licenses\python\LICENSE.txt
+  В его составе: OpenSSL (libssl-3.dll, libcrypto-3.dll) — Apache-2.0,
+  libffi — MIT, SQLite — public domain и другие (там же)
+Пакеты Python, см. licenses\<пакет>\: aiohttp — Apache-2.0 и MIT;
+  aiosignal, frozenlist, multidict, propcache, yarl — Apache-2.0;
+  aiohappyeyeballs — PSF-2.0; attrs — MIT; idna — BSD-3-Clause;
+  numpy (с OpenBLAS в numpy.libs) — BSD-3-Clause и другие;
+  onnxruntime 1.31 (onnxruntime\capi) — MIT, см. также
+  licenses\onnxruntime\ThirdPartyNotices.txt
+Nuitka (компилятор программы): его runtime в StreamTTS.exe — AGPLv3
+  с Nuitka Runtime Library Exception, которое разрешает распространять
+  собранную программу под любой лицензией,
+  см. licenses\nuitka\LICENSE-RUNTIME.txt
+
+== Скачивается по кнопке в программе ==
+
+Модель синтеза CosyVoice3 0.5B (GGUF) — Apache-2.0
+  https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+Создание голосов из записи: ONNX-фронтенд CosyVoice3 (речевой
+  токенизатор и CAM++) — Apache-2.0, оттуда же
+CUDA для видеокарт NVIDIA: ggml-cuda.dll — MIT (llama.cpp); CUDA Runtime
+  и cuBLAS (cudart64_13.dll, cublas64_13.dll, cublasLt64_13.dll) —
+  NVIDIA CUDA Toolkit EULA, распространяемые файлы:
+  https://docs.nvidia.com/cuda/eula/
+  Из релиза https://github.com/ggml-org/llama.cpp/releases/tag/b11500
+Очистка образца от музыки: Demucs v4 htdemucs в ONNX
+  https://huggingface.co/HRSadeghi/demucs-onnx
+  Код Demucs и экспорта — MIT, а веса обучены на MusDB и, по словам
+  автора Demucs, предназначены только для исследований
+  (https://github.com/facebookresearch/demucs/issues/327).
+Модель ESpeech:
+  веса ESpeech-TTS-1_SFT-256K
+  https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K
+  На Hugging Face указана Apache-2.0, но это, похоже, дообученная
+  F5-TTS, а её веса — CC-BY-NC-4.0 (только некоммерческое
+  использование): https://huggingface.co/SWivid/F5-TTS
+  вокодер Vocos (vocos-mel-24khz) — MIT,
+  https://huggingface.co/charactr/vocos-mel-24khz
+  ударения RUAccent 1.5.8.3 — Apache-2.0, его модели
+  (ruaccent/accentuator) — MIT, https://github.com/Den4ikAI/ruaccent
+  встраиваемый Python 3.14.7 — PSF License 2.0
+  PyTorch 2.14.1 — BSD-3-Clause и другие, библиотеки CUDA в нём —
+  NVIDIA CUDA Toolkit EULA
+  пакеты Python: numpy — BSD-3-Clause и другие;
+  psutil, protobuf, sympy, mpmath — BSD-3-Clause; onnxruntime,
+  razdel — MIT; safetensors, tokenizers, onnx, ml_dtypes — Apache-2.0;
+  typing_extensions — PSF-2.0. Тексты лицензий — в
+  espeech-runtime\Lib\site-packages\*.dist-info
+Модель Supertonic 3 (веса ONNX и 10 готовых голосов) — BigScience
+  OpenRAIL-M: ограничения использования (Attachment A лицензии) действуют
+  для всех, кто получает модель; программа показывает их перед загрузкой,
+  текст лицензии кладёт рядом с весами (models\supertonic\LICENSE)
+  https://huggingface.co/Supertone/supertonic-3
+Страница голосов в интернете: cloudflared 2026.10.7 — Apache-2.0
+  https://github.com/cloudflare/cloudflared; быстрый туннель
+  *.trycloudflare.com — сервис Cloudflare без аккаунта, без гарантий
+  доступности, по условиям Cloudflare: https://www.cloudflare.com/website-terms/

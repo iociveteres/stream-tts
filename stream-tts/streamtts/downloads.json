@@ -1,0 +1,977 @@
+{
+ "cuda": {
+  "windows": {
+   "version": "13.4-b11500",
+   "unpacked": 696204624,
+   "files": [
+    "ggml-cuda.dll",
+    "cublas64_13.dll",
+    "cublasLt64_13.dll",
+    "cudart64_13.dll"
+   ],
+   "archives": [
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/llama-b11500-bin-win-cuda-13.4-x64.zip",
+     "size": 153313982,
+     "sha256": "acc9413b9a1af8db6698b032e316297a2446056d7e7799e06304145dfa6e5b5e",
+     "unpacked": 197706525,
+     "files": [
+      "ggml-cuda.dll"
+     ]
+    },
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/cudart-llama-bin-win-cuda-13.4-x64.zip",
+     "size": 423535356,
+     "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
+     "unpacked": 548245840,
+     "files": [
+      "cublas64_13.dll",
+      "cublasLt64_13.dll",
+      "cudart64_13.dll"
+     ]
+    }
+   ]
+  },
+  "linux": {
+   "version": "13.4-b11500",
+   "unpacked": 766121600,
+   "files": [
+    "libggml-cuda.so",
+    "libcudart.so.13",
+    "libcublas.so.13",
+    "libcublasLt.so.13"
+   ],
+   "archives": [
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/llama-b11500-bin-ubuntu-cuda-13.4-x64.tar.gz",
+     "size": 152727636,
+     "sha256": "d00d0611f2994cc54658354deace1a4b164f12ac2691f10e5fbb2e0b10bab497",
+     "unpacked": 209212070,
+     "files": [
+      "libggml-cuda.so"
+     ]
+    },
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/cudart-llama-b11500-bin-ubuntu-cuda-13.4-x64.tar.gz",
+     "size": 440236541,
+     "sha256": "b3e8d1fca1062a1b4a6862edc0c70f8308ecb789af9c0dc7995aeacea449d791",
+     "unpacked": 603362352,
+     "files": [
+      "libcudart.so.13",
+      "libcublas.so.13",
+      "libcublasLt.so.13"
+     ]
+    }
+   ]
+  }
+ },
+ "model": {
+  "url": "https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF/resolve/ab01740bbbfcc059fd748163787554f7c8977e64/",
+  "quants": {
+   "Q8_0": {
+    "size": 943933536,
+    "sha256": "be133cb6154ca73cd1d213b1c9496def99ba9c1f7c14cd99f6b350af2eb7963d"
+   },
+   "Q6_K": {
+    "size": 839539424,
+    "sha256": "e6b5e34e413ec6def8e38113ff6e92416b0f3d580aa59d4766dc3dfdc854ff4a"
+   },
+   "Q5_K_M": {
+    "size": 682814464,
+    "sha256": "702b54d4e5d2d6c8d855081a5a2dc1acf046544291899f674295dc17a4f89f16"
+   }
+  }
+ },
+ "espeech": {
+  "runtime": {
+   "windows": {
+    "python": {
+     "url": "https://www.python.org/ftp/python/3.14.7/python-3.14.7-embed-amd64.zip",
+     "size": 12673227,
+     "sha256": "d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15"
+    },
+    "wheels": [
+     {
+      "url": "https://files.pythonhosted.org/packages/df/ac/46de6dda46478f7942f839e094970be2d4a861e005c4b3bf07c92e291a09/numpy-2.4.6-cp314-cp314-win_amd64.whl",
+      "size": 12450334,
+      "sha256": "b507f5c4c1d508876d1819b6bf9a49d365b96320b5d4993426b33a23ca4b8261"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
+      "size": 355540,
+      "sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/6a/66/0bf4fdb9f58efa69cf4eddde24c72aebcc628d6ff1d67c9546145c6b9922/onnxruntime-1.31.0-cp314-cp314-win_amd64.whl",
+      "size": 15268709,
+      "sha256": "83e3dbcf6abc6189c4bdf7d329c07ba1133c88172134c266d84b4409aa3b9dbf"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/d1/6c/24f074c9a0efb98e61b20aafe6b2641922d5db24e447d5d6daffd9e17555/tokenizers-0.23.3-cp310-abi3-win_amd64.whl",
+      "size": 2872101,
+      "sha256": "1f0823bb00c5fdc98e487354d54dd55a03848d61a1a0bf29a68c77f24f3b26c3"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/15/2c/664223a3924aa6e70479f7d37220b3a658765b9cfe760b4af7ffdc50d38f/razdel-0.5.0-py3-none-any.whl",
+      "size": 21149,
+      "sha256": "76f59691c3216b47d32fef6274c18c12d61f602f1444b7ef4b135b03801f6d37"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba807a03511f97c5f86b3caeda6ad92351a7/psutil-7.2.2-cp37-abi3-win_amd64.whl",
+      "size": 137737,
+      "sha256": "eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/0f/ba/d0033444205367e6eaeacc6a141013dab67ee483edaa0e0278ac0389a8ce/ruaccent-1.5.8.3-py2.py3-none-any.whl",
+      "size": 22304,
+      "sha256": "35c220a07aa9c3c11574a6be7eb5a4dbe4c5f60be58cafb80e9c6d0796eb05b1"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+      "size": 45571,
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/38/ce/102fd4a0b2a6d111a9c86745e084c4c68c0ee020eaa359a03a8d43e4646f/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+      "size": 7872489,
+      "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+      "size": 456514,
+      "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/ff/ad/9c32c53f823dda3742df19a79c10bc198365937873ea125ba65747440c23/ml_dtypes-0.6.0-cp314-cp314-win_amd64.whl",
+      "size": 457224,
+      "sha256": "d574c2b28921dc72e869df248f1a278f6eee176a1f237c8642e1a71eb15f3977"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+      "size": 6299353,
+      "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "size": 536198,
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+     }
+    ],
+    "torch": {
+     "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-win_amd64.whl",
+     "size": 2001146779,
+     "tail": 1999985312,
+     "tail_sha256": "9eafe70b299b616990b359a6a56bbb3b73ef565da477b7b7ebcd00b81dbee038",
+     "exclude": [
+      "torch/lib/curand64*",
+      "torch/lib/cusolverMg*",
+      "torch/lib/cufftw*",
+      "torch/lib/nvperf_host*",
+      "torch/lib/nvJitLink*",
+      "torch/lib/*.lib",
+      "torch/lib/*.h",
+      "torch/include/*",
+      "torch/bin/*",
+      "torch/share/*",
+      "torch/lib/cudnn*",
+      "torch/lib/cusparse*",
+      "torch/lib/cusolver*",
+      "torch/lib/nvrtc*",
+      "torch/lib/cufft*",
+      "torch/lib/cublas*",
+      "torch/lib/cudart*"
+     ],
+     "digest": "9284d826326253f26be2634632a96d4c4eef949db0d2ac55393f83daa6d2182c",
+     "unpacked": 818319973,
+     "download": 454992275
+    },
+    "stubs": [
+     "cudnn64_9.dll",
+     "cusparse64_12.dll",
+     "cusolver64_12.dll",
+     "nvrtc64_130_0.dll",
+     "cufft64_12.dll"
+    ],
+    "cublas": [
+     "cublas64_13.dll",
+     "cublasLt64_13.dll"
+    ]
+   },
+   "linux": {
+    "python": {
+     "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260929/cpython-3.14.7%2B20260929-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+     "size": 36262931,
+     "sha256": "da5357f47b1d9c8d4c439004d463d893ef688a44c27438a62b47073d26d1377e",
+     "exclude": [
+      "python/share/*",
+      "python/include/*",
+      "python/bin/idle*",
+      "python/bin/pip*",
+      "python/bin/pydoc*",
+      "python/bin/*-config",
+      "python/lib/pkgconfig/*",
+      "python/lib/libpython3*",
+      "python/lib/libtcl*",
+      "python/lib/libtk*",
+      "python/lib/tcl*",
+      "python/lib/tk*",
+      "python/lib/itcl*",
+      "python/lib/thread*",
+      "python/lib/python3.14/site-packages/*",
+      "python/lib/python3.14/ensurepip/*",
+      "python/lib/python3.14/idlelib/*",
+      "python/lib/python3.14/tkinter/*",
+      "python/lib/python3.14/turtledemo/*",
+      "python/lib/python3.14/lib-dynload/_tkinter*"
+     ]
+    },
+    "wheels": [
+     {
+      "url": "https://files.pythonhosted.org/packages/f3/eb/ebffaa97dc55502df69584a8f0dcf07f69a3e0b3e2323670a2722db9aa39/numpy-2.4.6-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 16638245,
+      "sha256": "a2c306dea656c12c68f51f4cea133cbe78ca7435eb28c735eac1d3ebe73be6e8"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/28/50/f203ff3a3ddfe19308efc83c5a3a29ed02bf786732ec35e68bf9162f3365/safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "size": 516040,
+      "sha256": "fd6f3f93c9a0a7cc2788ee63fb763353d4bd2e89b0751bc78fcf7dda00bea774"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/30/2e/5c6ec7e26a097e97ee70f2dee68b8ca4d9d26701f2f33c3f8ab585cb89fe/onnxruntime-1.31.0-cp314-cp314-manylinux_2_28_x86_64.whl",
+      "size": 23762993,
+      "sha256": "e4efa4a1a0bb0b5173c6a3292c181d518b8323f9d56e978635d0c09d38c94d1a"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/3a/40/6706b82693715581457c6d5423eaa7faae576bb0526c5738a57085eb4449/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "size": 3396193,
+      "sha256": "376851d22bcf9d650a5c3090bb83e6cf9e895fbf0595369fa4cd43c1f69b5f87"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/15/2c/664223a3924aa6e70479f7d37220b3a658765b9cfe760b4af7ffdc50d38f/razdel-0.5.0-py3-none-any.whl",
+      "size": 21149,
+      "sha256": "76f59691c3216b47d32fef6274c18c12d61f602f1444b7ef4b135b03801f6d37"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/b5/70/5d8df3b09e25bce090399cf48e452d25c935ab72dad19406c77f4e828045/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 155560,
+      "sha256": "076a2d2f923fd4821644f5ba89f059523da90dc9014e85f8e45a5774ca5bc6f9"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/0f/ba/d0033444205367e6eaeacc6a141013dab67ee483edaa0e0278ac0389a8ce/ruaccent-1.5.8.3-py2.py3-none-any.whl",
+      "size": 22304,
+      "sha256": "35c220a07aa9c3c11574a6be7eb5a4dbe4c5f60be58cafb80e9c6d0796eb05b1"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+      "size": 45571,
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/87/56/21509a657f9a73ab0ca307d325043f49ca6c4ff6bf79edeb9e159190d44d/onnx-1.23.2-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 8881633,
+      "sha256": "7abf381d278f31ac62487fddedc9dd42da842dce94d5d43536836ee3efdf4a2b"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/db/f3/3996583dd2906297a637af12114deddf7658af6e683fedb83be061983fb5/protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl",
+      "size": 343223,
+      "sha256": "89f23aa53c24553a2416fd4fd1ec06f74fa42b14b546d8883128813f775bbfd2"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/1c/b1/1831dd8c9b06c013085d31a2ac4f03392d43bd36bfc6ff591a08bcedc1cf/ml_dtypes-0.6.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "size": 409966,
+      "sha256": "8f490c003369ce60e514a0c3b12374f05274c101fee1bead6740ec8a564032b0"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+      "size": 6299353,
+      "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+     },
+     {
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "size": 536198,
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+     }
+    ],
+    "torch": {
+     "url": "https://download.pytorch.org/whl/cu132/torch-2.14.1%2Bcu132-cp314-cp314-manylinux_2_28_x86_64.whl",
+     "size": 559168974,
+     "tail": 557940573,
+     "tail_sha256": "6a44e09c6cef91329b06c5c9de37979b19710fc751db2503070d1cc6c609fd2f",
+     "exclude": [
+      "torch/include/*",
+      "torch/bin/protoc*",
+      "torch/share/*",
+      "torch/lib/libshm/*",
+      "torch/lib/libshm_windows/*",
+      "torch/lib/libtorch_cuda_linalg.so"
+     ],
+     "digest": "15b09d4677b40dfced2c4cf7927162a71eb8d724fc4cf585da8082595be81b12",
+     "unpacked": 1059471433,
+     "download": 510544233
+    },
+    "stubs": [
+     "libcudnn.so.9",
+     "libcusparse.so.12",
+     "libcufft.so.12",
+     "libnvrtc.so.13",
+     "libcupti.so.13",
+     "libnccl.so.2",
+     "libcusparseLt.so.0",
+     "libcufile.so.0",
+     "libcurand.so.10",
+     "libnvshmem_host.so.3"
+    ],
+    "cublas": [
+     "libcudart.so.13",
+     "libcublasLt.so.13",
+     "libcublas.so.13"
+    ]
+   }
+  },
+  "model": {
+   "files": [
+    {
+     "url": "https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K/resolve/2bd8087e9b7e3a89e7b546e2fb1893f2f0ba137c/vocab.txt",
+     "path": "ESpeech/ESpeech-TTS-1_SFT-256K/vocab.txt",
+     "size": 13800,
+     "sha256": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+    },
+    {
+     "url": "https://huggingface.co/charactr/vocos-mel-24khz/resolve/0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21/pytorch_model.bin",
+     "path": "charactr/vocos-mel-24khz/pytorch_model.bin",
+     "size": 54365991,
+     "sha256": "97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/dictionary/accents.json.gz",
+     "path": "ruaccent/accentuator/dictionary/accents.json.gz",
+     "size": 20954156,
+     "sha256": "aa460ebba90de00fbbf3d41d121961f605b98667e45efb7920f127473b15515e"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/dictionary/omographs.json.gz",
+     "path": "ruaccent/accentuator/dictionary/omographs.json.gz",
+     "size": 219047,
+     "sha256": "04a9e81c68d65f65ba493fe0110f99e79087548c2beeec3032e2b66e28706f36"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/dictionary/yo_words.json.gz",
+     "path": "ruaccent/accentuator/dictionary/yo_words.json.gz",
+     "size": 548914,
+     "sha256": "a19fa89a964a0691d9fe4ee384783e3934904891843d8f59a1c480d67947a82a"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/dictionary/yo_homographs.json.gz",
+     "path": "ruaccent/accentuator/dictionary/yo_homographs.json.gz",
+     "size": 5747,
+     "sha256": "c4ee777bbbab87f9eac838f370ad92974e079d02b21903e480c54b5f0c8c60d1"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_omograph/turbo3.1/model.onnx",
+     "path": "ruaccent/accentuator/nn/nn_omograph/turbo3.1/model.onnx",
+     "size": 359306923,
+     "sha256": "2cb6a174c4cdb45bd3132b4f7c8a3779fc4b6869863180ed7d0e421bcd453dbd"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_omograph/turbo3.1/config.json",
+     "path": "ruaccent/accentuator/nn/nn_omograph/turbo3.1/config.json",
+     "size": 723,
+     "sha256": "fa47e006d2a15a164d36e0303b5f8344a795f2108a3e55724133a87710216136"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_omograph/turbo3.1/tokenizer_config.json",
+     "path": "ruaccent/accentuator/nn/nn_omograph/turbo3.1/tokenizer_config.json",
+     "size": 492,
+     "sha256": "f159df92d0b0be03e1ceb0768222aa4c21dcfd37c5763b6b395b6864e023c7fb"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_omograph/turbo3.1/special_tokens_map.json",
+     "path": "ruaccent/accentuator/nn/nn_omograph/turbo3.1/special_tokens_map.json",
+     "size": 280,
+     "sha256": "06e405a36dfe4b9604f484f6a1e619af1a7f7d09e34a8555eb0b77b66318067f"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_omograph/turbo3.1/tokenizer.json",
+     "path": "ruaccent/accentuator/nn/nn_omograph/turbo3.1/tokenizer.json",
+     "size": 5532343,
+     "sha256": "eb84a77af38a91f6f327486c7827d8541f8d446250f8d408909999b6be817afa"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_accent/model.onnx",
+     "path": "ruaccent/accentuator/nn/nn_accent/model.onnx",
+     "size": 803402,
+     "sha256": "4e393144e45626f6f1062a0784ef06f921b97321a8e7b87ac2a09a892286500a"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_accent/config.json",
+     "path": "ruaccent/accentuator/nn/nn_accent/config.json",
+     "size": 841,
+     "sha256": "e377f159a8fc8673e211f100d4a237d5fe3dceb3b6789a5a738bf50bda23be49"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_accent/tokenizer_config.json",
+     "path": "ruaccent/accentuator/nn/nn_accent/tokenizer_config.json",
+     "size": 257,
+     "sha256": "efea18a18af2809330eb0f431ab86979304d2559571e887de7b6359e3f18f0d8"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_accent/special_tokens_map.json",
+     "path": "ruaccent/accentuator/nn/nn_accent/special_tokens_map.json",
+     "size": 99,
+     "sha256": "2acac3fb89054158ccbeff3c52744ca93979f738002709c0aea001597213024b"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_accent/vocab.txt",
+     "path": "ruaccent/accentuator/nn/nn_accent/vocab.txt",
+     "size": 140,
+     "sha256": "242882b2f27800e49a6babf46867dabf6dc9b6535b600776a68815fe4d4f4382"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_stress_usage_predictor/model.onnx",
+     "path": "ruaccent/accentuator/nn/nn_stress_usage_predictor/model.onnx",
+     "size": 116473561,
+     "sha256": "3d547500637b4ddfec8880ed6d1405fd50ee9d3f0131ef8a2a69dcf961dbefeb"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_stress_usage_predictor/config.json",
+     "path": "ruaccent/accentuator/nn/nn_stress_usage_predictor/config.json",
+     "size": 822,
+     "sha256": "aa0638edf56254f123e593e96f034c2b5e68303ac207b29f64f0878dc4c22631"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_stress_usage_predictor/tokenizer_config.json",
+     "path": "ruaccent/accentuator/nn/nn_stress_usage_predictor/tokenizer_config.json",
+     "size": 368,
+     "sha256": "4466c2e475c434d35bce0f4a46f918730155386b50582fa3742b7b7d67897e96"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_stress_usage_predictor/special_tokens_map.json",
+     "path": "ruaccent/accentuator/nn/nn_stress_usage_predictor/special_tokens_map.json",
+     "size": 125,
+     "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_stress_usage_predictor/tokenizer.json",
+     "path": "ruaccent/accentuator/nn/nn_stress_usage_predictor/tokenizer.json",
+     "size": 2413536,
+     "sha256": "ce51cde5df60ecb167abec4c90db11360482150628f7a91f3e316df6d6ff6f6f"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_yo_homograph_resolver/model.onnx",
+     "path": "ruaccent/accentuator/nn/nn_yo_homograph_resolver/model.onnx",
+     "size": 14332169,
+     "sha256": "42cc85bf0c4b319dfe3d89fa17b162a92fd5e1c651a657cb3d5f44978d4e70ac"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_yo_homograph_resolver/config.json",
+     "path": "ruaccent/accentuator/nn/nn_yo_homograph_resolver/config.json",
+     "size": 625,
+     "sha256": "adf7fd2c67be1498071f447ec4a23dbe84904c49f95d1d3e6c7d9df269b9a2e9"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_yo_homograph_resolver/tokenizer_config.json",
+     "path": "ruaccent/accentuator/nn/nn_yo_homograph_resolver/tokenizer_config.json",
+     "size": 401,
+     "sha256": "804b8a4b4a02c9d38af8c88706206718759061ff9a102ad8483e9ac00011188c"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_yo_homograph_resolver/special_tokens_map.json",
+     "path": "ruaccent/accentuator/nn/nn_yo_homograph_resolver/special_tokens_map.json",
+     "size": 125,
+     "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+     "url": "https://huggingface.co/ruaccent/accentuator/resolve/b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855/nn/nn_yo_homograph_resolver/tokenizer.json",
+     "path": "ruaccent/accentuator/nn/nn_yo_homograph_resolver/tokenizer.json",
+     "size": 126952,
+     "sha256": "f2bf174f2fe62ff11c28d56555f9c0cf16b24e162ef53bcf42ff85ebcf6ebfa8"
+    }
+   ],
+   "checkpoint": {
+    "url": "https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K/resolve/2bd8087e9b7e3a89e7b546e2fb1893f2f0ba137c/espeech_tts_256k.pt",
+    "size": 2697097675,
+    "tail": 2697041720,
+    "tail_sha256": "93d9973118fb7ad64ecc74096a0425bafc816f4519a44f97adb5b6b63335d536",
+    "members": [
+     "model_265000_stripped/data.pkl",
+     "model_265000_stripped/data/364",
+     "model_265000_stripped/data/365",
+     "model_265000_stripped/data/366",
+     "model_265000_stripped/data/367",
+     "model_265000_stripped/data/368",
+     "model_265000_stripped/data/369",
+     "model_265000_stripped/data/370",
+     "model_265000_stripped/data/371",
+     "model_265000_stripped/data/372",
+     "model_265000_stripped/data/373",
+     "model_265000_stripped/data/374",
+     "model_265000_stripped/data/375",
+     "model_265000_stripped/data/376",
+     "model_265000_stripped/data/377",
+     "model_265000_stripped/data/378",
+     "model_265000_stripped/data/379",
+     "model_265000_stripped/data/380",
+     "model_265000_stripped/data/381",
+     "model_265000_stripped/data/382",
+     "model_265000_stripped/data/383",
+     "model_265000_stripped/data/384",
+     "model_265000_stripped/data/385",
+     "model_265000_stripped/data/386",
+     "model_265000_stripped/data/387",
+     "model_265000_stripped/data/388",
+     "model_265000_stripped/data/389",
+     "model_265000_stripped/data/390",
+     "model_265000_stripped/data/391",
+     "model_265000_stripped/data/392",
+     "model_265000_stripped/data/393",
+     "model_265000_stripped/data/394",
+     "model_265000_stripped/data/395",
+     "model_265000_stripped/data/396",
+     "model_265000_stripped/data/397",
+     "model_265000_stripped/data/398",
+     "model_265000_stripped/data/399",
+     "model_265000_stripped/data/400",
+     "model_265000_stripped/data/401",
+     "model_265000_stripped/data/402",
+     "model_265000_stripped/data/403",
+     "model_265000_stripped/data/404",
+     "model_265000_stripped/data/405",
+     "model_265000_stripped/data/406",
+     "model_265000_stripped/data/407",
+     "model_265000_stripped/data/408",
+     "model_265000_stripped/data/409",
+     "model_265000_stripped/data/410",
+     "model_265000_stripped/data/411",
+     "model_265000_stripped/data/412",
+     "model_265000_stripped/data/413",
+     "model_265000_stripped/data/414",
+     "model_265000_stripped/data/415",
+     "model_265000_stripped/data/416",
+     "model_265000_stripped/data/417",
+     "model_265000_stripped/data/418",
+     "model_265000_stripped/data/419",
+     "model_265000_stripped/data/420",
+     "model_265000_stripped/data/421",
+     "model_265000_stripped/data/422",
+     "model_265000_stripped/data/423",
+     "model_265000_stripped/data/424",
+     "model_265000_stripped/data/425",
+     "model_265000_stripped/data/426",
+     "model_265000_stripped/data/427",
+     "model_265000_stripped/data/428",
+     "model_265000_stripped/data/429",
+     "model_265000_stripped/data/430",
+     "model_265000_stripped/data/431",
+     "model_265000_stripped/data/432",
+     "model_265000_stripped/data/433",
+     "model_265000_stripped/data/434",
+     "model_265000_stripped/data/435",
+     "model_265000_stripped/data/436",
+     "model_265000_stripped/data/437",
+     "model_265000_stripped/data/438",
+     "model_265000_stripped/data/439",
+     "model_265000_stripped/data/440",
+     "model_265000_stripped/data/441",
+     "model_265000_stripped/data/442",
+     "model_265000_stripped/data/443",
+     "model_265000_stripped/data/444",
+     "model_265000_stripped/data/445",
+     "model_265000_stripped/data/446",
+     "model_265000_stripped/data/447",
+     "model_265000_stripped/data/448",
+     "model_265000_stripped/data/449",
+     "model_265000_stripped/data/450",
+     "model_265000_stripped/data/451",
+     "model_265000_stripped/data/452",
+     "model_265000_stripped/data/453",
+     "model_265000_stripped/data/454",
+     "model_265000_stripped/data/455",
+     "model_265000_stripped/data/456",
+     "model_265000_stripped/data/457",
+     "model_265000_stripped/data/458",
+     "model_265000_stripped/data/459",
+     "model_265000_stripped/data/460",
+     "model_265000_stripped/data/461",
+     "model_265000_stripped/data/462",
+     "model_265000_stripped/data/463",
+     "model_265000_stripped/data/464",
+     "model_265000_stripped/data/465",
+     "model_265000_stripped/data/466",
+     "model_265000_stripped/data/467",
+     "model_265000_stripped/data/468",
+     "model_265000_stripped/data/469",
+     "model_265000_stripped/data/470",
+     "model_265000_stripped/data/471",
+     "model_265000_stripped/data/472",
+     "model_265000_stripped/data/473",
+     "model_265000_stripped/data/474",
+     "model_265000_stripped/data/475",
+     "model_265000_stripped/data/476",
+     "model_265000_stripped/data/477",
+     "model_265000_stripped/data/478",
+     "model_265000_stripped/data/479",
+     "model_265000_stripped/data/480",
+     "model_265000_stripped/data/481",
+     "model_265000_stripped/data/482",
+     "model_265000_stripped/data/483",
+     "model_265000_stripped/data/484",
+     "model_265000_stripped/data/485",
+     "model_265000_stripped/data/486",
+     "model_265000_stripped/data/487",
+     "model_265000_stripped/data/488",
+     "model_265000_stripped/data/489",
+     "model_265000_stripped/data/490",
+     "model_265000_stripped/data/491",
+     "model_265000_stripped/data/492",
+     "model_265000_stripped/data/493",
+     "model_265000_stripped/data/494",
+     "model_265000_stripped/data/495",
+     "model_265000_stripped/data/496",
+     "model_265000_stripped/data/497",
+     "model_265000_stripped/data/498",
+     "model_265000_stripped/data/499",
+     "model_265000_stripped/data/500",
+     "model_265000_stripped/data/501",
+     "model_265000_stripped/data/502",
+     "model_265000_stripped/data/503",
+     "model_265000_stripped/data/504",
+     "model_265000_stripped/data/505",
+     "model_265000_stripped/data/506",
+     "model_265000_stripped/data/507",
+     "model_265000_stripped/data/508",
+     "model_265000_stripped/data/509",
+     "model_265000_stripped/data/510",
+     "model_265000_stripped/data/511",
+     "model_265000_stripped/data/512",
+     "model_265000_stripped/data/513",
+     "model_265000_stripped/data/514",
+     "model_265000_stripped/data/515",
+     "model_265000_stripped/data/516",
+     "model_265000_stripped/data/517",
+     "model_265000_stripped/data/518",
+     "model_265000_stripped/data/519",
+     "model_265000_stripped/data/520",
+     "model_265000_stripped/data/521",
+     "model_265000_stripped/data/522",
+     "model_265000_stripped/data/523",
+     "model_265000_stripped/data/524",
+     "model_265000_stripped/data/525",
+     "model_265000_stripped/data/526",
+     "model_265000_stripped/data/527",
+     "model_265000_stripped/data/528",
+     "model_265000_stripped/data/529",
+     "model_265000_stripped/data/530",
+     "model_265000_stripped/data/531",
+     "model_265000_stripped/data/532",
+     "model_265000_stripped/data/533",
+     "model_265000_stripped/data/534",
+     "model_265000_stripped/data/535",
+     "model_265000_stripped/data/536",
+     "model_265000_stripped/data/537",
+     "model_265000_stripped/data/538",
+     "model_265000_stripped/data/539",
+     "model_265000_stripped/data/540",
+     "model_265000_stripped/data/541",
+     "model_265000_stripped/data/542",
+     "model_265000_stripped/data/543",
+     "model_265000_stripped/data/544",
+     "model_265000_stripped/data/545",
+     "model_265000_stripped/data/546",
+     "model_265000_stripped/data/547",
+     "model_265000_stripped/data/548",
+     "model_265000_stripped/data/549",
+     "model_265000_stripped/data/550",
+     "model_265000_stripped/data/551",
+     "model_265000_stripped/data/552",
+     "model_265000_stripped/data/553",
+     "model_265000_stripped/data/554",
+     "model_265000_stripped/data/555",
+     "model_265000_stripped/data/556",
+     "model_265000_stripped/data/557",
+     "model_265000_stripped/data/558",
+     "model_265000_stripped/data/559",
+     "model_265000_stripped/data/560",
+     "model_265000_stripped/data/561",
+     "model_265000_stripped/data/562",
+     "model_265000_stripped/data/563",
+     "model_265000_stripped/data/564",
+     "model_265000_stripped/data/565",
+     "model_265000_stripped/data/566",
+     "model_265000_stripped/data/567",
+     "model_265000_stripped/data/568",
+     "model_265000_stripped/data/569",
+     "model_265000_stripped/data/570",
+     "model_265000_stripped/data/571",
+     "model_265000_stripped/data/572",
+     "model_265000_stripped/data/573",
+     "model_265000_stripped/data/574",
+     "model_265000_stripped/data/575",
+     "model_265000_stripped/data/576",
+     "model_265000_stripped/data/577",
+     "model_265000_stripped/data/578",
+     "model_265000_stripped/data/579",
+     "model_265000_stripped/data/580",
+     "model_265000_stripped/data/581",
+     "model_265000_stripped/data/582",
+     "model_265000_stripped/data/583",
+     "model_265000_stripped/data/584",
+     "model_265000_stripped/data/585",
+     "model_265000_stripped/data/586",
+     "model_265000_stripped/data/587",
+     "model_265000_stripped/data/588",
+     "model_265000_stripped/data/589",
+     "model_265000_stripped/data/590",
+     "model_265000_stripped/data/591",
+     "model_265000_stripped/data/592",
+     "model_265000_stripped/data/593",
+     "model_265000_stripped/data/594",
+     "model_265000_stripped/data/595",
+     "model_265000_stripped/data/596",
+     "model_265000_stripped/data/597",
+     "model_265000_stripped/data/598",
+     "model_265000_stripped/data/599",
+     "model_265000_stripped/data/600",
+     "model_265000_stripped/data/601",
+     "model_265000_stripped/data/602",
+     "model_265000_stripped/data/603",
+     "model_265000_stripped/data/604",
+     "model_265000_stripped/data/605",
+     "model_265000_stripped/data/606",
+     "model_265000_stripped/data/607",
+     "model_265000_stripped/data/608",
+     "model_265000_stripped/data/609",
+     "model_265000_stripped/data/610",
+     "model_265000_stripped/data/611",
+     "model_265000_stripped/data/612",
+     "model_265000_stripped/data/613",
+     "model_265000_stripped/data/614",
+     "model_265000_stripped/data/615",
+     "model_265000_stripped/data/616",
+     "model_265000_stripped/data/617",
+     "model_265000_stripped/data/618",
+     "model_265000_stripped/data/619",
+     "model_265000_stripped/data/620",
+     "model_265000_stripped/data/621",
+     "model_265000_stripped/data/622",
+     "model_265000_stripped/data/623",
+     "model_265000_stripped/data/624",
+     "model_265000_stripped/data/625",
+     "model_265000_stripped/data/626",
+     "model_265000_stripped/data/627",
+     "model_265000_stripped/data/628",
+     "model_265000_stripped/data/629",
+     "model_265000_stripped/data/630",
+     "model_265000_stripped/data/631",
+     "model_265000_stripped/data/632",
+     "model_265000_stripped/data/633",
+     "model_265000_stripped/data/634",
+     "model_265000_stripped/data/635",
+     "model_265000_stripped/data/636",
+     "model_265000_stripped/data/637",
+     "model_265000_stripped/data/638",
+     "model_265000_stripped/data/639",
+     "model_265000_stripped/data/640",
+     "model_265000_stripped/data/641",
+     "model_265000_stripped/data/642",
+     "model_265000_stripped/data/643",
+     "model_265000_stripped/data/644",
+     "model_265000_stripped/data/645",
+     "model_265000_stripped/data/646",
+     "model_265000_stripped/data/647",
+     "model_265000_stripped/data/648",
+     "model_265000_stripped/data/649",
+     "model_265000_stripped/data/650",
+     "model_265000_stripped/data/651",
+     "model_265000_stripped/data/652",
+     "model_265000_stripped/data/653",
+     "model_265000_stripped/data/654",
+     "model_265000_stripped/data/655",
+     "model_265000_stripped/data/656",
+     "model_265000_stripped/data/657",
+     "model_265000_stripped/data/658",
+     "model_265000_stripped/data/659",
+     "model_265000_stripped/data/660",
+     "model_265000_stripped/data/661",
+     "model_265000_stripped/data/662",
+     "model_265000_stripped/data/663",
+     "model_265000_stripped/data/664",
+     "model_265000_stripped/data/665",
+     "model_265000_stripped/data/666",
+     "model_265000_stripped/data/667",
+     "model_265000_stripped/data/668",
+     "model_265000_stripped/data/669",
+     "model_265000_stripped/data/670",
+     "model_265000_stripped/data/671",
+     "model_265000_stripped/data/672",
+     "model_265000_stripped/data/673",
+     "model_265000_stripped/data/674",
+     "model_265000_stripped/data/675",
+     "model_265000_stripped/data/676",
+     "model_265000_stripped/data/677",
+     "model_265000_stripped/data/678",
+     "model_265000_stripped/data/679",
+     "model_265000_stripped/data/680",
+     "model_265000_stripped/data/681",
+     "model_265000_stripped/data/682",
+     "model_265000_stripped/data/683",
+     "model_265000_stripped/data/684",
+     "model_265000_stripped/data/685",
+     "model_265000_stripped/data/686",
+     "model_265000_stripped/data/687",
+     "model_265000_stripped/data/688",
+     "model_265000_stripped/data/689",
+     "model_265000_stripped/data/690",
+     "model_265000_stripped/data/691",
+     "model_265000_stripped/data/692",
+     "model_265000_stripped/data/693",
+     "model_265000_stripped/data/694",
+     "model_265000_stripped/data/695",
+     "model_265000_stripped/data/696",
+     "model_265000_stripped/data/697",
+     "model_265000_stripped/data/698",
+     "model_265000_stripped/data/699",
+     "model_265000_stripped/data/700",
+     "model_265000_stripped/data/701",
+     "model_265000_stripped/data/702",
+     "model_265000_stripped/data/703",
+     "model_265000_stripped/data/704",
+     "model_265000_stripped/data/705",
+     "model_265000_stripped/data/706",
+     "model_265000_stripped/data/707",
+     "model_265000_stripped/data/708",
+     "model_265000_stripped/data/709",
+     "model_265000_stripped/data/710",
+     "model_265000_stripped/data/711",
+     "model_265000_stripped/data/712",
+     "model_265000_stripped/data/713",
+     "model_265000_stripped/data/714",
+     "model_265000_stripped/data/715",
+     "model_265000_stripped/data/716",
+     "model_265000_stripped/data/717",
+     "model_265000_stripped/data/718",
+     "model_265000_stripped/data/719",
+     "model_265000_stripped/data/720",
+     "model_265000_stripped/data/721",
+     "model_265000_stripped/data/722",
+     "model_265000_stripped/data/723",
+     "model_265000_stripped/data/724",
+     "model_265000_stripped/data/725",
+     "model_265000_stripped/data/726",
+     "model_265000_stripped/data/727",
+     "model_265000_stripped/data/728",
+     "model_265000_stripped/data/729"
+    ],
+    "digest": "f7659d380d43bf880e289c939f6ce21b8b428ed1adf2c049d60ee5dbf0202987",
+    "unpacked": 1348560230,
+    "download": 1348663088,
+    "path": "ESpeech/ESpeech-TTS-1_SFT-256K/espeech_tts_256k.pt"
+   }
+  }
+ },
+ "supertonic": {
+  "repo": "Supertone/supertonic-3",
+  "revision": "3cadd1ee6394adea1bd021217a0e650ede09a323",
+  "url": "https://huggingface.co/Supertone/supertonic-3/resolve/3cadd1ee6394adea1bd021217a0e650ede09a323",
+  "license": "https://huggingface.co/Supertone/supertonic-3/blob/3cadd1ee6394adea1bd021217a0e650ede09a323/LICENSE",
+  "files": [
+   {
+    "path": "onnx/duration_predictor.onnx",
+    "size": 3700147,
+    "sha256": "c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db"
+   },
+   {
+    "path": "onnx/text_encoder.onnx",
+    "size": 36416150,
+    "sha256": "c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff"
+   },
+   {
+    "path": "onnx/vector_estimator.onnx",
+    "size": 256534781,
+    "sha256": "883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c"
+   },
+   {
+    "path": "onnx/vocoder.onnx",
+    "size": 101424195,
+    "sha256": "085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba"
+   },
+   {
+    "path": "onnx/tts.json",
+    "size": 8253,
+    "sha256": "42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09"
+   },
+   {
+    "path": "onnx/unicode_indexer.json",
+    "size": 277676,
+    "sha256": "9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f"
+   },
+   {
+    "path": "voice_styles/F1.json",
+    "size": 292046,
+    "sha256": "bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2"
+   },
+   {
+    "path": "voice_styles/F2.json",
+    "size": 292423,
+    "sha256": "7c722c6a72707b1a77f035d67f0d1351ba187738e06f7683e8c72b1df3477fc6"
+   },
+   {
+    "path": "voice_styles/F3.json",
+    "size": 290794,
+    "sha256": "12f6ef2573baa2defa1128069cb59f203e3ab67c92af77b42df8a0e3a2f7c6ab"
+   },
+   {
+    "path": "voice_styles/F4.json",
+    "size": 291808,
+    "sha256": "c2fa764c1225a76dfc3e2c73e8aa4f70d9ee48793860eb34c295fff01c2e032b"
+   },
+   {
+    "path": "voice_styles/F5.json",
+    "size": 291479,
+    "sha256": "45966e73316415626cf41a7d1c6f3b4c70dbc1ba2bee5c1978ef0ce33244fc8d"
+   },
+   {
+    "path": "voice_styles/M1.json",
+    "size": 291748,
+    "sha256": "e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b"
+   },
+   {
+    "path": "voice_styles/M2.json",
+    "size": 292055,
+    "sha256": "b76cbf62bac707c710cf0ae5aba5e31eea1a6339a9734bfae33ab98499534a50"
+   },
+   {
+    "path": "voice_styles/M3.json",
+    "size": 290198,
+    "sha256": "ea1ac35ccb91b0d7ecad533a2fbd0eec10c91513d8951e3b25fbba99954e159b"
+   },
+   {
+    "path": "voice_styles/M4.json",
+    "size": 291522,
+    "sha256": "ca8eefad4fcd989c9379032ff3e50738adc547eeb5e221b82593a6d7b3bac303"
+   },
+   {
+    "path": "voice_styles/M5.json",
+    "size": 291469,
+    "sha256": "dd22b92740314321f8ae11c5e87f8dd60d060f15dd3a632b5adf77f471f77af2"
+   },
+   {
+    "path": "LICENSE",
+    "size": 15007,
+    "sha256": "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f"
+   }
+  ]
+ },
+ "cloudflared": {
+  "version": "2026.10.7",
+  "windows": {
+   "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe",
+   "size": 55390512,
+   "sha256": "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343"
+  },
+  "linux": {
+   "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-linux-amd64",
+   "size": 40274445,
+   "sha256": "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872"
+  }
+ }
+}

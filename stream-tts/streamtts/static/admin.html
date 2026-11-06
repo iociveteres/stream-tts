@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream TTS</title>
+<link rel="stylesheet" href="/static/common.css">
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<header>
+  <div class="brand">Stream TTS <span id="channel" class="muted"></span></div>
+  <div class="row" id="pills"></div>
+  <button type="button" id="hints-show" class="small" hidden>Показать подсказки</button>
+  <select id="lang" aria-label="Language / Язык" translate="no">
+    <option value="ru">Русский</option><option value="en">English</option>
+  </select>
+  <label class="switch" title="Выключено: награда на паузе, очередь очищена">
+    <input type="checkbox" id="enabled"><span>Озвучка</span>
+  </label>
+</header>
+<nav id="tabs">
+  <button data-tab="queue" class="on">Очередь</button>
+  <button data-tab="twitch">Twitch</button>
+  <button data-tab="voices">Голоса</button>
+  <button data-tab="server" hidden>Сервер</button>
+  <button data-tab="downloads" hidden>Загрузки<span id="dl-badge"></span></button>
+  <button data-tab="settings">Настройки</button>
+  <button data-tab="stats">Статистика</button>
+</nav>
+<div id="banner" hidden></div>
+<div id="update-banner" hidden></div>
+<main>
+
+<!-- ============ Очередь ============ -->
+<section id="tab-queue" class="tab on">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <div class="row between">
+          <h2>Сейчас</h2>
+          <div class="row">
+            <button id="skip" title="Прервать текущую фразу и вернуть баллы">⏭ Пропустить</button>
+            <button id="clear" class="danger" title="Очистить очередь и вернуть баллы за всё в ней">Очистить</button>
+          </div>
+        </div>
+        <div id="now" class="now muted">Ничего не воспроизводится</div>
+      </div>
+      <div class="card">
+        <h2>Очередь <span id="qcount" class="muted"></span></h2>
+        <div class="table-wrap"><table id="queue"><thead><tr>
+          <th>Зритель</th><th>Голос</th><th>Текст</th><th>Статус</th><th></th></tr></thead><tbody></tbody></table></div>
+        <p id="qempty" class="muted">Очередь пуста</p>
+      </div>
+      <div class="card">
+        <h2>Тестовая активация</h2>
+        <form id="test" class="row end">
+          <label class="grow">Ник <input name="login" value="tester" maxlength="25"></label>
+          <label class="grow">Голос <select name="voice"></select></label>
+          <label style="flex-basis:100%">Текст <input name="text" required maxlength="500"
+            value="Привет, чат! Проверка озвучки."></label>
+          <button type="button" id="test-accent" hidden title="Показать текст так, как его прочитает модель">Как прочитает</button>
+          <button class="primary">Отправить</button>
+        </form>
+        <div id="accent-out" class="small" hidden></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Оверлей для OBS</h2>
+        <p id="ovstate"></p>
+        <div class="row"><code id="ovurl" class="grow"></code><button data-copy="ovurl">Копировать</button></div>
+      </div>
+      <div class="card">
+        <h2>Страница голосов для зрителей</h2>
+        <div class="row"><code id="vurl" class="grow"></code><button data-copy="vurl">Копировать</button></div>
+        <h3 class="mt">В интернете</h3>
+        <div class="row"><span id="tunnel-state" class="grow"></span><button id="tunnel-toggle"></button></div>
+        <div class="row mt" id="tunnel-link" hidden><a id="tunnel-url" class="grow" target="_blank"
+          rel="noopener noreferrer"></a><button data-copy="tunnel-url">Копировать</button></div>
+        <p class="muted small" data-t>Через туннель Cloudflare, без аккаунта и хостинга: страница работает, пока
+          запущена программа. Адрес меняется при каждом запуске — зрители получают текущий командой
+          <code>!ttsvoices</code> (ответ в чат — при входе через приложение Twitch). Постоянный адрес —
+          <a href="/voices.zip">скачайте zip</a> и выложите на любой хостинг.</p>
+      </div>
+      <div class="card">
+        <h2>Журнал</h2>
+        <ul id="journal" class="journal"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Twitch ============ -->
+<section id="tab-twitch" class="tab">
+  <div class="card" id="mode-card">
+    <h2>Подключение к Twitch</h2>
+    <div class="modes">
+      <label class="mode"><input type="radio" name="twitch-mode" value="app">
+        <span><b>Через приложение Twitch</b>
+          <span class="muted small">TTS доступен через награды за баллы, команды или озвучку всех сообщений</span></span></label>
+      <label class="mode"><input type="radio" name="twitch-mode" value="chat">
+        <span><b>Только чтение чата</b>
+          <span class="muted small">Вход и 2FA не нужны, TTS доступен только через команды и озвучку всех сообщений</span></span></label>
+    </div>
+    <form id="chat-form" class="row end mt" hidden>
+      <label class="grow">Канал
+        <span class="chan"><span class="muted" translate="no">twitch.tv/</span><input name="channel" required
+          spellcheck="false" translate="no" autocomplete="off"></span></label>
+      <button class="primary">Подключиться</button>
+    </form>
+    <p id="chat-state" hidden></p>
+  </div>
+  <div class="card" id="login-card"></div>
+  <div class="card" id="sources-card" hidden>
+    <h2>Как зрители заказывают озвучку</h2>
+    <p class="muted small">Способы можно выставить одновременно. Бан, фильтры и лимит очереди общие. Стример, модеры
+      и ники из списка «Всегда доступно» проходят мимо уровня доступа и кулдаунов. Статус зрителя сервис узнаёт по
+      значкам в чате: кто ещё не писал в чат, пока сервис работает, считается обычным зрителем.</p>
+    <div class="src" data-src="reward">
+      <label class="check src-head"><input type="checkbox" data-k="on"> <b>Награда за баллы канала</b>
+        <span id="reward-state" class="muted small"></span></label>
+      <div class="src-body">
+        <p class="muted small">Награду создаёт сервис: только у награды, созданной своим Client ID, можно отмечать
+          активации сыгранными и возвращать баллы. Текст от зрителя обязателен. Если озвучить не вышло, баллы
+          возвращаются. Выключенный способ ставит награду на паузу.</p>
+        <form id="reward" class="rgrid">
+          <label>Название <input name="title" maxlength="45" required></label>
+          <label>Цена, баллов <input name="cost" type="number" min="1" required></label>
+          <label>Кулдаун, с <input name="cooldown" type="number" min="0" max="604800"></label>
+          <label class="wide">Описание для зрителей <input name="prompt" maxlength="200"></label>
+          <div class="wide row">
+            <button class="primary" id="reward-save">Создать награду</button>
+            <button type="button" class="danger" id="reward-delete" hidden>Удалить награду</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="src" data-src="command">
+      <label class="check src-head"><input type="checkbox" data-k="on"> <b>Команда в чате</b>
+        <span class="muted small">без баллов</span></label>
+      <div class="src-body">
+        <div class="rgrid">
+          <label>Команда <input data-k="name" maxlength="26" spellcheck="false" translate="no"></label>
+          <label>Кулдаун зрителя, с <input data-k="user_cd" type="number" min="0" max="3600"></label>
+          <label>Общий кулдаун, с <input data-k="global_cd" type="number" min="0" max="3600"></label>
+        </div>
+        <p class="muted small" id="cmd-example"></p>
+      </div>
+    </div>
+    <div class="src" data-src="chat">
+      <label class="check src-head"><input type="checkbox" data-k="on"> <b>Все сообщения чата</b>
+        <span class="muted small">без баллов</span></label>
+      <div class="src-body">
+        <p class="muted small" data-t>Команды (<code>!…</code>) и эмоуты не озвучиваются. Сообщение, отправленное
+          вместе с наградой, озвучивается один раз, как награда.</p>
+      </div>
+    </div>
+    <div id="reply-box">
+    <h3 class="mt">Если озвучка отклонена</h3>
+    <div class="row">
+      <label class="grow">Ответ зрителю
+        <select id="reply">
+          <option value="chat">ответом в чате</option><option value="off">молча игнорировать</option>
+        </select></label>
+    </div>
+    <p class="small" id="reply-note"></p>
+    </div>
+  </div>
+  <div class="card" id="guide-card">
+    <div class="row between"><h2>Регистрация приложения Twitch</h2>
+      <button id="guide-toggle" class="icon" type="button">Свернуть</button></div>
+    <p class="muted">Чтобы получить полный доступ к возможностям интеграции, вам надо зарегистрировать приложение
+      через панель разработчика Twitch. Это несложно, бесплатно и занимает пару минут.</p>
+    <ol id="guide" class="guide"></ol>
+  </div>
+</section>
+
+<!-- ============ Голоса ============ -->
+<section id="tab-voices" class="tab">
+ <div id="voices-list">
+  <div class="card">
+    <div class="row">
+      <input type="search" id="vsearch" placeholder="Поиск" class="grow" aria-label="Поиск голоса">
+      <button id="vall-on">Включить все</button>
+      <button id="vall-off">Выключить все</button>
+      <button id="ed-open" class="primary">+ Добавить голос</button>
+    </div>
+    <p class="muted small">Выключенный голос нельзя выбрать командой, зрители с ним получат случайный.
+      Громкость голосов выравнивается сама; поправка — если голос всё равно тише или громче остальных.</p>
+    <div class="table-wrap"><table id="voices"><thead><tr><th></th><th>Голос</th><th>Пример</th>
+      <th>Поправка, дБ</th></tr></thead>
+      <tbody></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Примеры звучания</h2>
+    <form id="demo-form" class="row end">
+      <label class="grow">Фраза примера <input name="demo_phrase" maxlength="200"></label>
+      <button>Сохранить</button>
+      <button type="button" id="demo-rebuild">Пересинтезировать все</button>
+    </form>
+    <p id="demo-progress" class="muted small"></p>
+  </div>
+  <div class="card" id="sets-card" hidden>
+    <h2>Наборы голосов</h2>
+    <p class="muted small">Набор голосов — zip-архив. Повторная установка обновляет голоса набора.
+      Папка: <code id="voices-dir"></code></p>
+    <ul id="sets" class="setlist"></ul>
+    <div class="row mt">
+      <input type="file" id="set-file" accept=".zip,application/zip" class="grow" aria-label="zip с набором">
+      <button id="set-import" class="primary">Установить</button>
+    </div>
+    <p id="set-result" class="small"></p>
+  </div>
+ </div>
+
+ <!-- Новый голос из записи (editor.py): черновик хранится на сервере, закрытие редактора его не удаляет -->
+ <div id="editor" hidden>
+  <div class="card">
+    <div class="row between">
+      <h2 id="ed-title">Новый голос</h2>
+      <div class="row">
+        <button type="button" id="ed-close">← К списку голосов</button>
+        <button type="button" id="ed-discard" class="danger">Удалить черновик</button>
+      </div>
+    </div>
+    <!-- data-hint — подсказка, которую можно скрыть (крестик, admin.js renderHints); id хранятся в настройках -->
+    <p class="ed-about" data-engine="cosyvoice" data-hint="ed-sample-cosyvoice" data-t>Голос — это образец: 10–20 секунд
+      записи и её точная расшифровка.<br>
+      Хороший образец — один голос без музыки и эффектов, с ровной подачей: если спокойная реплика стоит рядом с
+      криком, синтез скачет.<br>
+      Из одного персонажа лучше сделать два голоса, спокойный и с напором.<br>
+      Сделайте несколько вариантов из разных мест записи и сравните их на тестовых фразах: разница на слух бывает
+      большой.</p>
+    <p class="ed-about" data-engine="espeech" data-hint="ed-sample-espeech" hidden data-t>Образец — 6–7 секунд спокойной
+      речи, одна-две целые фразы.<br>
+      Модель повторяет манеру образца во всех фразах.<br>
+      Сделайте несколько вариантов и сравните их на тестовых фразах.</p>
+    <p class="warn" data-engine="supertonic" hidden data-t>У модели Supertonic 3 только готовые голоса: голос из
+      записи она не делает. Чтобы сделать голос, выберите другую модель на вкладке <a href="#server">«Сервер»</a>.
+      Черновик сохранится.</p>
+    <ul id="ed-packages" class="setlist dlist"></ul>
+  </div>
+  <div class="card">
+    <h2 class="step">Записи</h2>
+    <p class="muted small" data-hint="ed-sources" data-t>Аудио до 15 минут и менее 512 МБ.<br>
+      Выделите отрезок на волне мышью, чтобы добавить его как вариант.<br>
+      Скролл мыши — масштаб; Shift + скролл мыши — прокрутка; ЛКМ — слушать с выбранного места.</p>
+    <div class="row"><input type="file" id="ed-file" accept="audio/*,video/*" multiple class="grow"
+      aria-label="Файлы записей"><span id="ed-upload-state" class="small muted"></span></div>
+    <div id="ed-sources"></div>
+  </div>
+  <div class="card">
+    <h2 class="step">Образец голоса</h2>
+    <div class="hint small" data-hint="ed-transcript" data-t>В расшифровке слово в слово должно быть описано то, что звучит в отрезке: каждое
+      слово, повтор, «э-э», оборванное на краю слово.<br>
+      Знаки препинания расставляйте как слышится: запятая на паузе, точка в конце фразы, «?» и «!» по интонации.<br>
+      Числа и сокращения — так, как их произносят: «двадцать пять», а не «25».<br>
+      Ошибки в расшифровке могут стать причиной плохой генерации: синтез начинает глотать слова, повторять их или
+      добавлять лишние звуки.</div>
+    <div class="hint small mt" data-engine="espeech" data-hint="ed-accents" hidden>«+» перед гласной — ударение. Кнопка «Ударения» расставит
+      их так, как прочитает модель. Неверные поправьте вручную.</div>
+    <div id="ed-variants" class="mt"></div>
+  </div>
+  <div class="card" data-engine="espeech" hidden>
+    <h2 class="step">Темп речи</h2>
+    <p class="muted small" data-hint="ed-tempo" data-t>Скорость речи голоса во всех фразах. Без отрезка — как в образце.<br>
+      Точнее всего — отрезок 20–60 секунд обычной речи с расшифровкой.</p>
+    <div id="ed-tempo"></div>
+  </div>
+  <div class="card">
+    <h2 class="step">Тестовые фразы</h2>
+    <div class="row">
+      <label class="grow">Сравнить с голосом <select id="ed-compare"></select></label>
+      <button type="button" id="ed-synth-all">Синтезировать всё</button>
+      <span id="ed-progress" class="small muted"></span>
+    </div>
+    <div class="table-wrap"><table id="ed-matrix"></table></div>
+    <details class="mt">
+      <summary class="muted small">Изменить фразы</summary>
+      <p class="muted small">По одной на строку, до 8</p>
+      <textarea id="ed-phrases" class="short" spellcheck="false"></textarea>
+      <div class="row mt"><button type="button" id="ed-phrases-save">Сохранить фразы</button></div>
+    </details>
+  </div>
+  <div class="card">
+    <h2 class="step">Сохранение</h2>
+    <form id="ed-save" class="rgrid">
+      <label>Вариант <select name="variant" required></select></label>
+      <label>Имя голоса <input name="name" required maxlength="64" spellcheck="false"
+        placeholder="например, game-hero"></label>
+      <label>Набор <input name="set" required maxlength="64" list="ed-sets" spellcheck="false" translate="no"
+        placeholder="my-voices"></label>
+      <datalist id="ed-sets"></datalist>
+      <p class="wide muted small" data-hint="ed-save" data-t>В имени допустимы латиница, цифры, «-», «_» и «.». Зрители используют его
+        в команде выбора голоса.<br>
+        Набор — раздел на странице голосов для зрителей. Впишите новое название (латиница, цифры, «-» и «_») — при
+        сохранении голоса на странице появится раздел с этим названием заглавными буквами.<br>
+        Если голос с таким именем уже есть у другой модели, этот станет его версией для текущей модели.</p>
+      <div class="wide row"><button class="primary">Сохранить голос</button><span id="ed-save-result" class="small"></span></div>
+    </form>
+  </div>
+ </div>
+
+ <!-- Обучение LoRA голоса ESpeech (engines/espeech/train.py, train.js): набор реплик хранит stream-tts, обучение идёт
+      на сервере синтеза. Вход — кнопка «LoRA» у голоса в списке (только у ESpeech с capabilities.train) -->
+ <div id="train" hidden>
+  <div class="card">
+    <div class="row between">
+      <h2 id="tr-title">Обучение голоса</h2>
+      <button type="button" id="tr-close">← К списку голосов</button>
+    </div>
+    <p class="muted small">LoRA дообучает модель ESpeech на репликах голоса: тембр и манера речи становятся ближе к
+      оригиналу, чем по одному образцу. Хватает минуты реплик. Обучение идёт на сервере синтеза, на видеокарте — от
+      нескольких минут (на RTX 3060 Ti около 15 минут на 3000 шагов).</p>
+    <div class="hint small">Пока идёт обучение, видеокарта занята им: озвучка зрителей работает между шагами, но
+      медленнее. Смена модели или устройства, проверка скорости, выгрузка модели и установка наборов голосов в это
+      время недоступны: они перезапускают сервер синтеза. Результат обучения хранится в памяти сервера, пока его не
+      сохранили в голос, — перезапуск сервера или программы его выбросит.</div>
+  </div>
+  <div class="card">
+    <h2>1. Реплики</h2>
+    <p class="muted small">Реплика — от 0,3 до 30 секунд речи только этого голоса, без музыки и чужих голосов. Текст —
+      ровно то, что звучит, как у образца: каждое слово, числа словами, знаки по интонации. Ударения «+» ставить не
+      обязательно — их расставит модель; кнопка «Ударения» покажет, как, неверные поправьте. Рекомендуется от 1 минуты
+      реплик (15–20 штук).</p>
+    <p id="tr-summary" class="small"></p>
+    <div class="row end">
+      <label class="grow">Файлы реплик <input type="file" id="tr-files" accept="audio/*,video/*,.txt,text/plain" multiple></label>
+      <label class="grow">Запись для нарезки <input type="file" id="tr-source-file" accept="audio/*,video/*" multiple></label>
+    </div>
+    <p class="muted small">Пары файлов с одинаковым именем («реплика.wav» и «реплика.txt») — текст подставится сам. Из
+      длинной записи (до 15 минут) реплики вырезаются на волне: выделите отрезок мышью и нажмите «+ Реплика из
+      выделения». Колесо мыши — масштаб, Shift + колесо — прокрутка, щелчок — послушать с этого места.</p>
+    <p id="tr-upload-state" class="small muted"></p>
+    <div id="tr-sources"></div>
+    <div class="row between mt">
+      <h3>Реплики набора</h3>
+      <button type="button" id="tr-clear" class="danger">Удалить набор</button>
+    </div>
+    <div class="table-wrap"><table id="tr-items"></table></div>
+  </div>
+  <div class="card">
+    <h2>2. Обучение</h2>
+    <div id="tr-other" class="hint small" hidden></div>
+    <div class="row end">
+      <label>Шагов <input type="number" id="tr-steps" min="1" max="20000" step="100" class="steps"></label>
+      <label class="check" id="tr-ckpt-label"><input type="checkbox" id="tr-ckpt"> Экономия видеопамяти</label>
+    </div>
+    <p class="muted small">Пустое поле — шаги по объёму набора: 1000 на минуту реплик, от 500 до 3000 (1 мин — 1000, 2 мин — 2000, от 3 мин — 3000). Малый набор
+      от лишних шагов переобучается — тогда появится «пора остановиться».</p>
+    <p id="tr-vram" class="small muted"></p>
+    <div class="row">
+      <button type="button" id="tr-start" class="primary">Начать обучение</button>
+      <button type="button" id="tr-stop" hidden>Остановить</button>
+      <span id="tr-state" class="small"></span>
+    </div>
+    <div id="tr-progress" class="dl mt" hidden>
+      <div class="track"><div class="fill" id="tr-fill"></div></div>
+      <p id="tr-progress-text" class="small"></p>
+    </div>
+    <div id="tr-notes"></div>
+    <div class="grid2 mt" id="tr-charts" hidden>
+      <div><h3>Лосс обучения</h3><div class="chart train" id="tr-loss"></div></div>
+      <div><h3>Проверочный лосс</h3><div class="chart train" id="tr-val"></div></div>
+    </div>
+  </div>
+  <div class="card" id="tr-result">
+    <h2>3. Результат</h2>
+    <p class="muted small">Тестовые фразы с результатом обучения: «лучший» — снимок на минимуме проверочного лосса,
+      «последний» — на последнем шаге; «последний» можно слушать и во время обучения. Сравните с голосом без LoRA и
+      сохраните тот, что звучит лучше. Прежний файл голоса сервер сохранит рядом (.espeech.bak).</p>
+    <div class="table-wrap"><table id="tr-matrix"></table></div>
+    <div class="row mt">
+      <label class="inline">Снимок <select id="tr-snapshot"></select></label>
+      <button type="button" id="tr-save" class="primary">Сохранить в голос</button>
+      <button type="button" id="tr-discard" class="danger">Сбросить результаты</button>
+    </div>
+    <p id="tr-saved" class="small"></p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ Сервер (модель синтеза и её вариант, устройство, скорость, состояние встроенного сервера) ============ -->
+<section id="tab-server" class="tab">
+  <div class="grid2">
+    <div>
+      <div class="card" id="engine-card">
+        <h2>Модель синтеза</h2>
+        <form id="engine-form" class="radios"></form>
+        <p class="muted small">При смене модели озвучка ненадолго остановится. Если у голоса нет версии для выбранной
+          модели, зритель временно услышит другой. Когда версия появится, снова зазвучит выбранный.</p>
+        <label class="mt" id="variant-box" hidden>Вариант CosyVoice3 <select id="variant"></select></label>
+        <div id="model-params"></div>
+        <p id="engine-state" class="small"></p>
+        <div id="engine-hint" class="hint small mt" hidden></div>
+      </div>
+      <div class="card" id="accents-card" hidden>
+        <h2>Словарь ударений</h2>
+        <p class="muted small">Ударение — «+» перед ударной гласной, например з+амок.</p>
+        <form id="accents-form" class="row">
+          <input name="accented" required maxlength="64" spellcheck="false" translate="no" class="grow" placeholder="з+амок"
+            aria-label="Слово с ударением">
+          <button class="primary">Добавить</button>
+        </form>
+        <input id="accents-filter" class="mt" type="search" placeholder="Поиск по словарю" aria-label="Поиск по словарю">
+        <ul id="accents-list" class="chips mt"></ul>
+      </div>
+    </div>
+    <div>
+      <div class="card managed">
+        <h2>Устройство синтеза</h2>
+        <form id="backend-form" class="radios"></form>
+        <p class="muted small" id="backend-about">Для стрима нужна видеокарта: процессор обычно не успевает за
+          реальным временем. Vulkan подходит для видеокарт NVIDIA, AMD и Intel.</p>
+        <p class="muted small" id="backend-only" hidden></p>
+        <p id="backend-lock" class="warn small" hidden></p>
+        <div id="backend-hint" class="hint small mt" hidden></div>
+      </div>
+      <div class="card managed">
+        <h2>Скорость синтеза</h2>
+        <p class="muted small">Замер на этом компьютере: синтез фразы и задержка первого звука при стриминге.
+          Пока идёт проверка, озвучка ждёт в очереди.</p>
+        <div id="bench-table"></div>
+        <div class="row mt">
+          <button id="bench-one" class="primary">Проверить текущее</button>
+          <button id="bench-all" title="Сервер перезапускается на каждом устройстве">Сравнить все устройства</button>
+          <span id="bench-state" class="small muted"></span>
+        </div>
+      </div>
+      <div class="card managed">
+        <h2>Состояние сервера</h2>
+        <div id="runtime-info" class="small"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Загрузки (install.py, admin-downloads.js): модели синтеза, CUDA, пакеты; очередь и место на диске ============ -->
+<section id="tab-downloads" class="tab">
+  <div id="dl-strip" class="strip" hidden></div>
+  <div class="grid2">
+    <div id="dl-models"></div>
+    <div>
+      <div class="card">
+        <h2>На диске</h2>
+        <div id="dl-sum"></div>
+        <p id="dl-free" class="free"></p>
+        <details class="mt">
+          <summary class="muted small" id="dl-dirs-title">Папки</summary>
+          <div id="dl-dirs" class="paths small muted"></div>
+        </details>
+      </div>
+      <div class="card" id="dl-cuda-card">
+        <h2>Видеокарта NVIDIA</h2>
+        <ul id="dl-cuda" class="setlist dlist"></ul>
+      </div>
+      <div class="card">
+        <h2>Создание голосов</h2>
+        <ul id="packages" class="setlist dlist"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Настройки ============ -->
+<section id="tab-settings" class="tab">
+  <div class="grid2">
+    <div>
+      <form class="card" id="settings">
+        <h2>Озвучка</h2>
+        <label class="check"><input type="checkbox" name="read_nick"> Читать ник: «&lt;ник&gt; говорит: …»</label>
+        <div class="row">
+          <label class="grow">Лимит очереди <input type="number" name="queue_limit" min="1" max="500"></label>
+          <label class="grow">Предел текста, символов <input type="number" name="max_chars" min="1" max="500"></label>
+        </div>
+        <h2 class="mt">Синтез</h2>
+        <label class="check"><input type="checkbox" name="streaming"> Стриминг длинных фраз: звучат, не дожидаясь конца синтеза</label>
+        <p class="warn small" id="stream-note" hidden></p>
+        <details class="mt" id="cosy-settings">
+          <summary class="muted small">Дополнительно</summary>
+          <label class="mt">Размер куска стриминга, токенов <input type="number" name="chunk_tokens" min="10" max="1000" step="10"></label>
+          <p class="muted small">25 токенов — секунда звука. Чем меньше кусок, тем раньше первый звук, но тем медленнее
+            синтез. Стримятся фразы длиннее полутора кусков.</p>
+          <label>max_token_text_ratio <input type="number" name="token_ratio" min="0" step="0.5"></label>
+          <p class="muted small">Длину фразы ещё жёстко ограничивает обрезка: не больше 1,8× расчётной длины
+            (12 символов в секунду) и не больше 60 с.</p>
+        </details>
+        <h2 class="mt">Фильтры</h2>
+        <label class="check"><input type="checkbox" name="filter_links"> Вырезать ссылки</label>
+        <label class="check"><input type="checkbox" name="filter_profanity"> Запикивать мат (вместо слова — короткий тихий писк)</label>
+      </form>
+      <div class="card">
+        <h2>Баны</h2>
+        <form id="ban" class="row"><input name="login" placeholder="ник" class="grow" required>
+          <button>Запретить</button></form>
+        <ul id="bans" class="chips"></ul>
+        <p class="muted small" data-t>Модеры в чате: <code>!ttsban ник</code>, <code>!ttsunban ник</code>.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Корни мата</h2>
+        <textarea id="prof" spellcheck="false"></textarea>
+        <div class="row mt">
+          <input id="prof-sample" class="grow" placeholder="проверить фразу" translate="no" value="Ну ты и мудак, х.у.й тебе!">
+          <button id="prof-save" class="primary">Сохранить и проверить</button>
+        </div>
+        <p id="prof-out" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Обновления</h2>
+        <p class="small">Установлена версия <b id="update-version" translate="no"></b></p>
+        <div class="row end">
+          <label class="grow">Проверять новую версию
+            <select id="update-check">
+              <option value="day">раз в день</option>
+              <option value="week">раз в неделю</option>
+              <option value="month">раз в месяц</option>
+              <option value="off">не проверять</option>
+            </select></label>
+          <button type="button" id="update-now">Проверить сейчас</button>
+        </div>
+        <div id="update-status" class="small mt"></div>
+      </div>
+      <div class="card">
+        <h2>Сервер</h2>
+        <p id="server-info" class="muted small"></p>
+        <p class="small"><a href="/logout" id="logout-link">Выйти из админки</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Статистика ============ -->
+<section id="tab-stats" class="tab">
+  <div class="card">
+    <h2>Сейчас</h2>
+    <div class="tiles" id="live"></div>
+    <h3 class="mt">Загрузка за 10 минут</h3>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>процессор</span>
+      <span><i style="background:var(--series-2)"></i>видеокарта</span></div>
+    <div id="load-chart" class="chart load"></div>
+    <p class="muted small">Замеры идут, только пока открыта админка.</p>
+  </div>
+  <div class="card">
+    <h2>Модели в памяти</h2>
+    <div class="table-wrap" id="mem-models"></div>
+  </div>
+  <div class="card">
+    <div class="row between">
+      <h2>За период</h2>
+      <div class="row">
+        <select id="period"><option value="24">24 часа</option><option value="168">7 дней</option>
+          <option value="720">30 дней</option></select>
+        <label class="check small"><input type="checkbox" id="with-test"> с тестовыми</label>
+      </div>
+    </div>
+    <div class="tiles" id="kpi"></div>
+    <h3 class="mt">Активации по часам</h3>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>сыграно</span>
+      <span><i style="background:var(--series-2)"></i>возврат</span></div>
+    <div id="hours" class="chart"></div>
+    <details><summary class="muted small">Таблицей</summary><div class="table-wrap" id="hours-table"></div></details>
+    <div class="grid3 mt">
+      <div><h3>Голоса</h3><div id="top-voices" class="bars"></div></div>
+      <div><h3>Зрители</h3><div id="top-viewers" class="bars"></div></div>
+      <div><h3>Способы</h3><div id="top-sources" class="bars"></div></div>
+      <div><h3>Возвраты по причинам</h3><div id="reasons" class="bars"></div></div>
+    </div>
+  </div>
+</section>
+</main>
+<dialog id="ask">
+  <p id="ask-text"></p>
+  <div class="row end-x"><button type="button" id="ask-no">Отмена</button><button type="button" id="ask-yes"></button></div>
+</dialog>
+<div id="toast"></div>
+<div id="tip" class="tip" hidden></div>
+<script src="/static/i18n.js"></script>
+<script src="/static/admin.js"></script>
+<script src="/static/admin-queue.js"></script>
+<script src="/static/admin-twitch.js"></script>
+<script src="/static/admin-voices.js"></script>
+<script src="/static/admin-server.js"></script>
+<script src="/static/admin-downloads.js"></script>
+<script src="/static/admin-settings.js"></script>
+<script src="/static/admin-stats.js"></script>
+<script src="/static/admin-start.js"></script>
+<script src="/static/editor.js"></script>
+<script src="/static/train.js"></script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+# Тесты без видеокарты и модели на push в main и dev и на PR: e2e stream-tts (tests/e2e), supertonic-server без модели
+# (tests/supertonic, test_server.py пропускается) и корпус нормализатора ESpeech (без torch). Windows — как у программы,
+# Ubuntu — как в образе Docker. Маркер real (нужны модель и видеокарта) пропускается. Образы — docker.yml.
+# test_index.py сверяет пути с коммитом базы рефакторинга — нужна вся история: fetch-depth: 0 приносит все ветки, а в
+# main базы нет, она в dev (docs/development.md, «Ветки»).
+name: tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            stream-tts/requirements.txt
+            tests/requirements.txt
+
+      # ffmpeg — mp3 примеров голосов и разбор звука в тестах; Chrome/Edge (test_admin_smoke.py) и Node
+      # (test_admin_scripts.py) в образах раннеров уже есть
+      - name: ffmpeg
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then choco install ffmpeg -y --no-progress; else sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg; fi
+
+      - name: Зависимости
+        run: python -m pip install -r stream-tts/requirements.txt -r tests/requirements.txt
+
+      - name: pytest
+        run: python -m pytest tests/e2e tests/supertonic tests/espeech/test_normalize_corpus.py -rs

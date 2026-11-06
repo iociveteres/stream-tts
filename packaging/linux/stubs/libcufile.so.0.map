@@ -1,0 +1,11 @@
+/* Заглушка libcufile.so.0 для torch (packaging/pin-espeech.py): символы, которые берут из неё библиотеки torch; сборка — packaging/linux/build-stubs.sh. fail=1 */
+{
+  global:
+    cuFileBufDeregister;
+    cuFileBufRegister;
+    cuFileHandleDeregister;
+    cuFileHandleRegister;
+    cuFileRead;
+    cuFileWrite;
+  local: *;
+};

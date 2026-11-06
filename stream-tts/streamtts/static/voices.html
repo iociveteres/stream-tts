@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{t:Голоса озвучки}}</title>
+<style>
+  :root { --bg: #f6f6f4; --card: #ffffff; --ink: #141414; --muted: #5d5c58; --line: #e2e1dc;
+    --accent: #2a78d6; --code: #eef3fb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141416; --card: #1d1d20; --ink: #f2f2f2; --muted: #a8a7a0; --line: #2e2e33;
+      --accent: #5598e7; --code: #23293a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 6px; font-size: 28px; }
+  .model { margin: 0 0 6px; color: var(--muted); }
+  .model b { color: var(--ink); }
+  .lead { color: var(--muted); margin: 0 0 18px; }
+  .lead code { background: var(--code); padding: 1px 6px; border-radius: 6px; }
+  input[type=search] { width: 100%; max-width: 420px; padding: 10px 14px; font: inherit; color: var(--ink);
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+  h2 { font-size: 20px; margin: 28px 0 10px; }
+  h2 span { color: var(--muted); font-weight: 400; font-size: 15px; }
+  ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+  li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 8px; }
+  .name { font-weight: 600; }
+  .copy { align-self: flex-start; border: 1px solid var(--line); background: var(--code); color: var(--ink);
+    border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  .copy:hover { border-color: var(--accent); }
+  .copy.done::after { content: "  ✓ {{t:скопировано}}"; color: var(--accent); font-size: 14px; }
+  audio { width: 100%; height: 36px; }
+  .nodemo { color: var(--muted); font-size: 14px; }
+  .empty { color: var(--muted); display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>{{t:Голоса озвучки}}</h1>
+  <p class="model">{{t:Модель синтеза речи: <b>%MODEL%</b>}}</p>
+  <p class="lead">{{t:Голосов: %COUNT%. Выбрать голос — написать в чат команду, например <code>!ttssf dota2-pudge</code>
+    (регистр не важен). Пример звучания каждого: «%PHRASE%»}}</p>
+  <input type="search" id="q" placeholder="{{t:Поиск по имени}}" aria-label="{{t:Поиск голоса}}">
+  <p class="empty" id="empty">{{t:Ничего не найдено.}}</p>
+  %SECTIONS%
+</main>
+<script>
+  document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", async () => {
+    const text = b.dataset.cmd;
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) {  // file:// и http без localhost: запасной путь
+      const t = document.createElement("textarea"); t.value = text; document.body.append(t);
+      t.select(); document.execCommand("copy"); t.remove();
+    }
+    b.classList.add("done"); setTimeout(() => b.classList.remove("done"), 1500);
+  }));
+  const q = document.getElementById("q");
+  q.addEventListener("input", () => {
+    const s = q.value.trim().toLowerCase(); let any = false;
+    document.querySelectorAll("section").forEach(sec => {
+      let n = 0;
+      sec.querySelectorAll("li").forEach(li => { const on = li.dataset.name.includes(s); li.hidden = !on; n += on; });
+      sec.hidden = !n; any = any || n > 0;
+    });
+    document.getElementById("empty").style.display = any ? "none" : "block";
+  });
+  // Играет один пример за раз
+  document.addEventListener("play", e => document.querySelectorAll("audio").forEach(a => a !== e.target && a.pause()), true);
+</script>
+</body>
+</html>
