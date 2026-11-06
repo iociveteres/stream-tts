@@ -1,13 +1,13 @@
 # Установщик StreamTTS для Windows: рантайм (build-runtime.py) → Nuitka (build-exe.py) → Inno Setup.
-# Запуск вручную (Actions → windows → Run workflow) или по тегу v*. Результат — артефакт StreamTTS-Setup, а по тегу
-# ещё и релиз на GitHub: установщик и latest.json, по которому программа узнаёт о новой версии (updates.py).
+# Вызывается из ci.yml после тестов (push в main или тег v*) или вручную (Actions → windows → Run workflow; без тестов).
+# Результат — артефакт StreamTTS-Setup, а по тегу ещё и релиз на GitHub: установщик и latest.json, по которому
+# программа узнаёт о новой версии (updates.py).
 # Тег — v<версия> из stream-tts/streamtts/__init__.py, аннотированный: его сообщение — «что нового» (release.py).
 name: windows
 
 on:
+  workflow_call:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
 
 jobs:
   setup:

@@ -16,8 +16,9 @@
 ├── AGENTS.md              # заметки для ИИ-агентов (CLAUDE.md ссылается на него)
 ├── .gitattributes         # LF для shell-скриптов, Dockerfile и *.yml; .gitignore — данные не в git
 ├── .claude/launch.json    # конфигурации preview (раздел «Запуск»)
-├── .github/workflows/     # GitHub Actions: tests.yml (тесты на push и PR, раздел «Тесты»), docker.yml (сборка образов,
-│                          # раздел «Образы»), windows.yml (установщик и релиз, docs/stream-tts-windows.md)
+├── .github/workflows/     # GitHub Actions: ci.yml (конвейер main: тесты → образы и установщик, раздел «Ветки»),
+│                          # tests.yml (раздел «Тесты»), docker.yml (сборка образов, раздел «Образы»), windows.yml
+│                          # (установщик и релиз, docs/stream-tts-windows.md)
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
 ├── cosyvoice/
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
@@ -239,7 +240,7 @@
 
 `--max-llm-len` (по умолчанию 4096) на видеопамять не влияет, а 1024 уже не хватает длинным образцам.
 
-**CI** — `.github/workflows/docker.yml`, на push в main и PR, если менялось то, что попадает в образ: собирает
+**CI** — `.github/workflows/docker.yml`, из `ci.yml` после тестов на push в main (или вручную): собирает
 `stream-tts`, `cosyvoice` и `cosyvoice` с `GPU=cuda` (кэш слоёв — в GitHub Actions) и проверяет запуск без
 видеокарты: `cosyvoice-server --help`, `ldd` всех библиотек в `/opt/cosyvoice` (кроме `libcuda.so.1` — её даёт
 драйвер), `stream-tts` отвечает на `/overlay` и не пишет `Traceback`. Образы никуда не публикуются.
@@ -325,6 +326,10 @@ Supertonic 3) — или `SUPERTONIC_PORT`.
 git switch main && git merge --squash dev && git commit   # сообщение — что нового с прошлого выпуска
 git switch dev && git merge main                          # main снова предок dev: следующий сквош — от этой точки
 ```
+
+CI (`.github/workflows/ci.yml`) работает только для `main`: на push — тесты, после них образы Docker и установщик
+(артефакт), на тег `v*` — тесты и релиз, на PR в `main` — только тесты. Коммиты в `dev` CI не запускают: тесты перед
+выпуском — локально (раздел «Тесты») или вручную в Actions (`tests`, `docker`, `windows` → Run workflow на ветке `dev`).
 
 ## Тесты
 
@@ -501,7 +506,8 @@ multipart): ошибки запроса, ход, 409 на второй стар�
 нехватка видеопамяти (второй сервер с `--vram-limit-mb 1400`: ошибка `oom`, память вернулась, с checkpointing
 идёт). ~2 мин на видеокарте всё вместе.
 
-**CI** — `.github/workflows/tests.yml`, на push в main и dev и на PR, на `windows-latest` и `ubuntu-latest` (Python 3.14,
+**CI** — `.github/workflows/tests.yml`, из `ci.yml` на push в main, тег `v*` и PR в main (на dev — только вручную,
+обычно тесты там гоняют локально), на `windows-latest` и `ubuntu-latest` (Python 3.14,
 ffmpeg ставится, Chrome и Node в образах раннеров есть): `tests/e2e`, `tests/supertonic` и
 `tests/espeech/test_normalize_corpus.py` — всё, что идёт без видеокарты, модели и torch; `real` и остальное
 `tests/espeech` — только локально. Checkout со всей историей: `test_index.py` сверяет пути с коммитом базы.

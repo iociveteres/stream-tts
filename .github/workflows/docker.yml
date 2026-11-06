@@ -1,25 +1,12 @@
-# Сборка образов из Dockerfile на push в main и PR, если менялось то, что попадает в образ (.dockerignore), — без
-# публикации: проверка, что образ собирается и запускается. stream-tts — без видеокарты (CUDA качает админка),
-# cosyvoice — оба варианта, cpu и cuda (docker-compose.gpu.yml). Проверка запуска: бинарник сервера находит свои
-# библиотеки (--help), stream-tts отвечает на :8090 и не пишет Traceback в лог. Видеокарты на раннере нет.
+# Сборка образов из Dockerfile без публикации: проверка, что образ собирается и запускается. Вызывается из ci.yml после
+# тестов (push в main) или вручную. stream-tts — без видеокарты (CUDA качает админка), cosyvoice — оба варианта, cpu и
+# cuda (docker-compose.gpu.yml). Проверка запуска: бинарник сервера находит свои библиотеки (--help), stream-tts
+# отвечает на :8090 и не пишет Traceback в лог. Видеокарты на раннере нет.
 name: docker
 
 on:
-  push:
-    branches: [main]
-    paths: [Dockerfile, .dockerignore, "docker-compose*.yml", "cosyvoice/**", stream-tts/requirements.txt,
-            "stream-tts/streamtts/**", "espeech/*.py", "supertonic/*.py", "packaging/linux/**",
-            .github/workflows/docker.yml]
-  # тот же список, что у push
-  pull_request:
-    paths: [Dockerfile, .dockerignore, "docker-compose*.yml", "cosyvoice/**", stream-tts/requirements.txt,
-            "stream-tts/streamtts/**", "espeech/*.py", "supertonic/*.py", "packaging/linux/**",
-            .github/workflows/docker.yml]
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  group: docker-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
