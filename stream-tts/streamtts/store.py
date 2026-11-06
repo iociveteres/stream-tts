@@ -26,7 +26,7 @@ DEFAULTS = {
     "max_chars": 500,
     "token_ratio": 10.0,        # max_token_text_ratio для /tts
     "chunk_tokens": 150,        # токенов в куске стриминга (по умолчанию в cosyvoice.cpp 28: заметно медленнее)
-    "engine": "",               # модель синтеза (engines/): cosyvoice | espeech | supertonic, пустая — первая доступная
+    "engine": "",               # модель синтеза (engines/): cosyvoice | espeech | supertonic, пустая — ещё не скачана ни одна
     "espeech_steps": 16,        # ESpeech: шагов синтеза (nfe_steps) — 16 / 32 / 12, в каждом запросе
     "espeech_device": "",       # ESpeech: auto | cuda | cpu (у CosyVoice — backend)
     "supertonic_steps": 8,      # Supertonic 3: шагов синтеза (total_step) — 5 / 8 / 12 / 16, в каждом запросе

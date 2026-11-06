@@ -5,7 +5,7 @@
 - все пути таблицы — файлы из git, пути колонки «На базе» — файлы базового коммита;
 - остальные пути документа (с «/», в папках из git) существуют: переименовал модуль — поправь индекс;
 - docs/development.md называет каждый файл из git по имени (новый или перенесённый файл — в дерево, AGENTS.md,
-  «Соглашения»), кроме tools/ (их описывает docs/voice-pipeline.md) и примеров звука static/quants/."""
+  «Соглашения»), кроме tools/ (их описывает docs/voice-pipeline.md) и примеров звука static/samples/."""
 import importlib.util, os, re, subprocess
 
 import pytest
@@ -86,7 +86,7 @@ def test_other_paths(index, tracked):
 
 
 # Что дерево development.md описывает группой, а не по файлу
-TREE_SKIP = ("tools/", "stream-tts/streamtts/static/quants/", "packaging/windows/stubs/", "packaging/linux/stubs/")
+TREE_SKIP = ("tools/", "stream-tts/streamtts/static/samples/", "packaging/windows/stubs/", "packaging/linux/stubs/")
 
 
 def test_development_tree(tracked):

@@ -168,11 +168,16 @@ class Launcher:
         if chosen in ggufs:
             return chosen
         if not ggufs:
-            raise Unavailable(tr("нет модели: скачайте её в админке (вкладка «Сервер») или положите *.gguf в {dir}",
+            raise Unavailable(tr("нет модели: скачайте её в админке (вкладка «Загрузки») или положите *.gguf в {dir}",
                                  dir=paths.MODELS))
         if len(ggufs) > 1:
             raise Unavailable(tr("в {dir} несколько моделей: выберите одну в админке (вкладка «Сервер»)", dir=paths.MODELS))
         return ggufs[0]
+
+    def has_model(self):
+        """Модель скачана (или задана MODEL): до первой скачанной модели ни одна не выбрана (engines.Tts)."""
+        model = env("MODEL")
+        return os.path.isfile(model) if model else bool(glob.glob(os.path.join(paths.MODELS, "*.gguf")))
 
     def _voices(self):
         """[(имя, путь от paths.VOICES)]: короткие пути, чтобы много голосов влезло в командную строку Windows."""

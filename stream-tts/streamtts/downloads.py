@@ -1,5 +1,5 @@
 """Что качается из админки: закреплённые загрузки (downloads.json — CUDA, кванты модели, рантайм и модель ESpeech),
-модель CosyVoice и её кванты, необязательные пакеты (PACKAGES), голос и фраза примера. Сами загрузки — install.py,
+модель CosyVoice и её кванты, необязательные пакеты (PACKAGES), фраза примеров звучания (static/samples/). Сами загрузки — install.py,
 ESpeech — engines/espeech/download.py."""
 import json, os
 
@@ -31,26 +31,25 @@ REPO = cosyvoice.REPO
 BASE = DOWNLOADS["model"]["url"].rstrip("/")
 QUANTS = {q: dict(d, size=DOWNLOADS["model"]["quants"][q]["size"]) for q, d in cosyvoice.QUANTS.items()}
 DEFAULT_QUANT = cosyvoice.DEFAULT_QUANT
-SAMPLES = (("ohf-denis", "Пример"),)
+# Примеры вариантов на «Загрузках» — static/samples/<вариант>.mp3: эта фраза, seed 42 (docs/stream-tts-deploy.md)
 SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет. Вперёд!"
 FRONTEND = cosyvoice.FRONTEND
-# Необязательные пакеты: качаются из админки (настройки и редактор голоса). files — пути в репозитории source на
+# Необязательные пакеты: качаются из админки («Загрузки» и редактор голоса). files — пути в репозитории source на
 # Hugging Face, локально — paths.MODELS/<into>/<путь>. size — байт. alt — те же файлы в полной точности
 # (scripts/download-model.sh --frontend full): тоже считаются установленными. restart — файлы читает
 # cosyvoice-server: после загрузки он перезапускается, а удаляются они при остановленном сервере.
 PACKAGES = {
     "frontend": dict(
-        title="Создание голосов из записи",
-        about="ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса). Нужен, чтобы сделать "
-              "голос из записи.",
+        # ONNX-фронтенд CosyVoice3: речевой токенизатор и CAM++ (отпечаток голоса)
+        title="Голос из записи", about="Нужен, чтобы сделать голос из записи.",
         files=FRONTEND, size=252891972, source=REPO, restart=True,
         alt=("frontend-onnx/campplus.onnx", "frontend-onnx/speech_tokenizer_v3.onnx")),
     # Веса Demucs обучены на MusDB: автор называет их исследовательскими (facebookresearch/demucs#267, #327, #508),
     # код Demucs и экспорт в ONNX — MIT. Поэтому пакет не входит в установщик, а качается по кнопке; лицензии всех
     # загрузок перечислены на странице «Информация» установщика (packaging/windows/THIRD-PARTY*.txt).
     "music": dict(
-        title="Очистка образца от музыки",
-        about="Demucs v4 отделяет голос от музыки. Нужен для функции «убрать музыку» в редакторе голоса.",
+        # Demucs v4 отделяет голос от музыки: галочка «убрать музыку» в редакторе голоса
+        title="Очистка от музыки", about="Убирает музыку из образца в редакторе голоса.",
         files=("htdemucs_int8.onnx",), into="demucs", size=84108789, source="HRSadeghi/demucs-onnx"),
 }
 

@@ -271,7 +271,7 @@ class Launcher:
         self.model = ""
         if self.downloaded:
             if runtime_state() != "ok" or not model_ready(self.models):
-                raise Unavailable(tr("ESpeech не скачан. Скачать — на вкладке «Сервер»"))
+                raise Unavailable(tr("ESpeech не скачан. Скачать — на вкладке «Загрузки»"))
             write_pth(RUNTIME)   # папку программы могли перенести
         else:
             if not os.path.isfile(self.server):
@@ -290,6 +290,12 @@ class Launcher:
         return [self.server, "-m", "espeech", "--models", a(self.models), "--voices", a(paths.VOICES),
                 "--user-accents", a(os.path.join(paths.DATA, "espeech", "accents.json")),
                 "--host", host, "--port", str(port), "--device", dev]
+
+    def has_model(self):
+        """Модель скачана: устаревший рантайм — тоже (сервер ждёт обновления, админка его предлагает)."""
+        if self.downloaded:
+            return runtime_state() != "missing" and model_ready(self.models)
+        return os.path.isfile(os.path.join(self.models, WEIGHTS))
 
     def sync(self, info):
         """Устройство, на котором сервер загрузил модель (GET /status): auto решает torch, а не nvcuda.dll."""

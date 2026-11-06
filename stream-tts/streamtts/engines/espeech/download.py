@@ -1,4 +1,4 @@
-"""Загрузка ESpeech по кнопке на вкладке «Сервер» (программа для Windows и образ Docker — одним кодом): рантайм и
+"""Загрузка ESpeech по кнопке на вкладке «Загрузки» (программа для Windows и образ Docker — одним кодом): рантайм и
 модель из первоисточников.
 
 Что и откуда — downloads.json, раздел espeech (закрепляет packaging/pin-espeech.py), рантайм — свой у каждой системы
@@ -76,7 +76,7 @@ def offered():
 
 
 def state(cuda):
-    """Для вкладки «Сервер». cuda — состояние CUDA cosyvoice-server (install.cuda_state)."""
+    """Для вкладки «Загрузки». cuda — состояние CUDA cosyvoice-server (install.cuda_state)."""
     if not offered():
         return dict(offer=False)
     rt, model = launch.runtime_state(), model_ready()

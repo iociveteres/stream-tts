@@ -1,4 +1,4 @@
-"""Загрузка Supertonic 3 по кнопке на вкладке «Сервер» (программа для Windows, Docker и исходники — одним кодом) и
+"""Загрузка Supertonic 3 по кнопке на вкладке «Загрузки» (программа для Windows, Docker и исходники — одним кодом) и
 готовые голоса модели.
 
 Что и откуда — downloads.json, раздел supertonic: файлы репозитория Hugging Face Supertone/supertonic-3 закреплённой
@@ -79,7 +79,7 @@ def voices_missing():
 
 
 def state(offered=True):
-    """Для вкладки «Сервер»: offer — загрузка есть (supertonic-server найден); model — файлы модели на месте, voices —
+    """Для вкладки «Загрузки»: offer — загрузка есть (supertonic-server найден); model — файлы модели на месте, voices —
     голосов из 10 на месте; installed — и то и другое."""
     if not offered:
         return dict(offer=False)

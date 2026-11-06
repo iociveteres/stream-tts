@@ -6,7 +6,7 @@
   узлы, атрибуты title/placeholder/aria-label/value, у элемента с data-t — innerHTML целиком; script, style,
   textarea и translate="no" — мимо;
 - константы модулей, которые переводятся при показе: причины возврата R_*, ответы зрителю REPLIES и ACCESS_WHO,
-  подсказки Helix HELIX_HINTS, группы голосов GROUPS, подписи примеров SAMPLES, названия и описания пакетов PACKAGES;
+  подсказки Helix HELIX_HINTS, группы голосов GROUPS, названия и описания пакетов PACKAGES;
 - схема настроек модели: title и help в PARAMS серверов моделей (espeech/*.py, supertonic/*.py) и в DEFAULT_PARAMS
   клиентов (streamtts/engines/), их переводит web/state.py при отдаче /api/state.
 Константы ищутся по имени во всех модулях, а не в конкретном файле: перенос в другой модуль проверку не выключает.
@@ -53,7 +53,6 @@ CONSTS = {
     "ACCESS_WHO": dict_values,
     "HELIX_HINTS": dict_values,  # подсказки к ошибкам Twitch Helix
     "GROUPS": dict_values,       # группы на странице голосов
-    "SAMPLES": lambda v: [t.elts[1].value for t in getattr(v, "elts", ()) if len(getattr(t, "elts", ())) > 1],
     # названия и описания пакетов: PACKAGES = {"id": dict(title=…, about=…, …)}
     "PACKAGES": lambda v: [s for n in ast.walk(v) if isinstance(n, ast.keyword) and n.arg in ("title", "about")
                            for s in consts(n.value)],

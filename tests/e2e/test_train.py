@@ -284,7 +284,7 @@ def test_restart_guard(managed):
     until(api, lambda t: t["state"] == "running" and t["step"] > 0, "хода обучения")
     for path, body in (("/api/backend", dict(backend="cpu")), ("/api/models/unload", dict(id="tts")),
                        ("/api/voicesets/delete", dict(name="wc3")), ("/api/bench", dict(all=True)),
-                       ("/api/cuda/download", {}), ("/api/backend", dict(backend="cpu", force=True))):
+                       ("/api/download", dict(id="cuda")), ("/api/backend", dict(backend="cpu", force=True))):
         r = api.post(path, body)
         assert r.status == 409 and not r.json()["confirm"], (path, r.text)
         assert r.json()["error"].startswith(f"Идёт обучение LoRA голоса {VOICE}: перезапуск сервера синтеза его прервёт")
@@ -330,22 +330,20 @@ def test_restart_guard(managed):
 RESTARTS = {"/api/backend": dict(backend="cpu"), "/api/engine": dict(engine="espeech"),
             "/api/models/unload": dict(id="tts"), "/api/bench": dict(all=True),
             "/api/voicesets/delete": dict(name="wc3"), "/api/voicesets/import": None,   # None — пустой zip сырым телом
-            "/api/cuda/download": {}, "/api/espeech/download": {}, "/api/espeech/delete": {},
-            "/api/supertonic/download": {}, "/api/supertonic/delete": {},
-            "/api/package/delete": "restart"}
+            "/api/download": dict(id="espeech"), "/api/download/delete": dict(id="espeech")}
 # Сервер не трогают: после всех запросов (тело — {} или указанное) тот же процесс сервера и обучение идёт.
 KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/rebuild": {},
          "/api/twitch/client_id": {}, "/api/twitch/mode": {}, "/api/twitch/logout": {}, "/api/reward": {},
          "/api/reward/delete": {}, "/api/enabled": dict(on=True), "/api/skip": {}, "/api/clear": {}, "/api/remove": {},
-         "/api/test": {}, "/api/ban": {}, "/api/profanity": {}, "/api/model/cancel": {},
+         "/api/test": {}, "/api/ban": {}, "/api/profanity": {}, "/api/download/cancel": {}, "/api/download/unqueue": {},
          "/api/model/use": {},       # перезапуск — только когда выбрана CosyVoice, а обучение — у ESpeech
          "/api/models/load": dict(id="tts"), "/api/accent": {}, "/api/accents": {}, "/api/accents/delete": {},
          "/api/draft": {}, "/api/draft/accent": {}, "/api/draft/source/delete": {}, "/api/draft/save": {},
          "/api/draft/discard": {}, "/api/draft/upload": None, "/api/update/dismiss": {}}
-# Не проверяются здесь: свои ручки обучения (/api/train/*, выше) и запросы в сеть. Загрузка модели и пакетов
-# перезапускает сервер только у CosyVoice.
-SKIPS = ("/api/train/", "/api/ui-edit", "/api/twitch/login", "/api/update/check", "/api/model/download",
-         "/api/package/download")
+# Не проверяются здесь: свои ручки обучения (/api/train/*, выше) и запросы в сеть. Загрузки (/api/download) и
+# удаление — в RESTARTS: модель после загрузки и на время удаления перезапускает сервер; кроме пакетов, которых
+# сервер не читает, — это сторож пропускает (web/server.py, _restarts).
+SKIPS = ("/api/train/", "/api/ui-edit", "/api/twitch/login", "/api/update/check")
 
 
 def post_routes():
@@ -371,16 +369,13 @@ def test_every_route_guarded(managed):
                          "в KEEPS (не трогают его) или в SKIPS (запрос в сеть)")
     gone = [p for p in (*RESTARTS, *KEEPS) if p not in routes]
     assert not gone, f"роутов больше нет: {gone}"
-    from streamtts import downloads   # sys.path — из make_app
-    restart_pkg = next(pid for pid, p in downloads.PACKAGES.items() if p.get("restart"))
-
     api = managed.api
     add_items(api, 2)
     api.ok("/api/train/start", dict(voice=VOICE, steps=20000))
     t = until(api, lambda t: t["state"] == "running" and t["step"] > 0, "хода обучения")
     pid = api.state()["cosy"]["runtime"]["pid"]
     for path, body in RESTARTS.items():
-        r = send(api, web, path, dict(id=restart_pkg) if body == "restart" else body)
+        r = send(api, web, path, body)
         assert r.status == 409 and r.json()["error"].startswith("Идёт обучение LoRA"), (path, r.status, r.text)
     for path, body in KEEPS.items():
         r = send(api, web, path, body)

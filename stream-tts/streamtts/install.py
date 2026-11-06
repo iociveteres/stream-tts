@@ -1,14 +1,20 @@
-"""Загрузки через админку (Installer): модель, CUDA, ESpeech, дополнительные пакеты; состояние загрузок и пакетов
-для админки; установка наборов голосов с остановкой сервера (сами наборы — voicesets.py).
-Установщик программы для Windows ничего не качает: модель, CUDA и ESpeech — кнопки на вкладке «Сервер» (при первом
-запуске без модели админка открывается на ней), пакеты — в настройках.
+"""Загрузки через админку (Installer, вкладка «Загрузки»): кванты модели CosyVoice3, CUDA, ESpeech, Supertonic 3,
+дополнительные пакеты — очередью, по одной; удаление скачанного; состояние загрузок, пакетов и места на диске для
+админки; установка наборов голосов с остановкой сервера (сами наборы — voicesets.py).
+Установщик программы для Windows ничего не качает: всё — кнопками на вкладке «Загрузки» (при первом запуске, пока
+модель не выбрана или не скачана, админка открывается на ней).
+
+Очередь: id загрузки — квант (Q8_0…), cuda, espeech, supertonic или id пакета (PACKAGES). «Скачать» во время загрузки
+ставит в конец очереди, «Убрать» убирает оттуда, отмена или ошибка идущей запускает следующую; оборванная (failed)
+докачается с того же места. ESpeech, которому нужна CUDA (cuBLAS для torch), ставит её в очередь перед собой. Первая
+скачанная модель синтеза (любой движок) становится выбранной (settings.engine, engines.Tts), следующие выбор не меняют.
 
 Модель качается как в scripts/download-model.sh: Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF с Hugging Face (ревизия
-закреплена в downloads.json, model.url), квант на выбор (по умолчанию Q8_0), по желанию ONNX-фронтенд int8 (нужен
-только для извлечения голоса из аудио, для озвучки не нужен; он же — дополнительный пакет из PACKAGES, качается и
-удаляется из настроек админки). Другие пакеты
-(htdemucs для очистки образца от музыки, separate.py) — из своих репозиториев Hugging Face. Что качается и откуда —
-downloads.py, файл с докачкой и проверкой sha256 — fetch.py. Папка моделей — paths.MODELS.
+закреплена в downloads.json, model.url), квант на выбор (по умолчанию Q8_0). Скачанный квант становится вариантом
+CosyVoice3, только если выбранного нет; выбранный можно удалить — CosyVoice3 перейдёт на оставшийся (первый по имени)
+или будет ждать модель. ONNX-фронтенд int8 (нужен только для извлечения голоса из аудио) и htdemucs для очистки
+образца от музыки (separate.py) — дополнительные пакеты из PACKAGES, каждый из своего репозитория Hugging Face. Что
+качается и откуда — downloads.py, файл с докачкой и проверкой sha256 — fetch.py. Папка моделей — paths.MODELS.
 
 CUDA (ggml-cuda.dll и рантайм CUDA 13) — два архива из релиза llama.cpp той же сборки, что и ядро GGML (адреса,
 размеры и sha256 — в downloads.json, cuda.archives; там же размеры квантов модели). Если в системе есть драйвер
@@ -29,8 +35,8 @@ import asyncio, contextlib, logging, os, shutil, time, zipfile
 import aiohttp
 
 from . import fetch, paths, voicesets
-from .downloads import (BASE, CUDA, CUDA_VERSION_FILE, DEFAULT_QUANT, PACKAGES, QUANTS, SAMPLE_PHRASE, SAMPLES,
-                        cuda_archives, package_files)
+from .downloads import (BASE, CUDA, CUDA_VERSION_FILE, DEFAULT_QUANT, PACKAGES, QUANTS, SAMPLE_PHRASE, cuda_archives,
+                        package_files)
 from .engines import cosyvoice
 from .engines.espeech import download as espeech_download, launch as espeech_launch
 from .engines.supertonic import download as supertonic_download
@@ -41,6 +47,9 @@ log = logging.getLogger("install")
 
 
 model_name = cosyvoice.model_name
+# Контейнер Docker: CUDA видна, только если его запустили с docker-compose.gpu.yml; папки — тома
+DOCKER = os.name != "nt" and os.path.exists("/.dockerenv")
+TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
 
 
 def installed_models():
@@ -55,30 +64,238 @@ class Cancelled(Exception):
 
 
 class Installer:
-    def __init__(self, settings, runtime, changed, launchers=None):
-        """launchers — запуски найденных движков {id: Launcher}: у каждого свои загрузки."""
+    def __init__(self, settings, runtime, changed, launchers=None, pick=None):
+        """launchers — запуски найденных движков {id: Launcher}: у каждого свои загрузки. pick(engine) — сделать
+        модель выбранной (смена модели задачей, как POST /api/engine): первая скачанная становится выбранной."""
         self.s, self.runtime, self.changed = settings, runtime, changed  # changed() — разбудить админку
-        launchers = launchers or {}
-        self.cosy = launchers.get("cosyvoice")   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
+        self.launchers, self.pick = launchers or {}, pick
+        self.cosy = self.launchers.get("cosyvoice")   # запуск CosyVoice (engines/cosyvoice): модель, CUDA и фронтенд — его
         # запуск ESpeech: у программы для Windows и в Docker рантайм и модель качаются (download.py)
-        self.espeech = launchers.get("espeech")
+        self.espeech = self.launchers.get("espeech")
         # запуск Supertonic 3: модель и готовые голоса качаются везде, где он есть (engines/supertonic/download.py)
-        self.supertonic = launchers.get("supertonic")
+        self.supertonic = self.launchers.get("supertonic")
         self.task = None
-        self.dl = dict(state="idle", quant="", package="", file="", done=0, total=0, speed=0.0, error="")
+        # идущая загрузка или последняя; queue — следующие по порядку; failed — оборванные и отменённые {id: dl}
+        self.dl = dict(state="idle", id="", file="", done=0, total=0, speed=0.0, error="")
+        self.queue, self.failed = [], {}
+        self.closing = False
         self._last_push = 0.0
 
     # --- состояние для админки ---
     def public(self):
         quants = [dict(QUANTS[q], quant=q, file=model_name(q)) for q in QUANTS]
-        samples = [(voice, tr(label)) for voice, label in SAMPLES]
         model = self.cosy.model if self.cosy else ""
-        return dict(quants=quants, default_quant=DEFAULT_QUANT, samples=samples, sample_phrase=SAMPLE_PHRASE,
-                    models=installed_models(),
-                    model=os.path.basename(model) if model else self.s.get("model", ""),
-                    models_dir=paths.MODELS, voices_dir=paths.VOICES, download=dict(self.dl), sets=voicesets.list_sets(),
-                    packages=packages(), cuda=self.cuda_state(), espeech=self.espeech_state(),
-                    supertonic=self.supertonic_state())
+        return dict(quants=quants, default_quant=DEFAULT_QUANT, sample_phrase=SAMPLE_PHRASE, samples=samples(),
+                    models=installed_models(), model=os.path.basename(model) if model else self.selected_model(),
+                    models_dir=paths.MODELS, voices_dir=paths.VOICES, sets=voicesets.list_sets(),
+                    download=dict(self.dl), queue=list(self.queue), failed=dict(self.failed),
+                    packages=packages(), cuda=self.cuda_public(), espeech=self.espeech_state(),
+                    supertonic=self.supertonic_state(), disk=disk())
+
+    def cuda_public(self):
+        """CUDA для «Загрузок»: gpu — есть видеокарта NVIDIA (CUDA ей пригодится), pinned — закреплённая версия.
+        deletable — удалить можно только скачанную кнопкой (cuda-version.txt), а не из сборки сервера."""
+        st = self.cuda_state()
+        return dict(st, gpu=st["offer"] or st["installed"], pinned=CUDA["version"], docker=DOCKER, deletable=False)
+
+    def selected_model(self):
+        """Вариант CosyVoice3, с которым запустится сервер (engines/cosyvoice/launch.py, _model): выбранный или
+        единственный; "" — нет или выбрать нечего."""
+        have, m = installed_models(), self.s.get("model", "")
+        return m if m in have else have[0] if len(have) == 1 else ""
+
+    # --- очередь загрузок ---
+    def current(self):
+        """id идущей загрузки или ""."""
+        return self.dl["id"] if self.task and not self.task.done() else ""
+
+    def _check(self, did):
+        """Можно ли скачать did сейчас: ValueError с причиной (неизвестная, уже скачана, здесь не качается, мало места)."""
+        if did in QUANTS:
+            if not self.cosy:
+                raise ValueError(tr("CosyVoice3 здесь не скачивается"))
+            if model_name(did) in installed_models():
+                raise ValueError(tr("{name} уже скачан", name=did))
+        elif did == "cuda":
+            if not self.cuda_state()["offer"]:
+                raise ValueError(tr("CUDA уже установлена или здесь не нужна"))
+        elif did == "espeech":
+            st = self.espeech_state()
+            if not st["offer"]:
+                raise ValueError(tr("ESpeech здесь не скачивается"))
+            if st["installed"]:
+                raise ValueError(tr("ESpeech уже скачан"))
+            espeech_download.check_space(st)
+        elif did == "supertonic":
+            st = self.supertonic_state()
+            if not st["offer"]:
+                raise ValueError(tr("Supertonic 3 здесь не скачивается"))
+            if st["installed"]:
+                raise ValueError(tr("Supertonic 3 уже скачан"))
+            supertonic_download.check_space()
+        elif did in PACKAGES:
+            if package_installed(did):
+                raise ValueError(tr("пакет уже скачан"))
+            if not package_usable(did):
+                raise ValueError(tr("пакет здесь недоступен"))
+        else:
+            raise ValueError(tr("нет такой загрузки"))
+
+    def enqueue(self, did):
+        """Скачать did: сразу или в конец очереди. ESpeech, которому нужна CUDA, ставит её перед собой."""
+        self._check(did)
+        if did == self.current() or did in self.queue:
+            raise ValueError(tr("уже в очереди"))
+        todo = [did]
+        if did == "espeech" and self.espeech_state()["cuda"] and "cuda" not in (self.current(), *self.queue):
+            todo.insert(0, "cuda")   # cuBLAS для torch — из CUDA cosyvoice-server
+        self.queue += todo
+        self._next()
+        self._push(force=True)
+
+    def unqueue(self, did):
+        if did not in self.queue:
+            raise ValueError(tr("этого нет в очереди"))
+        self.queue.remove(did)
+        self._push(force=True)
+
+    def cancel(self):
+        """Отменить идущую загрузку: следующая из очереди запустится сама."""
+        if self.task and not self.task.done():
+            self.task.cancel()
+
+    def close(self):
+        """Остановка stream-tts: очередь не продолжается."""
+        self.closing = True
+        self.queue.clear()
+        self.cancel()
+
+    def _next(self):
+        while not self.closing and not self.current() and self.queue:
+            did = self.queue.pop(0)
+            try:
+                self._check(did)   # пока ждала, могла скачаться (CUDA вместе с ESpeech) или кончиться место
+            except ValueError as e:
+                self.failed[did] = dict(state="error", id=did, file="", done=0, total=0, speed=0.0, error=str(e))
+                log.warning("загрузка %s: %s", did, e)
+                continue
+            self.failed.pop(did, None)
+            self.dl = dict(state="running", id=did, file="", done=0, total=0, speed=0.0, error="")
+            self.task = asyncio.create_task(self._run(did))
+
+    async def _run(self, did):
+        try:
+            async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
+                await self._job(did, session)
+            self.dl.update(state="done", file="", speed=0.0)
+            log.info("скачано: %s", did)
+        except asyncio.CancelledError:
+            self.dl.update(state="cancelled", speed=0.0, error="")
+            self.failed[did] = dict(self.dl)
+            log.info("загрузка %s отменена (докачается со следующей попытки)", did)
+        except Exception as e:
+            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
+            self.failed[did] = dict(self.dl)
+            log.warning("загрузка %s: %s", did, self.dl["error"])
+        else:
+            try:
+                await self._after(did)
+            except Exception as e:
+                log.warning("после загрузки %s: %s", did, e)
+        finally:
+            self.task = None
+            self._next()
+            self._push(force=True)
+
+    async def _job(self, did, session):
+        if did in QUANTS:
+            await self._fetch_files(session, [(f"{BASE}/{model_name(did)}", model_name(did))])
+        elif did == "cuda":
+            d = self.cosy.dir
+            self.dl.update(total=sum(a[2] for a in cuda_archives()), done=_present(cuda_archives(), d))
+            await self._get_cuda(session)
+        elif did == "espeech":
+            await self._download_espeech(session, self.espeech_state())
+        elif did == "supertonic":
+            await supertonic_download.download(self, session)
+            log.info("Supertonic 3: голоса %s", ", ".join(sorted(supertonic_download.VOICES.values())))
+        else:
+            await self._fetch_files(session, package_files(did))
+
+    async def _after(self, did):
+        """Скачанное подхватывается сервером только при запуске: модель — выбрать (первую) и запустить сервер."""
+        if did in QUANTS:
+            # квант становится вариантом, только если выбранного нет (файл уже на месте: selected_model() — он)
+            changed = self.s.get("model", "") not in installed_models()
+            if changed:
+                self.s.update(model=model_name(did))
+            await self._model_ready("cosyvoice", changed)
+        elif did in ("espeech", "supertonic"):
+            await self._model_ready(did)
+        elif did in PACKAGES and PACKAGES[did].get("restart") and self.runtime.launcher is self.cosy:
+            await self.runtime.restart()
+
+    async def _model_ready(self, engine, restart=True):
+        """Модель engine скачана: первая скачанная становится выбранной (смена модели — задачей, pick), а сервер этой
+        модели перезапускается — ждущий модель запустится."""
+        launcher = self.launchers.get(engine)
+        if not self.s.get("engine"):
+            self.s.update(engine=engine)
+            log.info("первая скачанная модель — выбрана: %s", engine)
+            if self.runtime.launcher is not launcher and self.pick:
+                self.pick(engine)
+                return
+            restart = True
+        if restart and self.runtime.launcher is launcher:
+            await self.runtime.restart()
+
+    async def _fetch_files(self, session, files):
+        """Файлы [(url, путь от paths.MODELS)]: уже скачанные (тот же размер) пропускаются, остальные — с докачкой."""
+        plan = []  # (url, путь от paths.MODELS, dst, size, sha256)
+        for url, rel in files:
+            dst = os.path.join(paths.MODELS, *rel.split("/"))
+            size, sha = await fetch.head(session, url, rel)
+            if os.path.isfile(dst) and (not size or os.path.getsize(dst) == size):
+                continue
+            plan.append((url, rel, dst, size, sha))
+        self.dl["total"] = sum(p[3] for p in plan)
+        self.dl["done"] = sum(fetch.part_size(p[2]) for p in plan)
+        for p in plan:
+            await fetch.fetch(self, session, *p)
+
+    # --- удаление ---
+    async def delete(self, did):
+        if did == self.current():
+            raise ValueError(tr("идёт загрузка: сначала отмените её"))
+        if did in QUANTS:
+            await self.delete_model(did)
+        elif did == "espeech":
+            await self.delete_espeech()
+        elif did == "supertonic":
+            await self.delete_supertonic()
+        elif did in PACKAGES:
+            await self.delete_package(did)
+        else:
+            raise ValueError(tr("это не удаляется"))
+        with contextlib.suppress(ValueError):
+            self.queue.remove(did)
+        self.failed.pop(did, None)
+        self._push(force=True)
+
+    async def delete_model(self, quant):
+        """Квант CosyVoice3. Выбранный тоже: CosyVoice3 перейдёт на оставшийся (первый по имени) или будет ждать модель."""
+        name = model_name(quant)
+        path = os.path.join(paths.MODELS, name)
+        if not os.path.isfile(path):
+            raise ValueError(tr("нет такой модели"))
+        used = self.selected_model() == name
+        rest = [m for m in installed_models() if m != name]
+        busy = used and self.runtime.launcher is self.cosy   # на Windows сервер держит свой .gguf открытым
+        async with self.runtime.paused() if busy else contextlib.nullcontext():
+            await asyncio.to_thread(os.remove, path)
+            if used:
+                self.s.update(model=rest[0] if rest else "")
+        log.info("модель %s удалена%s", quant, f", вариант CosyVoice3 — {rest[0]}" if used and rest else "")
 
     # --- CUDA ---
     def cuda_state(self):
@@ -95,32 +312,6 @@ class Installer:
             os.path.join(paths.env("SystemRoot", r"C:\Windows"), "System32", "nvcuda.dll"))
         return dict(offer=nvidia and not installed, installed=installed, version=version,
                     size=sum(a["size"] for a in CUDA["archives"]), unpacked=CUDA["unpacked"], dir=d)
-
-    def start_cuda(self):
-        if not self.cuda_state()["offer"]:
-            raise ValueError(tr("CUDA уже установлена или здесь не нужна"))
-        if self.task and not self.task.done():
-            raise ValueError(tr("загрузка уже идёт"))
-        self.dl = dict(state="running", quant="", package="cuda", file="", done=0, total=0, speed=0.0, error="")
-        self.task = asyncio.create_task(self._download_cuda())
-
-    async def _download_cuda(self):
-        d = self.cosy.dir
-        archives = cuda_archives()
-        try:
-            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                self.dl.update(total=sum(a[2] for a in archives), done=_present(archives, d))
-                await self._get_cuda(session)
-            self.dl.update(state="done", file="", speed=0.0)
-        except asyncio.CancelledError:
-            self.dl.update(state="cancelled", speed=0.0, error="")
-            log.info("загрузка CUDA отменена (докачается со следующей попытки)")
-        except Exception as e:
-            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
-            log.warning("CUDA: %s", self.dl["error"])
-        finally:
-            self._push(force=True)
 
     async def _get_cuda(self, session):
         """Скачать архивы CUDA (докачка) и распаковать нужные файлы в папку cosyvoice-server."""
@@ -142,44 +333,17 @@ class Installer:
             return dict(offer=False)
         return espeech_download.state(self.cuda_state())
 
-    def start_espeech(self):
-        st = self.espeech_state()
-        if not st["offer"]:
-            raise ValueError(tr("ESpeech здесь не скачивается"))
-        if st["installed"]:
-            raise ValueError(tr("ESpeech уже скачан"))
-        if self.task and not self.task.done():
-            raise ValueError(tr("загрузка уже идёт"))
-        espeech_download.check_space(st)
-        self.dl = dict(state="running", quant="", package="espeech", file="", done=0, total=0, speed=0.0, error="")
-        self.task = asyncio.create_task(self._download_espeech(st))
-
-    async def _download_espeech(self, st):
-        try:
-            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                cuda = cuda_archives() if st["cuda"] else []
-                self.dl.update(total=st["size"], done=espeech_download.bytes_present() +
-                               (_present(cuda, self.cosy.dir) if cuda else 0))
-                steps = espeech_download.Steps(self, session)
-                if cuda:   # cuBLAS для torch — из CUDA cosyvoice-server
-                    await self._get_cuda(session)
-                if st["runtime"] != "ok":
-                    await steps.runtime(self._espeech_swap)
-                if not st["model"]:
-                    await steps.model()
-            self.dl.update(state="done", file="", speed=0.0)
-            log.info("ESpeech скачан")
-            if self.runtime.launcher is self.espeech:
-                await self.runtime.restart()
-        except asyncio.CancelledError:
-            self.dl.update(state="cancelled", speed=0.0, error="")
-            log.info("загрузка ESpeech отменена (докачается со следующей попытки)")
-        except Exception as e:
-            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
-            log.warning("ESpeech: %s", self.dl["error"])
-        finally:
-            self._push(force=True)
+    async def _download_espeech(self, session, st):
+        cuda = cuda_archives() if st["cuda"] else []
+        self.dl.update(total=st["size"], done=espeech_download.bytes_present() +
+                       (_present(cuda, self.cosy.dir) if cuda else 0))
+        steps = espeech_download.Steps(self, session)
+        if cuda:   # CUDA не скачалась перед ним (очередь): cuBLAS для torch — из CUDA cosyvoice-server
+            await self._get_cuda(session)
+        if st["runtime"] != "ok":
+            await steps.runtime(self._espeech_swap)
+        if not st["model"]:
+            await steps.model()
 
     async def _espeech_swap(self, tmp):
         """Собранный рантайм — на место прежнего (сервер ESpeech держит его файлы, если запущен)."""
@@ -190,8 +354,6 @@ class Installer:
     async def delete_espeech(self):
         if not self.espeech_state()["offer"]:
             raise ValueError(tr("ESpeech здесь не скачивается"))
-        if self.task and not self.task.done() and self.dl.get("package") == "espeech":
-            raise ValueError(tr("загрузка уже идёт"))
         busy = self.runtime.launcher is self.espeech
         async with self.runtime.paused() if busy else contextlib.nullcontext():
             await asyncio.to_thread(espeech_download.remove)
@@ -201,73 +363,15 @@ class Installer:
     def supertonic_state(self):
         return supertonic_download.state(bool(self.supertonic))
 
-    def start_supertonic(self):
-        st = self.supertonic_state()
-        if not st["offer"]:
-            raise ValueError(tr("Supertonic 3 здесь не скачивается"))
-        if st["installed"]:
-            raise ValueError(tr("Supertonic 3 уже скачан"))
-        if self.task and not self.task.done():
-            raise ValueError(tr("загрузка уже идёт"))
-        supertonic_download.check_space()
-        self.dl = dict(state="running", quant="", package="supertonic", file="", done=0, total=0, speed=0.0, error="")
-        self.task = asyncio.create_task(self._download_supertonic())
-
-    async def _download_supertonic(self):
-        try:
-            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                await supertonic_download.download(self, session)
-            self.dl.update(state="done", file="", speed=0.0)
-            log.info("Supertonic 3 скачан, голоса: %s", ", ".join(sorted(supertonic_download.VOICES.values())))
-            # сервер ждёт модель (runtime.Unavailable) или работает со старым списком голосов: запуск сразу
-            if self.runtime.launcher is self.supertonic:
-                await self.runtime.restart()
-        except asyncio.CancelledError:
-            self.dl.update(state="cancelled", speed=0.0, error="")
-            log.info("загрузка Supertonic 3 отменена (докачается со следующей попытки)")
-        except Exception as e:
-            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
-            log.warning("Supertonic 3: %s", self.dl["error"])
-        finally:
-            self._push(force=True)
-
     async def delete_supertonic(self):
         if not self.supertonic_state()["offer"]:
             raise ValueError(tr("Supertonic 3 здесь не скачивается"))
-        if self.task and not self.task.done() and self.dl.get("package") == "supertonic":
-            raise ValueError(tr("загрузка уже идёт"))
         busy = self.runtime.launcher is self.supertonic   # сервер держит открытыми файлы модели
         async with self.runtime.paused() if busy else contextlib.nullcontext():
             await asyncio.to_thread(supertonic_download.remove)
         log.info("Supertonic 3 удалён вместе с готовыми голосами")
 
-    def _push(self, force=False):
-        now = time.monotonic()
-        if force or now - self._last_push > 0.5:
-            self._last_push = now
-            self.changed()
-
-    # --- модель ---
-    def start_download(self, quant, frontend):
-        if quant not in QUANTS:
-            raise ValueError(tr("неизвестный квант {quant}", quant=quant))
-        if self.task and not self.task.done():
-            raise ValueError(tr("загрузка уже идёт"))
-        files = [(f"{BASE}/{model_name(quant)}", model_name(quant))]
-        if frontend:
-            files += package_files("frontend")
-        self.dl = dict(state="running", quant=quant, package="", file="", done=0, total=0, speed=0.0, error="")
-        self.task = asyncio.create_task(self._download(quant, files))
-
-    def start_package(self, pid):
-        if pid not in PACKAGES:
-            raise ValueError(tr("нет такого пакета"))
-        if self.task and not self.task.done():
-            raise ValueError(tr("загрузка уже идёт"))
-        self.dl = dict(state="running", quant="", package=pid, file="", done=0, total=0, speed=0.0, error="")
-        self.task = asyncio.create_task(self._download("", package_files(pid)))
-
+    # --- пакеты ---
     async def delete_package(self, pid):
         if pid not in PACKAGES:
             raise ValueError(tr("нет такого пакета"))
@@ -280,43 +384,13 @@ class Installer:
                     os.remove(os.path.join(paths.MODELS, *rel.split("/")))
         log.info("пакет %s удалён", pid)
 
-    def cancel(self):
-        if self.task and not self.task.done():
-            self.task.cancel()
+    def _push(self, force=False):
+        now = time.monotonic()
+        if force or now - self._last_push > 0.5:
+            self._last_push = now
+            self.changed()
 
-    async def _download(self, quant, files):
-        try:
-            timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                plan = []  # (url, путь от paths.MODELS, dst, size, sha256)
-                for url, rel in files:
-                    dst = os.path.join(paths.MODELS, *rel.split("/"))
-                    size, sha = await fetch.head(session, url, rel)
-                    if os.path.isfile(dst) and (not size or os.path.getsize(dst) == size):
-                        continue
-                    plan.append((url, rel, dst, size, sha))
-                self.dl["total"] = sum(p[3] for p in plan)
-                self.dl["done"] = sum(fetch.part_size(p[2]) for p in plan)
-                for p in plan:
-                    await fetch.fetch(self, session, *p)
-            self.dl.update(state="done", file="", speed=0.0)
-            if quant:
-                log.info("модель %s скачана", quant)
-                self.s.update(model=model_name(quant))
-            else:
-                log.info("пакет %s скачан", self.dl["package"])
-            if (quant or PACKAGES[self.dl["package"]].get("restart")) and self.runtime.launcher is self.cosy:
-                await self.runtime.restart()  # новая модель или фронтенд подхватываются только при запуске
-        except asyncio.CancelledError:
-            self.dl.update(state="cancelled", speed=0.0, error="")
-            log.info("загрузка отменена (докачается со следующей попытки)")
-        except Exception as e:
-            self.dl.update(state="error", speed=0.0, error=str(e) or type(e).__name__)
-            log.warning("загрузка: %s", self.dl["error"])
-        finally:
-            self._push(force=True)
-
-
+    # --- вариант CosyVoice3 (вкладка «Сервер») ---
     def use_model(self, name):
         if name not in installed_models():
             raise ValueError(tr("нет такой модели"))
@@ -337,6 +411,27 @@ class Installer:
         async with self.runtime.paused():
             await asyncio.to_thread(voicesets._delete_set, name, model)
         log.info("набор %s%s удалён", name, f" ({model})" if model else "")
+
+
+def samples():
+    """Примеры звучания вариантов, которые есть (static/samples/<вариант>.mp3): без примера кнопки нет."""
+    try:
+        return sorted(f[:-4] for f in os.listdir(os.path.join(paths.STATIC, "samples")) if f.endswith(".mp3"))
+    except OSError:
+        return []
+
+
+def disk():
+    """Свободное место там, куда качаются модели: where — диск (Windows), том (Docker) или ""."""
+    d = os.path.abspath(paths.MODELS)
+    while not os.path.isdir(d) and os.path.dirname(d) != d:   # папки моделей ещё нет
+        d = os.path.dirname(d)
+    try:
+        free = shutil.disk_usage(d).free
+    except OSError:
+        free = None
+    where = os.path.splitdrive(os.path.abspath(paths.MODELS))[0] if os.name == "nt" else paths.MODELS if DOCKER else ""
+    return dict(free=free, where=where, docker=DOCKER)
 
 
 def _present(archives, d):
@@ -396,5 +491,3 @@ def packages(installed=None):
                  source=p["source"], restart=bool(p.get("restart")), usable=package_usable(pid),
                  installed=installed[pid] if pid in installed else package_installed(pid))
             for pid, p in PACKAGES.items()]
-
-

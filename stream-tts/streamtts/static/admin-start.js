@@ -10,6 +10,6 @@ $("#lang").onchange = async e => {
 $("#prof-sample").placeholder = T("проверить фразу");   // у поля translate="no": образец мата остаётся русским
 
 // --- старт ---
-// Первый запуск: без модели — сразу на вкладку «Сервер»
-const firstTab = () => S.setup && S.cosy.engine === "cosyvoice" && !S.setup.models.length ? "server" : (S.twitch.mode === "chat" ? S.twitch.chat.state : S.twitch.state) === "ok" ? "queue" : "twitch";
+// Первый запуск: модель не выбрана или выбранная не скачана — сразу на вкладку «Загрузки»
+const firstTab = () => S.setup && !engineReady(S.cosy.picked) ? "downloads" : (S.twitch.mode === "chat" ? S.twitch.chat.state : S.twitch.state) === "ok" ? "queue" : "twitch";
 reload().then(() => { showTab(location.hash.slice(1) || firstTab()); connect(); });

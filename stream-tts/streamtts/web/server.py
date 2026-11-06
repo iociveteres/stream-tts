@@ -1,5 +1,5 @@
-"""Встроенный сервер синтеза: модель и её загрузка, устройство, проверка скорости, наборы голосов, необязательные
-пакеты, CUDA, ESpeech, Supertonic 3, выгрузка моделей из памяти, обновления программы. Всё, что перезапускает или
+"""Встроенный сервер синтеза: загрузки (очередь и удаление: модели, CUDA, пакеты), вариант CosyVoice3, устройство,
+проверка скорости, наборы голосов, выгрузка моделей из памяти, обновления программы. Всё, что перезапускает или
 останавливает сервер, — через _restart_guard (common.py): обучение LoRA живёт в процессе сервера."""
 import logging, urllib.parse
 
@@ -15,21 +15,11 @@ log = logging.getLogger("web")
 MAX_SET_UPLOAD = 2 << 30   # коллекция ESpeech: ~10 МБ на голос (адаптер LoRA), WC3 — ~680 МБ
 
 
-# --- первый запуск: модель, устройство, наборы голосов ---
+# --- встроенный сервер: вариант модели, устройство, наборы голосов ---
 def _install(ctx):
     if not ctx.install:   # готовый сервер в тестах: ставить некуда
         raise ValueError("no built-in server")
     return ctx.install
-
-
-async def post_model_download(request, ctx, data):
-    _install(ctx).start_download(str(data.get("quant") or downloads.DEFAULT_QUANT), bool(data.get("frontend")))
-    return ok()
-
-
-async def post_model_cancel(request, ctx, data):
-    _install(ctx).cancel()
-    return ok()
 
 
 async def post_model_use(request, ctx, data):
@@ -96,58 +86,38 @@ async def api_voiceset_import(request):
     return ok(**result)
 
 
-# --- необязательные пакеты ---
-async def post_package_download(request, ctx, data):
-    _install(ctx).start_package(str(data["id"]))
-    return ok()
+# --- «Загрузки»: очередь (install.py) ---
+# Перезапускают сервер синтеза после загрузки или на время удаления (install.py, _after и delete): всё, кроме
+# пакетов, которых сервер не читает (очистка от музыки)
+def _restarts(did):
+    return did not in downloads.PACKAGES or bool(downloads.PACKAGES[did].get("restart"))
 
 
-async def post_package_delete(request, ctx, data):
-    inst = _install(ctx)
-    if (downloads.PACKAGES.get(str(data["id"])) or {}).get("restart") and (stop := await _restart_guard(ctx, data)):
-        return stop   # сервер останавливается, пока удаляются файлы фронтенда
-    await inst.delete_package(str(data["id"]))
-    return ok()
-
-
-async def post_cuda_download(request, ctx, data):
-    inst = _install(ctx)
-    if stop := await _restart_guard(ctx, data):   # распаковка — при остановленном сервере
+async def post_download(request, ctx, data):
+    inst, did = _install(ctx), str(data["id"])
+    if _restarts(did) and (stop := await _restart_guard(ctx, data)):
         return stop
-    inst.start_cuda()
+    inst.enqueue(did)
     return ok()
 
 
-async def post_espeech_download(request, ctx, data):
-    inst = _install(ctx)
-    if stop := await _restart_guard(ctx, data):   # замена рантайма и перезапуск ESpeech после скачивания
-        return stop
-    inst.start_espeech()
+async def post_download_unqueue(request, ctx, data):
+    _install(ctx).unqueue(str(data["id"]))
     return ok()
 
 
-async def post_espeech_delete(request, ctx, data):
-    inst = _install(ctx)
-    if stop := await _restart_guard(ctx, data):   # сервер ESpeech останавливается, пока удаляются файлы
-        return stop
-    await inst.delete_espeech()
+async def post_download_cancel(request, ctx, data):
+    _install(ctx).cancel()
     return ok()
 
 
-async def post_supertonic_download(request, ctx, data):
-    inst = _install(ctx)
-    if stop := await _restart_guard(ctx, data):   # после загрузки сервер Supertonic перезапускается
+async def post_download_delete(request, ctx, data):
+    inst, did = _install(ctx), str(data["id"])
+    if _restarts(did) and (stop := await _restart_guard(ctx, data)):
         return stop
-    inst.start_supertonic()
-    return ok()
-
-
-async def post_supertonic_delete(request, ctx, data):
-    inst = _install(ctx)
-    if stop := await _restart_guard(ctx, data):   # сервер Supertonic останавливается, пока удаляются файлы
-        return stop
-    await inst.delete_supertonic()
-    ctx.voices.wake.set()
+    await inst.delete(did)
+    if did == "supertonic":   # ушли и готовые голоса
+        ctx.voices.wake.set()
     return ok()
 
 
@@ -197,19 +167,14 @@ async def post_update_dismiss(request, ctx, data):
 
 
 POSTS = {
-    "/api/model/download": post_model_download,
-    "/api/model/cancel": post_model_cancel,
+    "/api/download": post_download,
+    "/api/download/unqueue": post_download_unqueue,
+    "/api/download/cancel": post_download_cancel,
+    "/api/download/delete": post_download_delete,
     "/api/model/use": post_model_use,
     "/api/backend": post_backend,
     "/api/bench": post_bench,
     "/api/voicesets/delete": post_voiceset_delete,
-    "/api/package/download": post_package_download,
-    "/api/package/delete": post_package_delete,
-    "/api/cuda/download": post_cuda_download,
-    "/api/espeech/download": post_espeech_download,
-    "/api/espeech/delete": post_espeech_delete,
-    "/api/supertonic/download": post_supertonic_download,
-    "/api/supertonic/delete": post_supertonic_delete,
     "/api/models/unload": post_model_unload,
     "/api/models/load": post_model_load,
     "/api/update/check": post_update_check,

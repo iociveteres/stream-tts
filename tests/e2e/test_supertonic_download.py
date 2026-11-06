@@ -1,4 +1,4 @@
-"""Загрузка Supertonic 3 по кнопке (engines/supertonic/download.py, install.py, POST /api/supertonic/*) без сети и без
+"""Загрузка Supertonic 3 по кнопке (engines/supertonic/download.py, install.py, POST /api/download*) без сети и без
 настоящей модели: stream-tts отдельным процессом со встроенным поддельным supertonic-server (пакет-заглушка), файлы —
 с локального HTTP-сервера по своему закреплению (STREAM_TTS_TEST_SUPERTONIC). Проверяются докачка после обрыва,
 неверный sha256, готовые голоса после загрузки (страница голосов, примеры), запуск ждущего сервера, удаление модели с
@@ -120,7 +120,7 @@ def test_download_resume_bad_sha_voices_delete(st):
     c = wait_for(lambda: (lambda c: c["runtime"]["state"] == "waiting" and c)(api.state()["cosy"]), 30,
                  f"ожидания модели\n{st.server.tail()}")
     assert c["engine"] == "supertonic"
-    assert c["runtime"]["error"] == "нет модели Supertonic 3: скачайте её на вкладке «Сервер»"
+    assert c["runtime"]["error"] == "нет модели Supertonic 3: скачайте её на вкладке «Загрузки»"
     s = setup(api)["supertonic"]
     total = sum(len(d) for d in files.values())
     assert (s["offer"], s["model"], s["installed"], s["voices"], s["voices_total"], s["size"]) == \
@@ -129,9 +129,9 @@ def test_download_resume_bad_sha_voices_delete(st):
 
     srv.cut["onnx/vector_estimator.onnx"] = 150_000
     srv.bad.add("onnx/vocoder.onnx")
-    api.ok("/api/supertonic/download")
+    api.ok("/api/download", dict(id="supertonic"))
     d = finished(api, "загрузки с испорченным файлом")
-    assert d["state"] == "error" and d["package"] == "supertonic"
+    assert d["state"] == "error" and d["id"] == "supertonic"
     assert d["error"] == "onnx/vocoder.onnx: контрольная сумма не совпала, файл удалён — скачайте ещё раз", d
     ve = [r for p, r in srv.requests if p == "onnx/vector_estimator.onnx"]
     assert ve == [None, "bytes=150000-"], "после обрыва — докачка с места обрыва"
@@ -141,7 +141,7 @@ def test_download_resume_bad_sha_voices_delete(st):
 
     srv.bad.clear()
     srv.requests.clear()
-    api.ok("/api/supertonic/download")
+    api.ok("/api/download", dict(id="supertonic"))
     d = finished(api, "загрузки")
     assert d["state"] == "done", d
     got = [p for p, _ in srv.requests]
@@ -153,7 +153,7 @@ def test_download_resume_bad_sha_voices_delete(st):
     assert sorted(manifest) == NAMES and manifest["anton"]["title"] == "Supertonic 3 M1"
     s = setup(api)["supertonic"]
     assert (s["model"], s["installed"], s["voices"], s["size"]) == (True, True, 10, 0)
-    r = api.post("/api/supertonic/download").json()
+    r = api.post("/api/download", dict(id="supertonic")).json()
     assert not r["ok"] and r["error"].endswith("Supertonic 3 уже скачан"), r
 
     # ждущий сервер запустился сам, голоса — готовые и голос пользователя
@@ -173,12 +173,12 @@ def test_download_resume_bad_sha_voices_delete(st):
     s = setup(api)["supertonic"]
     assert (s["model"], s["installed"], s["voices"]) == (True, False, 9)
     srv.requests.clear()
-    api.ok("/api/supertonic/download")
+    api.ok("/api/download", dict(id="supertonic"))
     assert finished(api, "голосов")["state"] == "done" and not srv.requests
     assert (voices / "rita.supertonic").is_file() and setup(api)["supertonic"]["installed"]
 
     pid = api.state()["cosy"]["runtime"]["pid"]
-    api.ok("/api/supertonic/delete")
+    api.ok("/api/download/delete", dict(id="supertonic"))
     assert not models.exists()
     assert sorted(os.listdir(voices)) == ["mine.supertonic"], "голос пользователя удалён или готовые остались"
     c = wait_for(lambda: (lambda c: c["runtime"]["state"] == "waiting" and c)(api.state()["cosy"]), 30,

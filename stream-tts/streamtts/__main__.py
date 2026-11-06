@@ -4,6 +4,7 @@ import asyncio, contextlib, logging, os, shutil, sys
 from aiohttp import web
 
 from . import bench, config, editor, engines, filters, i18n, install, paths, stats, store, updates, web as webapp
+from .web import model as web_model
 from .i18n import tr
 from .engine import Engine
 from .engines.espeech import train as lora
@@ -80,7 +81,7 @@ async def on_cleanup(app):
     await asyncio.gather(*ctx.tasks, return_exceptions=True)
     await ctx.tts.close()
     if ctx.install:
-        ctx.install.cancel()
+        ctx.install.close()
     if ctx.runtime:
         await ctx.runtime.stop()
 
@@ -123,8 +124,9 @@ def main():
     ctx.twitch = Twitch(ctx.settings, ctx.engine)
     ctx.engine.twitch = ctx.twitch
     ctx.load = stats.Load()
-    # Первый запуск через админку (модель, устройство, наборы голосов); в тестах с готовым сервером их нет
-    ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set, launchers) if ctx.runtime else None
+    # Загрузки (очередь, удаление) и наборы голосов встроенного сервера; в тестах с готовым сервером их нет
+    ctx.install = install.Installer(ctx.settings, ctx.runtime, ctx.engine.dirty.set, launchers,
+                                    lambda e: web_model.switch(ctx, e)) if ctx.runtime else None
     ctx.editor = editor.Editor(ctx.settings, ctx.tts, ctx.voices, ctx.runtime)
     ctx.train = lora.Training(ctx.settings, ctx.tts, ctx.voices, ctx.editor)   # обучение LoRA голоса ESpeech
     ctx.bench = bench.Bench(ctx.settings, ctx.tts, ctx.runtime, ctx.voices, ctx.engine) if ctx.runtime else None
