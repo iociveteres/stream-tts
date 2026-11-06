@@ -55,7 +55,7 @@ for _ in $(seq 1 90); do
         echo "Логи: docker compose logs -f | Стоп: docker compose down"
         # CUDA в образ не входит: её (~590 МБ) качает админка в ./cuda, пока синтез идёт на процессоре
         if [ "$GPU" -eq 1 ] && [ ! -f cuda/libggml-cuda.so ]; then
-            echo "Видеокарта: на вкладке «Сервер» в блоке «Устройство синтеза» скачайте CUDA (~590 МБ)."
+            echo "Видеокарта: на вкладке «Загрузки» в карточке «Видеокарта NVIDIA» скачайте CUDA (~590 МБ)."
         fi
         exit 0
     fi

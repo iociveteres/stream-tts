@@ -16,7 +16,7 @@ all — с CUDA (нужен build-runtime.py --cuda). Так собранную 
 --setup собирает установщик dist/StreamTTS-Setup-<версия>.exe (версия — __version__ в streamtts/__init__.py; Inno
 Setup 6.5+: ISCC из переменной ISCC, портативной установки в packaging/windows/.inno, PATH или стандартных папок
 установки), --no-build — только установщик из уже собранного dist/StreamTTS. Установщик ничего не качает (модель и
-CUDA программа качает сама на вкладке «Сервер»); из streamtts/downloads.json он через /D получает версию и файлы CUDA
+CUDA программа качает сама на вкладке «Загрузки»); из streamtts/downloads.json он через /D получает версию и файлы CUDA
 (чтобы сохранить при обновлении CUDA, скачанную в программе) и размеры для сводки перед установкой.
 """
 import argparse, importlib.metadata as md, json, os, re, shutil, subprocess, sys

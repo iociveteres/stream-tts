@@ -3,7 +3,7 @@
 usage: python packaging/pin-espeech.py [--what windows,linux,model] [--torch-wheel PATH] [--linux-torch-wheel PATH]
                                        [--checkpoint PATH] [--cache DIR] [--no-stubs]
 
-stream-tts качает ESpeech сам по кнопке на вкладке «Сервер» (engines/espeech/download.py) — программа для Windows и
+stream-tts качает ESpeech сам по кнопке на вкладке «Загрузки» (engines/espeech/download.py) — программа для Windows и
 образ Docker одним кодом, всё из первоисточников и только закреплённое здесь (docs/espeech.md, «Поставка»):
 - рантайм, свой у каждой системы (runtime.windows, runtime.linux): Python 3.14.7 (встраиваемый с python.org;
   python-build-standalone для Linux), колёса PACKAGES (PyPI: cp314 / abi3 / py3 под win_amd64 или manylinux x86_64)

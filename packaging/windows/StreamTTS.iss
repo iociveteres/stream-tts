@@ -7,7 +7,7 @@
 ; можно выбрать любую, куда можно писать), и всё живёт в папке программы: данные — {app}\data, модели — {app}\models,
 ; голоса — {app}\voices (paths.py узнаёт такую установку по файлу {app}\portable). Рантайм VC++ лежит рядом с
 ; cosyvoice-server (build-runtime.py), поэтому vc_redist не нужен.
-; Установщик ничего не качает: модель CosyVoice, CUDA и ESpeech программа качает по кнопкам на вкладке «Сервер»
+; Установщик ничего не качает: модель CosyVoice, CUDA и ESpeech программа качает по кнопкам на вкладке «Загрузки»
 ; (install.py, engines/espeech/download.py), при первом запуске без модели админка открывается на ней. В
 ; {app}\runtime\espeech — только код espeech-server и DLL-заглушки (build-runtime.py). Язык установщика — в
 ; {app}\setup-lang.txt: на нём админка открывается в первый раз (i18n.py). Тексты — в [CustomMessages] на двух
@@ -15,7 +15,7 @@
 ; Установка поверх: {app}\runtime очищается целиком (GGML грузит все ggml-*.dll из папки, старые DLL несовместимы),
 ; data, models, voices и espeech-runtime не трогаются; CUDA, скачанная в программе, переносится через {app}\.cuda-keep,
 ; если её версия (runtime\cuda-version.txt) совпадает с downloads.json, иначе удаляется — новую предложит вкладка
-; «Сервер». Удаление спрашивает, удалить ли также модели (с espeech-runtime), голоса и настройки.
+; «Загрузки». Удаление спрашивает, удалить ли также модели (с espeech-runtime), голоса и настройки.
 
 #ifndef AppVersion
   #define AppVersion "0.2.0"
@@ -64,7 +64,7 @@ en.DiskSpaceMBLabel=At least [mb] MB of free disk space is required (not countin
 [CustomMessages]
 ru.DirNotWritable=В папку %1 нельзя записывать без прав администратора (так устроены Program Files и другие системные папки). StreamTTS хранит в своей папке настройки, модели и голоса, поэтому выберите другую, например %2.
 ru.DirNotEmpty=В папке %1 уже есть другие файлы. StreamTTS положит туда свои папки data, models, voices и runtime.%n%nВсё равно ставить сюда?
-ru.ReadyLater=Скачивается потом, в программе (вкладка «Сервер»):
+ru.ReadyLater=Скачивается потом, в программе (вкладка «Загрузки»):
 ru.ReadyModel=модель синтеза — %1–%2 МБ на выбор, с примерами звука
 ru.ReadyCuda=CUDA для видеокарт NVIDIA — %1 МБ (распакованная — %2 МБ)
 ru.ReadyCudaKeep=CUDA %1 уже установлена и сохранится
@@ -72,7 +72,7 @@ ru.ReadyCudaOld=CUDA прежней сборки удалится: новую (%
 ru.UninstallData=Удалить также модели, голоса и настройки?%n%n%1%n%nОни лежат в папке программы. Если оставить, повторная установка в ту же папку их подхватит.
 en.DirNotWritable=The folder %1 cannot be written without administrator rights (Program Files and other system folders work this way). StreamTTS keeps its settings, models and voices in its own folder, so choose another one, for example %2.
 en.DirNotEmpty=The folder %1 already contains other files. StreamTTS will put its data, models, voices and runtime folders there.%n%nInstall here anyway?
-en.ReadyLater=Downloaded later, in the program («Сервер» (Server) tab):
+en.ReadyLater=Downloaded later, in the program («Загрузки» (Downloads) tab):
 en.ReadyModel=speech model — %1–%2 MB of your choice, with audio samples
 en.ReadyCuda=CUDA for NVIDIA graphics cards — %1 MB (%2 MB unpacked)
 en.ReadyCudaKeep=CUDA %1 is already installed and will be kept

@@ -9,10 +9,10 @@ usage: python packaging/windows/build-runtime.py [--out DIR] [--cache DIR] [--cr
   <out>/core/licenses/   тексты лицензий: из архивов (LICENSES) и из репозиториев тех же версий (LICENSE_URLS)
   <out>/core/espeech/    espeech-server без Python и torch: пакет espeech/ (код проекта) и DLL-заглушки stubs/ из
                 packaging/windows/stubs/*.def (их пишет pin-espeech.py; сборка — MSVC, нужен C++ из Visual Studio или
-                Build Tools). Python, пакеты и torch программа качает сама по кнопке на вкладке «Сервер»
+                Build Tools). Python, пакеты и torch программа качает сама по кнопке на вкладке «Загрузки»
                 (engines/espeech/download.py, закреплено в downloads.json, раздел espeech) в папку espeech-runtime.
   --cuda: <out>/cuda/   ggml-cuda.dll и рантайм CUDA 13 (cudart, cuBLAS), ~660 МБ — для build-exe.py --runtime all.
-                В установщик CUDA не входит: вкладка «Сервер» качает те же два архива llama.cpp сама.
+                В установщик CUDA не входит: вкладка «Загрузки» качает те же два архива llama.cpp сама.
                 Их адреса, размеры и sha256 — в stream-tts/streamtts/downloads.json (cuda.archives), отсюда же их
                 берёт и этот скрипт, так что версия CUDA закреплена в одном месте.
 --flat DIR собирает core (без espeech/: из исходников espeech-server запускается из espeech/.venv) и файлы CUDA в одну

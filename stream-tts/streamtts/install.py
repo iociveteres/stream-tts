@@ -19,12 +19,12 @@ CosyVoice3, только если выбранного нет; выбранны�
 CUDA (ggml-cuda и рантайм CUDA 13) — два архива из релиза llama.cpp той же сборки, что и ядро GGML (адреса,
 размеры и sha256 — в downloads.json, cuda.windows — zip, cuda.linux — tar.gz для образа Docker; там же размеры квантов
 модели). Если есть драйвер NVIDIA (paths.nvidia: nvcuda.dll, в контейнере — libcuda.so.1 от --gpus), а ggml-cuda
-нет, вкладка «Сервер» предлагает скачать их: из архивов берутся только нужные файлы (files), они распаковываются при
+нет, вкладка «Загрузки» предлагает скачать их: из архивов берутся только нужные файлы (files), они распаковываются при
 остановленном сервере в папку сервера или в paths.CUDA (в Docker — том /cuda, образ один и без CUDA), версия
 пишется в cuda-version.txt (по ней установщик при обновлении решает, сохранить ли CUDA или удалить вместе со старым
 рантаймом), потом сервер перезапускается и заново ищет устройства.
 
-ESpeech (рантайм с torch и модель) программа для Windows и образ Docker качают по кнопке на вкладке «Сервер» —
+ESpeech (рантайм с torch и модель) программа для Windows и образ Docker качают по кнопке на вкладке «Загрузки» —
 engines/espeech/download.py; CUDA, если её нет, а видеокарта NVIDIA есть, качается вместе с ним (torch берёт cuBLAS
 оттуда). Supertonic 3 (модель и 10 готовых голосов) — тоже по кнопке, везде, где найден supertonic-server:
 engines/supertonic/download.py; после загрузки ждущий модель сервер запускается.
@@ -300,7 +300,7 @@ class Installer:
 
     # --- CUDA ---
     def cuda_state(self):
-        """CUDA для вкладки «Сервер»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda нет)."""
+        """CUDA для вкладки «Загрузки»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda нет)."""
         if not self.cosy:
             return dict(offer=False, installed=False, version="", size=0, unpacked=0, dir="")
         lib, d = self.cosy.cuda_lib(), self.cosy.cuda

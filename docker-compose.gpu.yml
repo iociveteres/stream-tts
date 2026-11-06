@@ -2,7 +2,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
 # (или ./setup.sh --gpu, который прописывает оба файла в .env)
 services:
-  # Образ тот же, что без видеокарты: CUDA качает кнопка на вкладке «Сервер» в том ./cuda (install.py), а этот
+  # Образ тот же, что без видеокарты: CUDA качает кнопка на вкладке «Загрузки» в том ./cuda (install.py), а этот
   # файл только даёт контейнеру видеокарту. Встроенный сервер сам выбирает CUDA и добавляет --llm-flash-attn 0
   # (engines/cosyvoice/launch.py). compute — для CUDA, utility — для nvidia-smi на странице статистики.
   stream-tts:

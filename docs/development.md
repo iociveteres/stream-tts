@@ -91,7 +91,7 @@
 │                          # очередь загрузок); admin-start.js — старт после всех вкладок;
 │                          # editor.js, train.js — редактор и обучение; overlay.html, voices.html, login.html;
 │                          # en.json — английский словарь, i18n.js — перевод страниц; ui-edit.js и ui-edit.css —
-│                          # режим правки строк; quants/ — примеры звука квантов для вкладки «Сервер»
+│                          # режим правки строк; samples/ — примеры звучания моделей для вкладки «Загрузки»
 ├── packaging/
 │   ├── pin-espeech.py     # загрузки ESpeech в downloads.json для обеих систем и списки заглушек библиотек CUDA:
 │                          # windows/stubs/*.def, linux/stubs/**/*.map
@@ -204,7 +204,7 @@
 
 **GPU.** Образ `cosyvoice-server:cuda` (`GPU=cuda`) берёт GGML из CUDA-сборки того же релиза llama.cpp
 (`libggml-cuda.so`) и рантайм CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`. У `stream-tts` CUDA в образе нет:
-те же два архива (`cuda.linux` в `downloads.json`) качает кнопка на вкладке «Сервер» в том `/cuda`
+те же два архива (`cuda.linux` в `downloads.json`) качает кнопка на вкладке «Загрузки» в том `/cuda`
 (`STREAM_TTS_CUDA`), а `engines/cosyvoice/launch.py` подключает оттуда `libggml-cuda.so` через `GGML_BACKEND_PATH` и
 её библиотеки через `LD_LIBRARY_PATH`. Ядро GGML в образе при этом из сборки для процессора: `libggml-base.so` у
 двух сборок llama.cpp разные, но той же версии, и речь та же (проверено 2026-11-06: распознанный текст фразы

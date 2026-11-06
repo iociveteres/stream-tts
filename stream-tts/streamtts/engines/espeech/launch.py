@@ -5,7 +5,7 @@
   интерпретатора (первая папка, где лежит espeech/server.py) и попадает в PYTHONPATH;
 - программа для Windows и образ Docker (downloadable()): код (пакет и заглушки библиотек CUDA) лежит в CODE
   (<paths.RUNTIME>/espeech: у программы его ставит установщик, в образе — Dockerfile), а Python 3.14 с torch и
-  пакетами качается по кнопке на вкладке «Сервер» в RUNTIME (download.py; ESPEECH_RUNTIME — другая папка, в Docker —
+  пакетами качается по кнопке на вкладке «Загрузки» в RUNTIME (download.py; ESPEECH_RUNTIME — другая папка, в Docker —
   том). Путь к пакету — в sys.path рантайма (write_pth: python3XX._pth встраиваемого Python на Windows, он не читает
   PYTHONPATH; espeech.pth в site-packages на Linux). torch находит заглушки и cuBLAS по ESPEECH_DLL_DIRS (dll_dirs(),
   espeech/__init__.py): cuBLAS (на Linux и cudart) — настоящий из CUDA cosyvoice-server (скачанной в paths.CUDA или

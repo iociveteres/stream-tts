@@ -87,8 +87,9 @@ def test_espeech_startup(esp, report):
     assert c["engine"] == "espeech" and rt["state"] == "running" and rt["model"] == "ESpeech-TTS-1_SFT-256K"
     assert [v["name"] for v in esp.api.state()["voices"]] == [JAINA]
     assert [(p["key"], p["choices"]) for p in c["params"]] == [("espeech_steps", [12, 16, 32])]
+    # supertonic-server из исходников находится всегда: код в supertonic/, интерпретатор — stream-tts
     assert c["capabilities"]["accent"] and [e["id"] for e in c["engines"] if e["available"]] == \
-        (["cosyvoice", "espeech"] if esp.cosy else ["espeech"])
+        (["cosyvoice"] if esp.cosy else []) + ["espeech", "supertonic"]
     report(f"ESpeech: устройство {rt['backend']}, CosyVoice для смены модели — {'есть' if esp.cosy else 'нет'}")
 
 

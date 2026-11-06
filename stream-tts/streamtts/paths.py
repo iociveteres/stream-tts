@@ -64,7 +64,7 @@ VOICES = env("STREAM_TTS_VOICES", os.path.join(_BASE, "voices"))
 # Корень проекта: voice-refs/<модель>/<набор>/manifest.json и скрипты эффектов (post) ищутся от него
 PROJECT = env("STREAM_TTS_PROJECT", _REPO if FROM_SOURCE else DATA)
 RUNTIME = env("STREAM_TTS_RUNTIME", os.path.join(APP, "runtime"))
-# Куда кнопка на вкладке «Сервер» кладёт CUDA (ggml-cuda и рантайм CUDA 13, install.py): пусто — к cosyvoice-server
+# Куда кнопка на вкладке «Загрузки» кладёт CUDA (ggml-cuda и рантайм CUDA 13, install.py): пусто — к cosyvoice-server
 # (программа для Windows), в Docker — том /cuda: образ один, CUDA качают только те, у кого видеокарта NVIDIA
 CUDA = env("STREAM_TTS_CUDA")
 # Драйвер NVIDIA на Linux: libcuda.so.1 подкладывает в контейнер --gpus (в Docker Desktop с WSL2 /dev/nvidia* нет —

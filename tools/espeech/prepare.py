@@ -2,7 +2,7 @@
 
 Сборку делает espeech/prepare.py (что из чего получается — в его docstring), этот скрипт только подставляет ему
 исходные файлы: из кеша Hugging Face (~/.cache/huggingface/hub) на закреплённых там ревизиях, чего нет — качается
-(huggingface_hub). Установленная программа качает те же файлы сама (вкладка «Сервер», engines/espeech/download.py).
+(huggingface_hub). Установленная программа качает те же файлы сама (вкладка «Загрузки», engines/espeech/download.py).
 Готовые файлы пропускаются (--force — пересобрать).
 
 usage: espeech/.venv/Scripts/python tools/espeech/prepare.py [out=models/espeech] [--ruaccent <папка RUAccent>] [--force]

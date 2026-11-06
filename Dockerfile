@@ -4,7 +4,7 @@
 #   engines/cosyvoice/launch.py);
 # - cosyvoice: только cosyvoice-server (профиль server-only), аргументы собирает entrypoint.sh.
 # GPU=cuda добавляет CUDA-бэкенд в образ — это нужно цели cosyvoice. stream-tts собирается без него: CUDA (~590 МБ)
-# качает кнопка на вкладке «Сервер» в том /cuda (STREAM_TTS_CUDA, install.py), если контейнер видит видеокарту
+# качает кнопка на вкладке «Загрузки» в том /cuda (STREAM_TTS_CUDA, install.py), если контейнер видит видеокарту
 # NVIDIA, — образ один для всех. Обе цели на ubuntu 26.04: бинарники собраны в CI на ubuntu-26.04 (glibc 2.43,
 # ICU 78), а в python:*-slim glibc 2.41.
 
@@ -98,7 +98,7 @@ COPY stream-tts/requirements.txt .
 # --only-binary: без компилятора в образе сборка из исходников всё равно не удалась бы, пусть падает сразу
 RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements.txt
 # ESpeech (вторая модель): в образе только код espeech-server и заглушки (сотни КБ), Python 3.14 с torch и модель
-# stream-tts качает по кнопке на вкладке «Сервер» в тома ESPEECH_RUNTIME и /models (engines/espeech/download.py);
+# stream-tts качает по кнопке на вкладке «Загрузки» в тома ESPEECH_RUNTIME и /models (engines/espeech/download.py);
 # /opt/cosyvoice — это paths.RUNTIME, код — в его espeech/, как у программы для Windows
 COPY --from=espeech-stubs /out/stubs /opt/cosyvoice/espeech/stubs
 COPY espeech/*.py espeech/THIRD-PARTY.txt /opt/cosyvoice/espeech/espeech/
