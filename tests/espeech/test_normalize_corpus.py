@@ -1,6 +1,6 @@
 """Эталонный корпус нормализатора ESpeech (espeech/normalize.py): фраза чата → текст для RUAccent и модели.
 
-Ожидаемое — вывод кода до разрезания normalize.py на модули (этап 2 docs/refactor-plan.md), включая спорные места:
+Ожидаемое — вывод кода до разрезания normalize.py на модули (рефакторинг, этап 2), включая спорные места:
 корпус держит поведение, а не правильность. Поменял нормализацию намеренно — поправь ожидаемое здесь. Без модели и
 torch, секунды: espeech/.venv/Scripts/python -m pytest tests/espeech/test_normalize_corpus.py"""
 import os, sys

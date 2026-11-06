@@ -17,7 +17,6 @@
 ├── .gitattributes         # LF для shell-скриптов, Dockerfile и *.yml; .gitignore — данные не в git
 ├── .claude/launch.json    # конфигурации preview (раздел «Запуск»)
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
-├── REFACTOR-REPORT.md     # итоги структурного рефакторинга: этапы, замеры, находки (docs/refactor-plan.md)
 ├── cosyvoice/
 │   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
 ├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): __init__.py (папки
@@ -154,9 +153,8 @@
 │                          # voice-pipeline.md, voices.md, voices-wc3.md,
 │                          # stream-tts.md (спецификация), stream-tts-deploy.md, stream-tts-windows.md,
 │                          # espeech.md (ESpeech как вторая модель: замеры, espeech-server, план),
-│                          # supertonic.md (Supertonic 3 как третья модель: supertonic-server, замеры, лицензии),
-│                          # refactor-brief.md (ТЗ на структурный рефакторинг для внешнего исполнителя),
-│                          # refactor-plan.md (план и порядок коммитов этого рефакторинга)
+│                          # supertonic.md (Supertonic 3 как третья модель: supertonic-server, замеры, лицензии);
+│                          # local/ — не в git: ТЗ, план и отчёт рефакторинга, голоса реальных людей
 │
 │   Данные (в git не попадают):
 ├── models/                # модели и пакеты (volume; админка качает сюда); espeech/ — модель ESpeech
@@ -170,6 +168,7 @@
 ├── voice-refs/cosyvoice/  # итоговые образцы CosyVoice (.wav + .txt) и manifest.json по наборам
 ├── voice-sets/            # коллекции для импорта: <модель>/<набор>.zip (tools/voices/pack-sets.py)
 ├── voice-origs/           # сырые звуковые паки
+├── tools/local.json       # записи инструментов о голосах реальных людей (lora-lines.py, emotion-eval.py)
 ├── samples/               # тестовые аудио
 ├── runtime/               # нативный cosyvoice-server с DLL и ffmpeg для stream-tts из исходников (Windows)
 └── stream-tts-data/       # настройки, токены и история stream-tts (volume)

@@ -179,9 +179,8 @@ curl -X POST http://localhost:8080/speaker/save \
   (`wc3-arthas`, `wc3-thrall`, `wc3-jaina`, `wc3-illidan`, `wc3-narrator`…) и юниты (`wc3-peasant`, `wc3-footman`,
   `wc3-peon`…). Полный список и откуда взяты реплики: [docs/voices-wc3.md](docs/voices-wc3.md).
 - **Другие игры**: `dota2-pudge`, `portal-glados`, `stalker-bandit`, `villager`, `neco-arc`, `neco-arc-angry`,
-  `neco-arc-ja`, `***`.
-- **Стримеры**: `***`, `***`. Голоса реальных людей только для шуток на стриме: не выдавайте синтез за
-  их настоящие слова.
+  `neco-arc-ja`.
+- **Голоса реальных людей** — только для шуток на стриме: не выдавайте синтез за их настоящие слова.
 
 ```bash
 curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json'   -d '{"text":"Работа никогда не заканчивается.","voice":"wc3-thrall","mode":"zero-shot","response_format":"wav"}'   -o out.wav

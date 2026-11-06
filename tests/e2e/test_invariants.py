@@ -1,5 +1,5 @@
 """Инварианты репозитория без процесса stream-tts (секунды): то, что раньше проверялось вручную командами и grep
-(AGENTS.md, «Инварианты»; docs/refactor-brief.md, §5).
+(AGENTS.md, «Инварианты»).
 
 - все .py из git компилируются (вместо python -m py_compile по списку файлов);
 - английский словарь полон и без лишних ключей (stream-tts/check-i18n.py), --missing печатает недостающие ключи
@@ -174,8 +174,8 @@ def test_handoff_skips_data():
                "stream-tts-data/native/settings.json": "stream-tts-data/"}
     for name, where in blocked.items():
         assert pack.forbidden(name) == where, name
-    for name in ("espeech/server.py", "docs/refactor-brief.md", "tools/voices/pick.py", "stream-tts/.venv-notes.md"):
+    for name in ("espeech/server.py", "docs/index.md", "tools/voices/pick.py", "stream-tts/.venv-notes.md"):
         assert pack.forbidden(name) is None, name
     files, _ = pack.file_list()
-    assert "AGENTS.md" in files and "docs/refactor-brief.md" in files
+    assert "AGENTS.md" in files and "docs/index.md" in files
     assert not [f for f in files if pack.forbidden(f)]

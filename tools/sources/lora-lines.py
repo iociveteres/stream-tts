@@ -1,10 +1,10 @@
-"""Реплики мемных голосов (Пудж, GLaDOS, бандит, Чувак, ***, ***, Neco Arc) для LoRA ESpeech и образец ~6 с.
+"""Реплики мемных голосов (Пудж, GLaDOS, бандит, Чувак, Neco Arc) для LoRA ESpeech и образец ~6 с.
 
 Использование (venv проекта: numpy, scipy, onnxruntime, faster-whisper, torch, transformers; японский — pykakasi):
     .venv/Scripts/python.exe tools/sources/lora-lines.py [голос …] [--root <корень>] [--max-min 10]
         [--max-cer 0.15] [--seed 1] [--ref <голос>=<файл>[+<файл>…]] [--candidates N] [--list]
-  голос   ключ VOICES ниже (dota2-pudge, portal-glados, stalker-bandit, postal-dude, ***, ***,
-          neco-arc-ja); по умолчанию все.
+  голос   ключ VOICES ниже (dota2-pudge, portal-glados, stalker-bandit, postal-dude, neco-arc-ja) или
+          tools/local.json («lora-lines», не в git: голоса реальных людей); по умолчанию все.
   --root  корень проекта с voice-origs/, voice-clips/, models/ (по умолчанию этот; из worktree — основная копия).
   --ref   образец вручную: реплики (ключи clips.json, «<источник>/<файл>») подряд с паузой 0,25 с; без него —
           ref_parts голоса в VOICES, если есть.
@@ -14,12 +14,12 @@
 Источники и текст (VOICES): папка с lines.json (fetch-wiki-lines.py, transcribe-lines.py) или папка звуков по глобу.
 Текст бывает трёх видов:
   given — текст вики или игры (Пудж, GLaDOS): сверяется с faster-whisper large-v3, CER > --max-cer — отказ;
-  long  — расшифровка длинной записи transcribe-lines.py (Чувак, ***, ***, Neco Arc): реплика распознаётся ещё раз
+  long  — расшифровка длинной записи transcribe-lines.py (Чувак, Neco Arc): реплика распознаётся ещё раз
           отдельно, при совпадении (CER ≤ --max-cer, у японского — по чтению каной, ≤ 0,25) берётся новый текст —
           у него те же границы, что у звука; иначе отказ (края резали посреди слова, или распознано по-разному);
   asr     — текста нет (бандит S.T.A.L.K.E.R.): текст распознавания, если реплика от 1 с и в ней от двух слов.
 Голос сверяется CAM++ (tools/voices/campplus.py): центр — эталоны голоса (center) или все реплики, затем дважды центр
-20 самых похожих; ниже min_sim — чужой голос (в летсплее *** — сам скуф, в интервью *** — собеседник).
+20 самых похожих; ниже min_sim — чужой голос (в летсплее — другой персонаж, в интервью — собеседник).
 Отбрасываются: звуки по exclude (музыка, смех, дыхание, рация «_pda» у бандита), галлюцинации Whisper на тишине
 («Субтитры…», «Продолжение следует»), повторы одного текста, реплики короче 0,5 с. Длиннее 30 с (предел train.py)
 режутся по самой длинной паузе у середины. Тишина по краям обрезана (−40 дБ от пика, запас 60 мс), 24 кГц моно PCM16.
@@ -88,15 +88,7 @@ VOICES = {
                                                             title="Злой Чувак (Postal 2)"),
                                   "postal-dude-angry-lora": dict(parts=[f"{PD}/298.wav", f"{PD}/295.wav"],
                                                                  title="Злой Чувак (Postal 2), с LoRA")}),
-    "***": dict(set="streamers", title="***", text="long",
-                   src=["voice-origs/***-qa", "voice-origs/***-nS29"],
-                   center=["voice-origs/***-qa/Q01-093-112.wav", "voice-origs/***-nS29/P01-032-054.wav"],
-                   min_sim=0.6),
-    "***": dict(set="altushka", title="***, внутренний голос («Альтушка для скуфа»)", text="long",
-                   src=["voice-origs/***-altushka"],
-                   center=["voice-origs/***-altushka/018.wav", "voice-origs/***-altushka/080.wav",
-                           "voice-origs/***-altushka/091.wav"],
-                   min_sim=0.73),  # внутренний голос 0,74–0,95, сам скуф 0,45–0,72
+    # голоса реальных людей — в tools/local.json (не в git), добавляются в main
     "neco-arc-ja": dict(set="neco-arc", title="Neco Arc (японский оригинал)", text="long", lang="ja",
                         src=["voice-origs/neco-arc-ja"], min_sim=0.5, max_cer=0.25,
                         variants={"neco-arc": dict(ref=f"{JB}/neco.mp3", title="Neco Arc"),
@@ -606,6 +598,7 @@ def main():
     ap.add_argument("--candidates", type=int, default=0)
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
+    VOICES.update(common.local("lora-lines", a.root))
     if a.list:
         for n, c in VOICES.items():
             print(f"{c['set']}/{n}: {c['title']}, текст {c['text']}, {[s if isinstance(s, str) else s['dir'] for s in c['src']]}")

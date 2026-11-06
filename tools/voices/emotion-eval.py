@@ -6,7 +6,7 @@ usage: python tools/voices/emotion-eval.py [--port 8767]              стран
 
 Зачем. Модель эмоций (emotions.py) выбрана по 50 фразам WC3 с метками «спокойно» против «гнев/приказ/крик»: так
 проверяются только крайности энергии, и все фразы — из одной игры. Здесь фразы идут вперемешку из разных источников
-(SOURCES: WC3, STALKER, Dota и Portal, стримеры, синтез cosyvoice), а человек оценивает каждую по трём шкалам
+(SOURCES: WC3, STALKER, Dota и Portal, синтез cosyvoice; записи людей — tools/local.json, не в git), а человек оценивает каждую по трём шкалам
 1–5 и одной категории (EMOTIONS), не видя текста и имени файла:
   энергия — вяло … крик, напор — робко … властно, тон — злобно … радостно.
 Модели (MODELS): msp-dim (audeering, оси arousal/dominance/valence прямо), Aniemore (wavlm, русский RESD,
@@ -40,9 +40,9 @@ SOURCES = {  # группа -> глобы от корня; внутри груп
     "wc3": None,  # реплики голосов из voice-clips/cosyvoice/wc3/pools.json (их пишет cut-clips.py)
     "stalker": ["voice-origs/stalker-cop/sounds/characters_voice/**/*.ogg"],
     "games": ["voice-origs/dota2-pudge/*_ru.mp3", "voice-origs/portal-glados/*_ru.wav"],
-    "streamers": ["voice-origs/***-*/*.wav", "voice-origs/***-altushka/*.wav"],
     "synth": ["voice-clips/cosyvoice/*/ab/*.wav", "voice-clips/cosyvoice/wc3/b0*/ab/*.wav"],
 }
+SOURCES.update(common.local("emotion-eval"))  # записи реальных людей (группа streamers) — не в git
 SKIP = ("/music/",)          # у STALKER рядом с речью лежат губная гармошка и гитара
 DUR = (0.7, 15.0)            # короче — не успеть понять подачу, длиннее — подача внутри успевает смениться
 BATCH = 20                   # столько фраз добавляется в очередь, когда неразмеченные кончаются

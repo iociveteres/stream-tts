@@ -1,4 +1,5 @@
-"""Общее для инструментов tools/: корень проекта, загрузка соседнего скрипта по пути, ffmpeg и звук, JSON.
+"""Общее для инструментов tools/: корень проекта, загрузка соседнего скрипта по пути, ffmpeg и звук, JSON,
+локальные записи инструментов (tools/local.json, не в git).
 
 usage — в начале инструмента tools/<группа>/<скрипт>.py (common.py грузится по пути, как и соседи):
     HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,6 +54,12 @@ def frames_db(x, hop=SR // 100):
 
 def read_json(path, default):
     return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else default
+
+
+def local(tool, root=ROOT):
+    """Записи инструмента из <root>/tools/local.json (не в git, docs/local/voices-streamers.md): голоса реальных
+    людей. В worktree файла нет — root основной копии."""
+    return read_json(os.path.join(root, "tools", "local.json"), {}).get(tool, {})
 
 
 def write_json(path, data):

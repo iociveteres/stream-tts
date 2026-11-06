@@ -81,7 +81,7 @@ def main():
         z.writestr(base + "/BASE.txt",
                    f"коммит: {git('rev-parse', 'HEAD').strip()}\n"
                    f"файлов: {len(files)}\n"
-                   f"задание: docs/refactor-brief.md\n")
+                   "задание: docs/local/refactor-brief.md — не в git, передать отдельно\n")
 
     print(f"коммит {sha}: {len(files)} файлов, {total / 1024:.0f} КБ без сжатия")
     # Пропущенное — по запрещённым папкам: в окружении Python тысячи файлов

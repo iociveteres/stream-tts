@@ -16,6 +16,9 @@
 /voice-clips/
 .venv/
 /stream-tts-data/
+# локальные доки: рефакторинг, голоса реальных людей (AGENTS.md)
+/docs/local/
+/tools/local.json
 # архив кода для внешнего исполнителя (scripts/pack-handoff.py)
 /handoff/
 __pycache__/
