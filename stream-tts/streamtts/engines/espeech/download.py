@@ -15,9 +15,8 @@
 - модель → paths.MODELS/espeech: исходные файлы с Hugging Face в .espeech-src/ (из чекпойнта — только EMA-копия
   весов, урезанный чекпойнт собирается как zip), сборка — python -m espeech.prepare в скачанном рантайме, потом
   исходники удаляются;
-- CUDA (только программа для Windows): если видеокарта NVIDIA есть, а CUDA для cosyvoice-server нет, она качается
-  первой (cuBLAS torch берёт оттуда; без CUDA ESpeech работает только на процессоре). В образе stream-tts:cuda она
-  уже есть, в stream-tts:cpu её нет, и ESpeech — на процессоре.
+- CUDA: если видеокарта NVIDIA есть, а CUDA для cosyvoice-server нет, она качается первой (в Docker — в том
+  /cuda; cuBLAS torch берёт оттуда, без CUDA ESpeech работает только на процессоре).
 Всё докачивается с места обрыва; прогресс — общий для загрузок (Installer.dl, install.py)."""
 import asyncio, contextlib, fnmatch, glob, logging, os, shutil, tarfile, time, zipfile
 

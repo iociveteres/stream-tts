@@ -120,14 +120,15 @@ OpenRAIL-M требует передавать условия использов
 
 ## Сборка
 
-Закреплённые загрузки — `stream-tts/streamtts/downloads.json`: CUDA (версия, нужные файлы и их размер, архивы
-llama.cpp — адрес, размер, распакованный размер, sha256 и какие файлы из него берутся) и кванты модели (адрес
+Закреплённые загрузки — `stream-tts/streamtts/downloads.json`: CUDA (`cuda.windows` — zip программы, `cuda.linux` —
+tar.gz для образа Docker; версия, нужные файлы и их размер, архивы llama.cpp — адрес, размер, распакованный размер,
+sha256 и какие файлы из него берутся) и кванты модели (адрес
 Hugging Face на конкретной ревизии, размеры, sha256), а ещё ESpeech (раздел `espeech`: рантаймы Windows и Linux и модель, его пишет
 `packaging/pin-espeech.py`) и Supertonic 3 (раздел `supertonic`: ревизия Hugging Face, файлы с размером и sha256 —
 таблица в [supertonic.md](supertonic.md); `tests/e2e/test_supertonic_download.py` сверяет, что закреплены все
 нужные серверу файлы и стили). Его читают `downloads.py`, `build-runtime.py` (CUDA для `--cuda` и `--flat`, список заглушек
 ESpeech) и `build-exe.py` (передаёт значения в `StreamTTS.iss` через `/D`). Переход на другую сборку
-llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новая запись `cuda` здесь (`build-runtime.py` не
+llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новые записи `cuda` здесь (`build-runtime.py` не
 соберётся, если CUDA не из сборки ядра). Файлы — в `packaging/windows/`:
 
 - `build-runtime.py` — рантайм с закреплёнными версиями и sha256 (см. выше): `build/runtime/core/` (281 МБ, вместе с

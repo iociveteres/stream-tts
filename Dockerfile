@@ -3,8 +3,10 @@
 # - stream-tts (по умолчанию): озвучка наград Twitch со встроенным cosyvoice-server (runtime.py и
 #   engines/cosyvoice/launch.py);
 # - cosyvoice: только cosyvoice-server (профиль server-only), аргументы собирает entrypoint.sh.
-# GPU=cuda добавляет CUDA-бэкенд. Обе цели на ubuntu 26.04: бинарники собраны в CI на ubuntu-26.04
-# (glibc 2.43, ICU 78), а в python:*-slim glibc 2.41.
+# GPU=cuda добавляет CUDA-бэкенд в образ — это нужно цели cosyvoice. stream-tts собирается без него: CUDA (~590 МБ)
+# качает кнопка на вкладке «Сервер» в том /cuda (STREAM_TTS_CUDA, install.py), если контейнер видит видеокарту
+# NVIDIA, — образ один для всех. Обе цели на ubuntu 26.04: бинарники собраны в CI на ubuntu-26.04 (glibc 2.43,
+# ICU 78), а в python:*-slim glibc 2.41.
 
 ARG UBUNTU=ubuntu:26.04
 
@@ -46,7 +48,7 @@ RUN set -eux; \
 # --- Заглушки библиотек CUDA для ESpeech: gcc нужен только здесь ---
 # torch ESpeech качается кнопкой в админке без пакетов nvidia-* (~3 ГБ): библиотеки, которые он загружает, а синтез и
 # обучение LoRA не вызывают, заменяются заглушками по спискам символов packaging/linux/stubs (pin-espeech.py);
-# cudart и cuBLAS — настоящие из /opt/cosyvoice (GPU=cuda) или тоже заглушки (docs/espeech.md, «Поставка»)
+# cudart и cuBLAS — настоящие из скачанной CUDA (том /cuda) или тоже заглушки (docs/espeech.md, «Поставка»)
 FROM ${UBUNTU} AS espeech-stubs
 RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 COPY packaging/linux/ /src/
@@ -109,7 +111,8 @@ COPY stream-tts/streamtts ./streamtts
 # LD_LIBRARY_PATH не задаётся: в /opt/cosyvoice свой libonnxruntime.so (1.30), он перебил бы onnxruntime из venv;
 # серверу путь добавляет engines/cosyvoice/launch.py. Сервер запускает stream-tts; COSYVOICE_HOST=0.0.0.0 открывает
 # его для порта 8080 контейнера (WebUI и инструменты), stream-tts ходит к нему по 127.0.0.1. ESPEECH_RUNTIME —
-# внутри тома (/espeech-runtime): рантайм собирается рядом, в python.tmp, и переименовывается.
+# внутри тома (/espeech-runtime): рантайм собирается рядом, в python.tmp, и переименовывается. STREAM_TTS_CUDA — том
+# для CUDA: её ggml-cuda сервер подключает через GGML_BACKEND_PATH, cuBLAS из неё берёт и torch ESpeech.
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     STREAM_TTS_DATA=/data \
@@ -121,6 +124,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     STREAM_TTS_LISTEN_PORT=8090 \
     COSYVOICE_HOST=0.0.0.0 \
     COSYVOICE_PORT=8080 \
-    ESPEECH_RUNTIME=/espeech-runtime/python
+    ESPEECH_RUNTIME=/espeech-runtime/python \
+    STREAM_TTS_CUDA=/cuda
 EXPOSE 8090 8080
 CMD ["python", "-m", "streamtts"]

@@ -1,35 +1,69 @@
 {
  "cuda": {
-  "version": "13.4-b11500",
-  "unpacked": 696204624,
-  "files": [
-   "ggml-cuda.dll",
-   "cublas64_13.dll",
-   "cublasLt64_13.dll",
-   "cudart64_13.dll"
-  ],
-  "archives": [
-   {
-    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/llama-b11500-bin-win-cuda-13.4-x64.zip",
-    "size": 153313982,
-    "sha256": "acc9413b9a1af8db6698b032e316297a2446056d7e7799e06304145dfa6e5b5e",
-    "unpacked": 197706525,
-    "files": [
-     "ggml-cuda.dll"
-    ]
-   },
-   {
-    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/cudart-llama-bin-win-cuda-13.4-x64.zip",
-    "size": 423535356,
-    "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
-    "unpacked": 548245840,
-    "files": [
-     "cublas64_13.dll",
-     "cublasLt64_13.dll",
-     "cudart64_13.dll"
-    ]
-   }
-  ]
+  "windows": {
+   "version": "13.4-b11500",
+   "unpacked": 696204624,
+   "files": [
+    "ggml-cuda.dll",
+    "cublas64_13.dll",
+    "cublasLt64_13.dll",
+    "cudart64_13.dll"
+   ],
+   "archives": [
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/llama-b11500-bin-win-cuda-13.4-x64.zip",
+     "size": 153313982,
+     "sha256": "acc9413b9a1af8db6698b032e316297a2446056d7e7799e06304145dfa6e5b5e",
+     "unpacked": 197706525,
+     "files": [
+      "ggml-cuda.dll"
+     ]
+    },
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/cudart-llama-bin-win-cuda-13.4-x64.zip",
+     "size": 423535356,
+     "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
+     "unpacked": 548245840,
+     "files": [
+      "cublas64_13.dll",
+      "cublasLt64_13.dll",
+      "cudart64_13.dll"
+     ]
+    }
+   ]
+  },
+  "linux": {
+   "version": "13.4-b11500",
+   "unpacked": 766121600,
+   "files": [
+    "libggml-cuda.so",
+    "libcudart.so.13",
+    "libcublas.so.13",
+    "libcublasLt.so.13"
+   ],
+   "archives": [
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/llama-b11500-bin-ubuntu-cuda-13.4-x64.tar.gz",
+     "size": 152727636,
+     "sha256": "d00d0611f2994cc54658354deace1a4b164f12ac2691f10e5fbb2e0b10bab497",
+     "unpacked": 209212070,
+     "files": [
+      "libggml-cuda.so"
+     ]
+    },
+    {
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11500/cudart-llama-b11500-bin-ubuntu-cuda-13.4-x64.tar.gz",
+     "size": 440236541,
+     "sha256": "b3e8d1fca1062a1b4a6862edc0c70f8308ecb789af9c0dc7995aeacea449d791",
+     "unpacked": 603362352,
+     "files": [
+      "libcudart.so.13",
+      "libcublas.so.13",
+      "libcublasLt.so.13"
+     ]
+    }
+   ]
+  }
  },
  "model": {
   "url": "https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF/resolve/ab01740bbbfcc059fd748163787554f7c8977e64/",

@@ -8,8 +8,8 @@
   пакетами качается по кнопке на вкладке «Сервер» в RUNTIME (download.py; ESPEECH_RUNTIME — другая папка, в Docker —
   том). Путь к пакету — в sys.path рантайма (write_pth: python3XX._pth встраиваемого Python на Windows, он не читает
   PYTHONPATH; espeech.pth в site-packages на Linux). torch находит заглушки и cuBLAS по ESPEECH_DLL_DIRS (dll_dirs(),
-  espeech/__init__.py): cuBLAS (на Linux и cudart) — настоящий из CUDA cosyvoice-server (paths.RUNTIME), а без неё —
-  заглушки, и тогда синтез только на процессоре;
+  espeech/__init__.py): cuBLAS (на Linux и cudart) — настоящий из CUDA cosyvoice-server (скачанной в paths.CUDA или
+  лежащей в paths.RUNTIME), а без неё — заглушки, и тогда синтез только на процессоре;
 - из исходников — espeech/.venv проекта.
 
 Аргументы: --models paths.MODELS/espeech (download.py или tools/espeech/prepare.py; без модели сервер не запускается),
@@ -120,9 +120,12 @@ def runtime_state():
 
 
 def cublas_dir():
-    """Папка с настоящим cuBLAS (CUDA cosyvoice-server) или None."""
-    d = os.path.abspath(paths.RUNTIME)
-    return d if all(os.path.isfile(os.path.join(d, f)) for f in CUBLAS) else None
+    """Папка с настоящим cuBLAS (CUDA cosyvoice-server: скачанная в paths.CUDA или в рантайме) или None."""
+    for d in filter(None, (paths.CUDA, paths.RUNTIME)):
+        d = os.path.abspath(d)
+        if all(os.path.isfile(os.path.join(d, f)) for f in CUBLAS):
+            return d
+    return None
 
 
 def write_pth(runtime_dir):
@@ -191,9 +194,7 @@ def package_root(python):
 
 def nvidia():
     """Есть ли драйвер NVIDIA: torch в рантайме — с CUDA, без драйвера синтез только на процессоре."""
-    if os.name == "nt":
-        return os.path.isfile(os.path.join(env("SystemRoot", r"C:\Windows"), "System32", "nvcuda.dll"))
-    return os.path.exists("/dev/nvidiactl") or bool(shutil.which("nvidia-smi"))
+    return paths.nvidia() or os.name != "nt" and bool(shutil.which("nvidia-smi"))
 
 
 def device(prefer, cuda):

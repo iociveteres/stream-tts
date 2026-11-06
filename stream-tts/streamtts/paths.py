@@ -64,6 +64,19 @@ VOICES = env("STREAM_TTS_VOICES", os.path.join(_BASE, "voices"))
 # Корень проекта: voice-refs/<модель>/<набор>/manifest.json и скрипты эффектов (post) ищутся от него
 PROJECT = env("STREAM_TTS_PROJECT", _REPO if FROM_SOURCE else DATA)
 RUNTIME = env("STREAM_TTS_RUNTIME", os.path.join(APP, "runtime"))
+# Куда кнопка на вкладке «Сервер» кладёт CUDA (ggml-cuda и рантайм CUDA 13, install.py): пусто — к cosyvoice-server
+# (программа для Windows), в Docker — том /cuda: образ один, CUDA качают только те, у кого видеокарта NVIDIA
+CUDA = env("STREAM_TTS_CUDA")
+# Драйвер NVIDIA на Linux: libcuda.so.1 подкладывает в контейнер --gpus (в Docker Desktop с WSL2 /dev/nvidia* нет —
+# там /dev/dxg и библиотеки в /usr/lib/wsl/lib)
+_LIBCUDA = ("/usr/lib/x86_64-linux-gnu/libcuda.so.1", "/usr/lib/wsl/lib/libcuda.so.1", "/usr/lib64/libcuda.so.1")
+
+
+def nvidia():
+    """Есть ли драйвер NVIDIA (видеокарта, которой пригодится CUDA). Рабочий ли он, решает сам сервер синтеза."""
+    if os.name == "nt":
+        return os.path.isfile(os.path.join(env("SystemRoot", r"C:\Windows"), "System32", "nvcuda.dll"))
+    return os.path.exists("/dev/nvidiactl") or any(os.path.exists(p) for p in _LIBCUDA)
 
 
 def resource(rel):

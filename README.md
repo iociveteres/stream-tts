@@ -19,7 +19,7 @@
 | Docker | Docker Engine с Compose v2 (`docker compose`) |
 | Shell | bash: Linux, WSL2 или Git Bash на Windows |
 | RAM | около 4 ГБ свободной памяти для Q8_0 |
-| Диск | около 2,1 ГБ (образ 862 МБ, модель 944 МБ, фронтенд 250 МБ); с GPU образ весит 1,63 ГБ |
+| Диск | около 2,1 ГБ (образ 862 МБ, модель 944 МБ, фронтенд 250 МБ); с GPU ещё ~730 МБ CUDA (качается в админке) |
 | GPU (необязательно) | NVIDIA с драйвером для CUDA 13 (R580+), 1,5–2 ГБ видеопамяти для Q8_0; Docker с доступом к GPU (Docker Desktop с WSL2 или NVIDIA Container Toolkit) |
 
 macOS на Apple Silicon и ARM-Linux не поддерживаются: бинарники собраны под x86_64, а при эмуляции нет AVX2.
@@ -52,7 +52,8 @@ PORT=9000 ./setup.sh             # другой порт на хосте
 
 С `--gpu` скрипт проверяет, что Docker видит видеокарту, и прописывает в `.env` оба compose-файла
 (`COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml`). Поэтому обычные `docker compose up/down/logs`
-дальше работают с GPU-вариантом. Чтобы вернуться на CPU, удалите из `.env` строки `COMPOSE_FILE` и
+дальше работают с GPU-вариантом. Образ тот же, что без видеокарты: CUDA (~590 МБ загрузки) скачивается кнопкой на
+вкладке «Сервер» в блоке «Устройство синтеза» в папку `./cuda`, пересборка образа её не трогает. Чтобы вернуться на CPU, удалите из `.env` строки `COMPOSE_FILE` и
 `COMPOSE_PATH_SEPARATOR` (или запустите `./setup.sh` без `--gpu`) и выполните `docker compose up -d`.
 
 Управление контейнером:

@@ -130,7 +130,7 @@ def iscc_defines():
     """/D для StreamTTS.iss из downloads.json: версия и файлы CUDA, размеры загрузок для сводки (в МБ)."""
     with open(os.path.join(SRC, "streamtts", "downloads.json"), encoding="utf-8") as f:
         dl = json.load(f)
-    cuda, sizes = dl["cuda"], [m["size"] for m in dl["model"]["quants"].values()]
+    cuda, sizes = dl["cuda"]["windows"], [m["size"] for m in dl["model"]["quants"].values()]
     mb = lambda n: round(n / 2**20)
     d = dict(AppVersion=VERSION, CudaVersion=cuda["version"], CudaFiles=",".join(cuda["files"]),
              CudaMB=mb(sum(a["size"] for a in cuda["archives"])), CudaUnpackedMB=mb(cuda["unpacked"]),
@@ -177,7 +177,7 @@ def main():
             shutil.copytree(os.path.join(rt, comp), os.path.join(APP, "runtime"), dirs_exist_ok=True)
         if a.runtime == "all":
             with open(os.path.join(SRC, "streamtts", "downloads.json"), encoding="utf-8") as f:
-                version = json.load(f)["cuda"]["version"]
+                version = json.load(f)["cuda"]["windows"]["version"]
             with open(os.path.join(APP, "runtime", "cuda-version.txt"), "w", encoding="utf-8") as f:
                 f.write(version)
     size = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(APP) for f in fs)

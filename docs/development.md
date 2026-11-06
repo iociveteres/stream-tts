@@ -134,6 +134,7 @@
 │                          # test_twitch.py), harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
+│                          # CUDA по кнопке (программа и том Docker) — test_cuda_download.py,
 │                          # загрузка Supertonic 3 и его запуск программой и в Docker — test_supertonic_download.py,
 │                          # обучение LoRA — test_train.py, инварианты репозитория без процесса —
 │                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py, роуты —
@@ -177,8 +178,8 @@
 ## Образы
 
 Корневой `Dockerfile`, цели выбирает `docker-compose.yml`:
-- `stream-tts` (`stream-tts:cpu`, `stream-tts:cuda`) — stream-tts со встроенным cosyvoice-server
-  ([stream-tts-deploy.md](stream-tts-deploy.md#docker));
+- `stream-tts` (`stream-tts:latest`, один и с видеокартой, и без) — stream-tts со встроенным cosyvoice-server
+  ([stream-tts-deploy.md](stream-tts-deploy.md#docker)); CUDA в него не входит, её качает админка в том `./cuda`;
 - `cosyvoice` (`cosyvoice-server:cpu`, `cosyvoice-server:cuda`) — только сервер для инструментов подготовки голосов
   (`scripts/`, `tools/`), профиль `server-only`.
 
@@ -200,8 +201,14 @@
 **GGML** в релизах cosyvoice.cpp не поставляется, его берут из llama.cpp. Копируются все варианты
 `libggml-cpu-<isa>.so`, и сервер сам выбирает лучший для текущего процессора (на Zen 3 это `haswell`).
 
-**GPU** (`GPU=cuda`, образы `stream-tts:cuda` и `cosyvoice-server:cuda`) берёт GGML из CUDA-сборки того же
-релиза llama.cpp (`libggml-cuda.so`) и рантайм CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`. Без двух
+**GPU.** Образ `cosyvoice-server:cuda` (`GPU=cuda`) берёт GGML из CUDA-сборки того же релиза llama.cpp
+(`libggml-cuda.so`) и рантайм CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`. У `stream-tts` CUDA в образе нет:
+те же два архива (`cuda.linux` в `downloads.json`) качает кнопка на вкладке «Сервер» в том `/cuda`
+(`STREAM_TTS_CUDA`), а `engines/cosyvoice/launch.py` подключает оттуда `libggml-cuda.so` через `GGML_BACKEND_PATH` и
+её библиотеки через `LD_LIBRARY_PATH`. Ядро GGML в образе при этом из сборки для процессора: `libggml-base.so` у
+двух сборок llama.cpp разные, но той же версии, и речь та же (проверено 2026-11-06: распознанный текст фразы
+совпал с образом, собранным с `GPU=cuda`). Новая версия llama.cpp — новые `cuda.linux` и проверка звука на
+видеокарте (`tests/e2e/test_cuda_download.py` сверяет, что архивы — из релиза и CUDA в `Dockerfile`). Без двух
 настроек CUDA-бэкенд выдаёт плохой звук, и обе уже заданы:
 - `GGML_CUDA_DISABLE_GRAPHS=1` (в образе и в `engines/cosyvoice/launch.py`). С включёнными CUDA Graphs звук тихий (около −36 дБ
   вместо −17) и шумный, а с flash attention в LLM вместо речи получается мусор. Ошибок в логах при этом нет. Это тот
@@ -237,11 +244,12 @@ ARG LLAMACPP_TAG=b11500
 ```
 
 Релиз llama.cpp лучше брать ближайший по дате к релизу cosyvoice.cpp: у GGML нет стабильного ABI.
-После обновления проверьте, что в выводе появился `loaded CPU backend` (для GPU-образа ещё и `CUDA0`):
+После обновления проверьте, что в выводе появился `loaded CPU backend` (с CUDA ещё и `CUDA0`; `./cuda` — том с
+CUDA, скачанной в админке):
 
 ```bash
-docker run --rm -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/cosyvoice/cosyvoice-cli stream-tts:cpu --list-backends
-docker run --rm --gpus all -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/cosyvoice/cosyvoice-cli stream-tts:cuda --list-backends
+docker run --rm -e LD_LIBRARY_PATH=/opt/cosyvoice --entrypoint /opt/cosyvoice/cosyvoice-cli stream-tts --list-backends
+docker run --rm --gpus all -v ./cuda:/cuda -e LD_LIBRARY_PATH=/opt/cosyvoice:/cuda -e GGML_BACKEND_PATH=/cuda/libggml-cuda.so --entrypoint /opt/cosyvoice/cosyvoice-cli stream-tts --list-backends
 ```
 
 После обновления версий на GPU стоит проверить, не исправлена ли ошибка с CUDA Graphs: уберите
@@ -366,6 +374,10 @@ stream-tts (`voicesets.py` напрямую): коллекции CosyVoice и ES
 `engines/espeech/download.py` напрямую, локальный HTTP-сервер с Range): только нужные файлы zip диапазонами, докачка
 после обрыва без повторной загрузки, выбор по списку, подмена хвоста или файла, распаковка колёс и Python из tar.gz,
 состояние рантайма, закреплённое в `downloads.json` для обеих систем (и заглушки к нему);
+`test_cuda_download.py` — CUDA по кнопке без сети (`install.py` и запуск cosyvoice-server напрямую): распаковка zip
+и tar.gz, загрузка в отдельную папку (том `/cuda` в Docker) с локального HTTP-сервера, когда кнопка предлагается,
+`GGML_BACKEND_PATH` для CUDA не рядом с сервером, закреплённые архивы Linux — из релиза и CUDA `Dockerfile`, образ
+`stream-tts` один;
 `test_supertonic_download.py` — загрузка Supertonic 3 без сети (stream-tts с поддельным встроенным supertonic-server,
 файлы с локального HTTP-сервера по закреплению из `STREAM_TTS_TEST_SUPERTONIC` — только тестам): докачка после обрыва,
 неверный sha256, готовые голоса в группе страницы голосов с примерами, запуск ждущего сервера, «Поставить голоса»,

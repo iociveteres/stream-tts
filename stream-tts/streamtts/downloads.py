@@ -9,7 +9,8 @@ from .engines import cosyvoice
 # Закреплённые загрузки (версию и файлы CUDA, размеры для сводки build-exe.py передаёт ещё и в StreamTTS.iss)
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads.json"), encoding="utf-8") as _f:
     DOWNLOADS = json.load(_f)
-CUDA = DOWNLOADS["cuda"]
+# CUDA этой системы: zip для Windows, tar.gz для Linux (образ Docker), из того же релиза llama.cpp, что и ядро GGML
+CUDA = DOWNLOADS["cuda"]["windows" if os.name == "nt" else "linux"]
 # Другая папка с теми же архивами (проверка без GitHub: python -m http.server в packaging/windows/build/cache)
 CUDA_BASE = paths.env("STREAM_TTS_CUDA_URL").rstrip("/")
 

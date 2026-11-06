@@ -101,38 +101,44 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 
 Пути (`paths.py`). Из исходников проекта — как раньше: `stream-tts-data/`, `models/`, `voices/`, `voice-refs/` (манифесты
 `voice-refs/<модель>/<набор>/manifest.json`),
-`runtime/` в корне. Программа, поставленная установщиком (рядом с exe лежит файл-признак `portable`), хранит всё
+`runtime/` в корне (CUDA, скачанная кнопкой, ложится туда же, к серверу; `STREAM_TTS_CUDA` — другая папка, в Docker —
+том). Программа, поставленная установщиком (рядом с exe лежит файл-признак `portable`), хранит всё
 в своей папке: данные — `data\`, модели — `models\`, голоса — `voices\`; собранная программа без признака (например,
 `build-exe.py --runtime`) — в `%LOCALAPPDATA%\StreamTTS\` (Linux: `$XDG_DATA_HOME/stream-tts`). Код и статику она
 только читает. Всё переопределяется переменными `STREAM_TTS_DATA`,
-`STREAM_TTS_MODELS`, `STREAM_TTS_VOICES`, `STREAM_TTS_PROJECT`, `STREAM_TTS_RUNTIME`. ffmpeg ищется в рантайме и
+`STREAM_TTS_MODELS`, `STREAM_TTS_VOICES`, `STREAM_TTS_PROJECT`, `STREAM_TTS_RUNTIME`, `STREAM_TTS_CUDA`. ffmpeg ищется в рантайме и
 рядом с программой, потом в `PATH` (или `FFMPEG`).
 
 ## Docker
 
 Сервис `stream-tts` в `docker-compose.yml` — со встроенным сервером из того же образа (корневой
 `Dockerfile`, цель `stream-tts`), `restart: unless-stopped`. Возможности те же, что у программы для Windows:
-вкладка «Сервер», наборы голосов из zip, загрузка пакетов, выгрузка модели, очистка образца от музыки; CUDA уже в
-образе `stream-tts:cuda` (`docker-compose.gpu.yml`), скачивать её не нужно. Проверка обновлений выключена:
+вкладка «Сервер», наборы голосов из zip, загрузка пакетов, выгрузка модели, очистка образца от музыки. Образ один —
+с видеокартой и без: CUDA (два архива релиза llama.cpp, ~590 МБ, на диске ~730 МБ; `cuda.linux` в `downloads.json`)
+качает кнопка в блоке «Устройство синтеза» в том `./cuda`, если контейнер видит видеокарту NVIDIA (запуск с
+`docker-compose.gpu.yml` или `--gpus all`: тогда в контейнере есть `libcuda.so.1`). Сервер подключает её из тома
+(`GGML_BACKEND_PATH`, `engines/cosyvoice/launch.py`), пересборка образа её не трогает. Проверка обновлений выключена:
 обновление — `git pull && docker compose up -d --build`. ESpeech — так же, как у программы: в образе только код
 espeech-server и заглушки библиотек CUDA (сотни КБ), Python 3.14 с torch (скачать ~580 МБ, на диске ~1,4 ГБ) и
 модель (1,8 ГБ) качает кнопка «Скачать» в карточке «Модель ESpeech» на вкладке «Сервер» в тома `./espeech-runtime` и
-`./models` — пересборка образа их не трогает. На `stream-tts:cuda` ESpeech работает на видеокарте (cuBLAS и cudart
-torch берёт из CUDA образа), на `stream-tts:cpu` — только на процессоре ([espeech.md](espeech.md), «Поставка»).
+`./models` — пересборка образа их не трогает. С CUDA ESpeech работает на видеокарте (cuBLAS и cudart torch берёт из
+тома `./cuda`; если её нет, а видеокарта есть, она качается вместе с ESpeech), без неё — только на процессоре
+([espeech.md](espeech.md), «Поставка»).
 Supertonic 3: в образе — код supertonic-server (десятки КБ), его запускает Python образа; модель (~400 МБ) и готовые
 голоса кнопка «Скачать» в карточке «Модель Supertonic 3» кладёт в тома `./models/supertonic` и `./voices/supertonic`.
 С Docker Desktop на Windows загрузка дольше, чем у программы (~10 мин): запись тысяч файлов рантайма в том на диске
 Windows медленная.
 
 - Образ: `ubuntu:26.04` (glibc 2.43 для cosyvoice.cpp), Python 3.14 из apt в venv `/opt/venv`, ffmpeg, aiohttp,
-  numpy, onnxruntime; сервер — `/opt/cosyvoice`. На CUDA образ больше на объём рантайма CUDA.
+  numpy, onnxruntime; сервер — `/opt/cosyvoice`, CUDA — в томе.
 - Пути: `STREAM_TTS_RUNTIME=/opt/cosyvoice` (в его `espeech/` — код espeech-server и заглушки, в `supertonic/` — код
   supertonic-server),
   `STREAM_TTS_MODELS=/models`, `STREAM_TTS_VOICES=/voices`, `STREAM_TTS_DATA=/data`, `STREAM_TTS_PROJECT=/project`,
-  `ESPEECH_RUNTIME=/espeech-runtime/python`.
-- Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `./models:/models`, `./voices:/voices`
-  и `./espeech-runtime:/espeech-runtime` с записью (админка качает модели и рантайм ESpeech и ставит наборы; рантайм —
-  в `espeech-runtime/python/`, рядом при загрузке — `python.dl/` и `python.tmp/`), `voice-refs/` и `effects/`
+  `ESPEECH_RUNTIME=/espeech-runtime/python`, `STREAM_TTS_CUDA=/cuda`.
+- Тома: `./stream-tts-data:/data` (SQLite, настройки, токены, кеш примеров), `./models:/models`, `./voices:/voices`,
+  `./espeech-runtime:/espeech-runtime` и `./cuda:/cuda` с записью (админка качает модели, рантайм ESpeech и CUDA и
+  ставит наборы; рантайм — в `espeech-runtime/python/`, рядом при загрузке — `python.dl/` и `python.tmp/`),
+  `voice-refs/` и `effects/`
   (скрипты эффектов) только для
   чтения. Режим `cut` в `effects/villager-fx.py` звуки жителя не читает. Остальным режимам нужна
   `voice-origs/minecraft-villager/`.

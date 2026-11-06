@@ -10,21 +10,22 @@
 (htdemucs для очистки образца от музыки, separate.py) — из своих репозиториев Hugging Face. Что качается и откуда —
 downloads.py, файл с докачкой и проверкой sha256 — fetch.py. Папка моделей — paths.MODELS.
 
-CUDA (ggml-cuda.dll и рантайм CUDA 13) — два архива из релиза llama.cpp той же сборки, что и ядро GGML (адреса,
-размеры и sha256 — в downloads.json, cuda.archives; там же размеры квантов модели). Если в системе есть драйвер
-NVIDIA (nvcuda.dll), а ggml-cuda.dll рядом с cosyvoice-server нет, вкладка «Сервер» предлагает скачать их: из
-архивов берутся только нужные файлы (cuda.files), они распаковываются в папку сервера при остановленном сервере,
-версия пишется в cuda-version.txt (по ней установщик при обновлении решает, сохранить ли CUDA или удалить вместе со
-старым рантаймом), потом сервер перезапускается и заново ищет устройства.
+CUDA (ggml-cuda и рантайм CUDA 13) — два архива из релиза llama.cpp той же сборки, что и ядро GGML (адреса,
+размеры и sha256 — в downloads.json, cuda.windows — zip, cuda.linux — tar.gz для образа Docker; там же размеры квантов
+модели). Если есть драйвер NVIDIA (paths.nvidia: nvcuda.dll, в контейнере — libcuda.so.1 от --gpus), а ggml-cuda
+нет, вкладка «Сервер» предлагает скачать их: из архивов берутся только нужные файлы (files), они распаковываются при
+остановленном сервере в папку сервера или в paths.CUDA (в Docker — том /cuda, образ один и без CUDA), версия
+пишется в cuda-version.txt (по ней установщик при обновлении решает, сохранить ли CUDA или удалить вместе со старым
+рантаймом), потом сервер перезапускается и заново ищет устройства.
 
 ESpeech (рантайм с torch и модель) программа для Windows и образ Docker качают по кнопке на вкладке «Сервер» —
-engines/espeech/download.py; CUDA (программе для Windows), если её нет, качается вместе с ним (torch берёт cuBLAS
+engines/espeech/download.py; CUDA, если её нет, а видеокарта NVIDIA есть, качается вместе с ним (torch берёт cuBLAS
 оттуда). Supertonic 3 (модель и 10 готовых голосов) — тоже по кнопке, везде, где найден supertonic-server:
 engines/supertonic/download.py; после загрузки ждущий модель сервер запускается.
 
 Набор голосов из zip (voicesets.py) ставится и удаляется при остановленном сервере синтеза: на Windows
 cosyvoice-server держит открытые .gguf; потом он запускается с новым списком голосов."""
-import asyncio, contextlib, logging, os, shutil, time, zipfile
+import asyncio, contextlib, logging, os, shutil, tarfile, time, zipfile
 
 import aiohttp
 
@@ -82,18 +83,15 @@ class Installer:
 
     # --- CUDA ---
     def cuda_state(self):
-        """CUDA для вкладки «Сервер»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda.dll нет)."""
+        """CUDA для вкладки «Сервер»: offer — предложить скачать (есть драйвер NVIDIA, а ggml-cuda нет)."""
         if not self.cosy:
             return dict(offer=False, installed=False, version="", size=0, unpacked=0, dir="")
-        d = self.cosy.dir
+        lib, d = self.cosy.cuda_lib(), self.cosy.cuda
         version = ""
         with contextlib.suppress(OSError):
-            with open(os.path.join(d, CUDA_VERSION_FILE), encoding="utf-8-sig") as f:
+            with open(os.path.join(os.path.dirname(lib) or d, CUDA_VERSION_FILE), encoding="utf-8-sig") as f:
                 version = f.read().strip()
-        installed = os.path.isfile(os.path.join(d, "ggml-cuda" + (".dll" if os.name == "nt" else ".so")))
-        nvidia = os.name == "nt" and os.path.isfile(
-            os.path.join(paths.env("SystemRoot", r"C:\Windows"), "System32", "nvcuda.dll"))
-        return dict(offer=nvidia and not installed, installed=installed, version=version,
+        return dict(offer=paths.nvidia() and not lib, installed=bool(lib), version=version,
                     size=sum(a["size"] for a in CUDA["archives"]), unpacked=CUDA["unpacked"], dir=d)
 
     def start_cuda(self):
@@ -105,7 +103,7 @@ class Installer:
         self.task = asyncio.create_task(self._download_cuda())
 
     async def _download_cuda(self):
-        d = self.cosy.dir
+        d = self.cosy.cuda
         archives = cuda_archives()
         try:
             timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
@@ -123,15 +121,16 @@ class Installer:
             self._push(force=True)
 
     async def _get_cuda(self, session):
-        """Скачать архивы CUDA (докачка) и распаковать нужные файлы в папку cosyvoice-server."""
-        d, archives = self.cosy.dir, cuda_archives()
+        """Скачать архивы CUDA (докачка) и распаковать нужные файлы в папку CUDA (cosyvoice-server или paths.CUDA)."""
+        d, archives = self.cosy.cuda, cuda_archives()
+        os.makedirs(d, exist_ok=True)
         for url, name, size, sha, _ in archives:
             dst = os.path.join(d, name)
             if not (os.path.isfile(dst) and os.path.getsize(dst) == size):  # скачан в прошлый раз
                 await fetch.fetch(self, session, url, name, dst, size, sha)
         self.dl.update(file=tr("{file}: распаковка", file="CUDA"), speed=0.0)
         self._push(force=True)
-        async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll
+        async with self.runtime.paused():  # сервер держит открытыми ggml-*.dll; после — заново ищет устройства
             await asyncio.to_thread(_extract_cuda, archives, d)
             self.cosy.backends = None  # после перезапуска устройства ищутся заново: появится CUDA
         log.info("CUDA %s установлена в %s", CUDA["version"], d)
@@ -160,7 +159,7 @@ class Installer:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 cuda = cuda_archives() if st["cuda"] else []
                 self.dl.update(total=st["size"], done=espeech_download.bytes_present() +
-                               (_present(cuda, self.cosy.dir) if cuda else 0))
+                               (_present(cuda, self.cosy.cuda) if cuda else 0))
                 steps = espeech_download.Steps(self, session)
                 if cuda:   # cuBLAS для torch — из CUDA cosyvoice-server
                     await self._get_cuda(session)
@@ -352,20 +351,38 @@ def _replace_dir(src, dst):
     os.replace(src, dst)
 
 
+def _put(src, dest, name):
+    """Файл из архива — через .part, чтобы оборванная распаковка не оставила половину библиотеки."""
+    tmp = os.path.join(dest, name + ".part")
+    with src, open(tmp, "wb") as dst:
+        shutil.copyfileobj(src, dst, CHUNK)
+    if os.name != "nt":
+        os.chmod(tmp, 0o755)
+    os.replace(tmp, os.path.join(dest, name))
+
+
 def _extract_cuda(archives, dest):
-    """Из каждого архива — только его файлы из downloads.json (лежат в корне архива); архивы потом не нужны."""
+    """Из каждого архива — только его файлы из downloads.json, архивы потом не нужны: zip (Windows) — файлы в корне,
+    tar.gz (Linux) — в папке сборки, файл ищется по имени среди обычных файлов (ссылки на них не нужны)."""
     for _, name, _, _, files in archives:
-        zpath = os.path.join(dest, name)
-        with zipfile.ZipFile(zpath) as z:
-            names = {i.filename: i for i in z.infolist()}
-            missing = [f for f in files if f not in names]
-            if missing:
-                raise RuntimeError(tr("в архиве CUDA нет {files}", files=", ".join(missing)))
-            for f in files:
-                tmp = os.path.join(dest, f + ".part")
-                with z.open(names[f]) as src, open(tmp, "wb") as dst:
-                    shutil.copyfileobj(src, dst, CHUNK)
-                os.replace(tmp, os.path.join(dest, f))
+        path, got = os.path.join(dest, name), set()
+        if name.endswith(".zip"):
+            with zipfile.ZipFile(path) as z:
+                names = {i.filename: i for i in z.infolist()}
+                for f in files:
+                    if f in names:
+                        _put(z.open(names[f]), dest, f)
+                        got.add(f)
+        else:
+            with tarfile.open(path, "r|gz") as tar:   # за один проход: tar.gz не перематывается
+                for m in tar:
+                    f = os.path.basename(m.name)
+                    if m.isfile() and f in files and f not in got:
+                        _put(tar.extractfile(m), dest, f)
+                        got.add(f)
+        missing = [f for f in files if f not in got]
+        if missing:
+            raise RuntimeError(tr("в архиве CUDA нет {files}", files=", ".join(missing)))
     with open(os.path.join(dest, CUDA_VERSION_FILE), "w", encoding="utf-8") as f:
         f.write(CUDA["version"])
     for _, name, _, _, _ in archives:

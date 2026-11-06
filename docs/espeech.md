@@ -382,7 +382,7 @@ CUDA (сотни КБ), torch там нет. Загрузка — один ко�
 с докачкой после обрыва и общим прогрессом. Версии одни: Python 3.14.7, те же пакеты (`PACKAGES`), torch
 2.14.1+cu132; модель собирает `python -m espeech.prepare` в скачанном рантайме.
 
-| | Программа для Windows | Docker (`stream-tts:cuda`, `stream-tts:cpu`) |
+| | Программа для Windows | Docker (`stream-tts`) |
 |---|---|---|
 | код espeech-server и заглушки (`launch.CODE`) | `{app}\runtime\espeech\` от установщика (`build-runtime.py`, MSVC) | `/opt/cosyvoice/espeech/` из образа (стадия `espeech-stubs`, gcc) |
 | Python 3.14.7 | встраиваемый, python.org, 12 МБ | python-build-standalone (`install_only_stripped` без tcl/tk, pip и заголовков), 36 МБ |
@@ -390,8 +390,8 @@ CUDA (сотни КБ), torch там нет. Загрузка — один ко�
 | пакеты (13 колёс, распаковкой, без pip) | win_amd64, 45 МБ | manylinux x86_64, 61 МБ |
 | torch — нужные файлы колеса диапазонами | 434 из 1908 МБ (CUDA-библиотеки в колесе — их не качать) | 487 из 533 МБ (CUDA-библиотек в колесе нет, пакеты nvidia-* не нужны) |
 | заглушки (`STUBS`) | cuDNN, cuSPARSE, cuSOLVER, NVRTC, cuFFT — `.def` экспорта DLL | ещё NCCL, cuPTI, cuRAND, cuSPARSELt, cuFile, NVSHMEM (cuSOLVER не нужен) — `.map`, символы, которые torch берёт, с версиями |
-| настоящие из CUDA cosyvoice-server (`CUBLAS`) | cuBLAS, cuBLASLt (cudart в torch статически); CUDA качается вместе с ESpeech, если её нет | cudart, cuBLASLt, cuBLAS из `/opt/cosyvoice` образа `stream-tts:cuda` (те же CUDA 13.4 и llama.cpp b11500) |
-| без CUDA | заглушки `stubs\cublas\`, синтез на процессоре | `stream-tts:cpu` — заглушки `stubs/cublas/` (и cudart), синтез на процессоре |
+| настоящие из CUDA cosyvoice-server (`CUBLAS`) | cuBLAS, cuBLASLt (cudart в torch статически); CUDA качается вместе с ESpeech, если её нет | cudart, cuBLASLt, cuBLAS из тома `/cuda` (`STREAM_TTS_CUDA`; те же CUDA 13.4 и llama.cpp b11500); CUDA качается вместе с ESpeech, если её нет, а контейнер видит видеокарту |
+| без CUDA | заглушки `stubs\cublas\`, синтез на процессоре | заглушки `stubs/cublas/` (и cudart), синтез на процессоре |
 | подключение библиотек (`ESPEECH_DLL_DIRS`) | папки поиска DLL (`os.add_dll_directory`) | загрузка до torch с `RTLD_GLOBAL`, `LD_LIBRARY_PATH` не задаётся (в `/opt/cosyvoice` свой `libonnxruntime.so`) |
 | рантайм (`ESPEECH_RUNTIME`) | `{app}\espeech-runtime\`, ~1,1 ГБ (вне `runtime\`: его очищает обновление) | том `./espeech-runtime`, `/espeech-runtime/python`, 1,4 ГБ (пересборка образа не трогает) |
 | модель | `{app}\models\espeech\`, 1,84 ГБ скачать, 1,4 ГБ на диске | том `./models`, то же |

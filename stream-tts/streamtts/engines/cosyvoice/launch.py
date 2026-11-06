@@ -12,7 +12,11 @@
   cosyvoice-cli --list-backends:
   CUDA, если есть ggml-cuda.dll и видеокарта NVIDIA, иначе Vulkan (дискретная видеокарта приоритетнее
   встроенной), иначе CPU. Набор, где лежат и ggml-cuda, и ggml-vulkan, на машине без них уходит на CPU;
-- всегда GGML_CUDA_DISABLE_GRAPHS=1, а на CUDA ещё --llm-flash-attn 0: без них вместо речи шум (AGENTS.md).
+- всегда GGML_CUDA_DISABLE_GRAPHS=1, а на CUDA ещё --llm-flash-attn 0: без них вместо речи шум (AGENTS.md);
+- CUDA, скачанная не к серверу, а в paths.CUDA (том Docker, install.py), подключается через GGML_BACKEND_PATH,
+  её библиотеки — через LD_LIBRARY_PATH (PATH на Windows). ggml-cuda оттуда — из CUDA-сборки llama.cpp, а ядро GGML в
+  образе — из сборки для процессора: libggml-base у них разные, но той же версии, и речь на CUDA та же (проверено
+  2026-11-06 на RTX 3060 Ti: распознанный текст совпал с образом, собранным с GPU=cuda).
 Порт — COSYVOICE_PORT (иначе свободный), адрес сервера — COSYVOICE_HOST (runtime.py)."""
 import asyncio, glob, logging, os, re, subprocess
 
@@ -24,6 +28,7 @@ from ...runtime import Unavailable, spawn_kwargs
 log = logging.getLogger("runtime")
 
 BACKENDS = ("auto", "cuda", "vulkan", "cpu")
+CUDA_LIB = "ggml-cuda.dll" if os.name == "nt" else "libggml-cuda.so"
 
 
 def find_server():
@@ -93,6 +98,7 @@ class Launcher:
 
     def __init__(self, server, settings=None):
         self.server, self.dir = server, os.path.dirname(os.path.abspath(server))
+        self.cuda = os.path.abspath(paths.CUDA) if paths.CUDA else self.dir   # куда качается CUDA (install.py)
         self.s = settings
         self.port = int(env("COSYVOICE_PORT", "0"))
         self.host = env("COSYVOICE_HOST", "127.0.0.1")  # только --host сервера
@@ -116,10 +122,23 @@ class Launcher:
                     device_env=self.DEVICE_ENV,
                     locked=dict(backend=bool(env("COSYVOICE_BACKEND")), model=bool(env("MODEL"))))
 
+    def cuda_lib(self):
+        """Путь к ggml-cuda: у сервера (программа для Windows, образ с GPU=cuda) или скачанной в self.cuda; "" — нет."""
+        for d in dict.fromkeys((self.dir, self.cuda)):
+            if os.path.isfile(os.path.join(d, CUDA_LIB)):
+                return os.path.join(d, CUDA_LIB)
+        return ""
+
     def env(self):
         e = dict(os.environ, GGML_CUDA_DISABLE_GRAPHS="1")
-        if os.name != "nt":
-            e["LD_LIBRARY_PATH"] = os.pathsep.join(filter(None, (self.dir, e.get("LD_LIBRARY_PATH"))))
+        libs = [] if os.name == "nt" else [self.dir]   # Windows ищет DLL рядом с exe сама
+        cuda = self.cuda_lib()
+        if cuda and os.path.dirname(cuda) != self.dir:   # рядом с сервером GGML найдёт её сам
+            e["GGML_BACKEND_PATH"] = cuda
+            libs.append(os.path.dirname(cuda))
+        if libs:
+            var = "PATH" if os.name == "nt" else "LD_LIBRARY_PATH"
+            e[var] = os.pathsep.join(filter(None, (*libs, e.get(var))))
         return e
 
     # --- для лога ---

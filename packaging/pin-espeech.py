@@ -99,7 +99,8 @@ LINUX_PYTHON_EXCLUDE = [
 # NVSHMEM; cuRAND torch не вызывает вовсе (заглушка — пустая библиотека с тем же именем)
 LINUX_STUBS = ["libcudnn.so.9", "libcusparse.so.12", "libcufft.so.12", "libnvrtc.so.13", "libcupti.so.13",
                "libnccl.so.2", "libcusparseLt.so.0", "libcufile.so.0", "libcurand.so.10", "libnvshmem_host.so.3"]
-# Из CUDA cosyvoice-server (/opt/cosyvoice образа stream-tts:cuda, релиз llama.cpp); заглушки — в образе без CUDA.
+# Из CUDA cosyvoice-server (скачанной кнопкой в том /cuda, cuda.linux в downloads.json; релиз llama.cpp); заглушки —
+# пока её нет.
 # Порядок — порядок загрузки: cuBLAS требует cuBLASLt
 LINUX_CUBLAS = ["libcudart.so.13", "libcublasLt.so.13", "libcublas.so.13"]
 # Без версий символов: чьи они — по префиксу. Символы драйвера (cu[A-Z]…, libcuda.so.1) берёт только
@@ -413,7 +414,7 @@ def main():
             with zipfile.ZipFile(whl) as z:
                 for dll in WIN_STUBS:
                     write_def(stub_dir, dll, z.read(L + dll))
-            cudart = os.path.join(a.cache, dl["cuda"]["archives"][1]["url"].rsplit("/", 1)[-1])   # cuBLAS той же CUDA
+            cudart = os.path.join(a.cache, dl["cuda"]["windows"]["archives"][1]["url"].rsplit("/", 1)[-1])   # cuBLAS той же CUDA
             if not os.path.isfile(cudart):
                 sys.exit(f"нет {cudart}: сначала packaging/windows/build-runtime.py --cuda")
             with zipfile.ZipFile(cudart) as z:

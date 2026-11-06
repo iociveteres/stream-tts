@@ -55,7 +55,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 DOWNLOADS = os.path.join(ROOT, "stream-tts", "streamtts", "downloads.json")
 with open(DOWNLOADS, encoding="utf-8") as _f:
     _DL = json.load(_f)
-CUDA, ESPEECH = _DL["cuda"], _DL["espeech"]["runtime"]["windows"]
+CUDA, ESPEECH = _DL["cuda"]["windows"], _DL["espeech"]["runtime"]["windows"]
 # Архивы CUDA — по порядку в downloads.json: llama.cpp (ggml-cuda.dll) и cudart; качаются только для --cuda и --flat
 CUDA_ASSETS = ("cuda", "cudart")
 ASSETS.update({name: (a["url"], a["sha256"]) for name, a in zip(CUDA_ASSETS, CUDA["archives"])})
