@@ -31,7 +31,10 @@ REPO = cosyvoice.REPO
 BASE = DOWNLOADS["model"]["url"].rstrip("/")
 QUANTS = {q: dict(d, size=DOWNLOADS["model"]["quants"][q]["size"]) for q, d in cosyvoice.QUANTS.items()}
 DEFAULT_QUANT = cosyvoice.DEFAULT_QUANT
-# Примеры вариантов на «Загрузках» — static/samples/<вариант>.mp3: эта фраза, seed 42 (docs/stream-tts-deploy.md)
+# Примеры вариантов на «Загрузках» — static/samples/<вариант>.mp3: эта фраза, seed 42 (docs/stream-tts-deploy.md),
+# mp3 24 кГц моно 48 кбит/с. supertonic.mp3 — готовый голос boris (M2), 8 шагов, скорость 1,05; espeech.mp3 — голос
+# ohf-denis без LoRA, образец 5,4 с: реплики 3000000026 и 3000000274 ru_RU-denis, темп — по склейке четырёх реплик
+# квантов; громкость обоих поднята до примеров CosyVoice (≈ −19,5 LUFS).
 SAMPLE_PHRASE = "Ну всё, я пошёл в бой! Если не вернусь — считайте, что я был прав, а вы нет. Вперёд!"
 FRONTEND = cosyvoice.FRONTEND
 # Необязательные пакеты: качаются из админки («Загрузки» и редактор голоса). files — пути в репозитории source на
