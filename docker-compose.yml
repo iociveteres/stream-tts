@@ -1,4 +1,4 @@
-# StreamTTS из готового образа: этот файл можно скачать один, без репозитория (README, «Docker: установка»), и
+# StreamTTS из готового образа: этот файл можно скачать один, без репозитория (README, «Установка» → «Docker»), и
 # запустить в пустой папке: docker compose up -d. Папки данных ниже Docker создаст рядом с ним. Обновление —
 # docker compose pull && docker compose up -d. Видеокарта NVIDIA — ещё docker-compose.gpu.yml; сборка образа из
 # исходников и папки проекта (эффекты, voice-refs) — docker-compose.dev.yml (его подключает ./setup.sh --build).

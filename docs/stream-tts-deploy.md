@@ -130,6 +130,9 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 `STREAM_TTS_MODELS`, `STREAM_TTS_VOICES`, `STREAM_TTS_PROJECT`, `STREAM_TTS_RUNTIME`, `STREAM_TTS_CUDA`. ffmpeg ищется в рантайме и
 рядом с программой, потом в `PATH` (или `FFMPEG`).
 
+В папке данных: `settings.json`, `token.json`, `stream-tts.sqlite` (история за 30 дней), `profanity.txt` (корни мата,
+правится и из интерфейса), `demos/` (mp3-примеры голосов), `admin-password`.
+
 ## Docker
 
 Сервис `stream-tts` в `docker-compose.yml` — со встроенным сервером из того же образа (корневой
@@ -206,3 +209,121 @@ Windows медленная.
 `stream-tts` со встроенным сервером синтеза — на сервере, на ПК стримера только OBS с
 Browser Source `http://<сервер>:8090/overlay`. Оверлей открыт без пароля, он только читает. Админка (настройки,
 токены) закрыта паролем. Синтез на одной машине и `stream-tts` на другой не поддерживаются.
+
+## Из репозитория: `setup.sh`
+
+Для инструментов подготовки голосов (`scripts/`, `tools/`), выбора кванта при установке и сборки образа из исходников.
+Команды — в bash: Linux, WSL2 или Git Bash на Windows (из PowerShell скрипт не запустится; Docker Desktop должен быть
+запущен). В WSL держите проект в домашней папке (`~/...`), а не на `/mnt/c/...`: модель грузится заметно быстрее.
+
+```bash
+git clone https://github.com/iociveteres/stream-tts.git && cd stream-tts && ./setup.sh
+```
+
+Скрипт проверяет Docker, качает модель (по умолчанию `Q8_0`) и ONNX-фронтенд в `./models` (имеющиеся файлы
+пропускает), пишет в `.env` порт и набор compose-файлов, скачивает образ (с `--build` — собирает) и запускает
+stream-tts, ждёт ответа сервера и печатает адреса, в том числе для других ПК в сети. WebUI сервера синтеза —
+**http://localhost:8080**, админка — **http://localhost:8090**.
+
+```bash
+./setup.sh Q6_K                  # другой квант
+./setup.sh Q8_0 --frontend full  # полный ONNX-фронтенд (~1 ГБ) вместо int8
+./setup.sh Q8_0 --frontend none  # без фронтенда (клонирование из аудио недоступно)
+PORT=9000 ./setup.sh             # другой порт сервера синтеза на хосте
+./setup.sh Q8_0 --gpu            # видеокарта NVIDIA (CUDA)
+./setup.sh Q8_0 --build          # образ из исходников, эффекты и manifest.json голосов — из папок проекта
+```
+
+`COMPOSE_FILE` в `.env`: с `--gpu` — ещё `docker-compose.gpu.yml`, с `--build` — `docker-compose.dev.yml`, поэтому
+обычные `docker compose up/down/logs` работают с тем же набором. Вернуться на CPU или к готовому образу —
+`./setup.sh` без флагов. После `git pull` с `--build` — `docker compose up -d --build`.
+
+Без `setup.sh`, с готовым образом и видеокартой: чтобы не писать `-f` в каждой команде, положите рядом с
+compose-файлами `.env` со строками `COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml` и
+`COMPOSE_PATH_SEPARATOR=:`.
+
+## Кванты CosyVoice3
+
+`scripts/download-model.sh --list` печатает кванты с размерами.
+
+| Квант | Размер | Видеопамять (CUDA) | Комментарий автора модели |
+|---|---|---|---|
+| `Q8_0` | 944 МБ | ≈1,5 ГБ, до 1,9 | **по умолчанию**, почти без потерь |
+| `Q6_K` | 840 МБ | ≈1,45 ГБ, до 1,8 | хорошее качество |
+| `Q5_K_M` / `Q5_1` | ~683 МБ | ≈1,3 ГБ, до 1,7 | приемлемо |
+| `Q4_K_M` | 629 МБ | — | иногда звук приглушённый |
+| `Q3_*`, `Q2_*` | < 530 МБ | — | заметные артефакты |
+
+Видеопамять — пик cosyvoice-server на RTX 3060 Ti, обычно и на самом длинном образце (~22 с); сравнение квантов —
+«Первый запуск». Если Hugging Face недоступен, файлы кладут вручную:
+
+```
+models/
+├── CosyVoice3-2512_Q8_0.gguf
+└── frontend-onnx/
+    ├── campplus.int8.onnx            (или campplus.onnx)
+    └── speech_tokenizer_v3.int8.onnx (или speech_tokenizer_v3.onnx)
+```
+
+Несколько `.gguf` в `models/` — нужная выбирается на вкладке «Сервер».
+
+## WebUI и API cosyvoice-server
+
+Порт 8080 (только `127.0.0.1`), для инструментов и опытов; озвучку stream-tts в это время не заказывать — сервер
+выполняет запросы строго по одному.
+
+Голос в WebUI: вкладка **Extract** → аудио 5–15 с чистой речи (или запись с микрофона) → **точная расшифровка** и имя.
+Голос живёт в памяти до перезапуска; чтобы сохранить, **Save speaker** с путём `/voices/<имя>.gguf` или
+`/voices/<набор>/<имя>.gguf` (подпапку создать заранее). Из двух файлов с одним именем подключается первый, второй
+пропускается с предупреждением в логе.
+
+| Режим | Что делает |
+|---|---|
+| **zero-shot** | голос и манера образца: нужная интонация — из образца, где она уже есть |
+| **instruct** | тот же голос плюс инструкция к стилю («говори шёпотом»); английские и китайские, вероятно, надёжнее |
+| **cross-lingual** | голос образца на другом языке |
+
+```bash
+# регистрация голоса из аудио
+curl -X POST "http://localhost:8080/speaker?type=extract" -F name=myvoice \
+  -F "text=Точная расшифровка записи." -F "audio=@sample.wav"
+# синтез; с инструкцией: "mode":"instruct","instruction":"Speak in a slow, mysterious whisper."
+curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json' \
+  -d '{"text":"Привет!","voice":"myvoice","mode":"zero-shot","format":"wav"}' -o out.wav
+# сохранение на диск
+curl -X POST http://localhost:8080/speaker/save -H 'Content-Type: application/json' \
+  -d '{"name":"myvoice","path":"/voices/myvoice.gguf"}'
+```
+
+Состояние: `GET /status`, `GET /speaker`, `GET /formats`. Справочник —
+[docs/TOOLS.md](https://github.com/Lourdle/cosyvoice.cpp/blob/v0.2.0/docs/TOOLS.md) cosyvoice.cpp, но `POST /model/load`
+ждёт поле `model`, а не `model_path`, и после выгрузки модели голоса сбрасываются. Формат — поле `format` (`wav`,
+`mp3`, `opus`, `flac`, `aac`, `m4a`, `pcm`); `response_format`, как у OpenAI, сервер молча пропускает и отдаёт WAV.
+Чтобы звук начинал играть раньше, в WebUI включают Streaming с MP3 или Opus.
+
+Свой набор: пары `<имя>.wav` + `<имя>.txt` (точная расшифровка) в папке → `scripts/import-voices.sh <папка>`. С
+`--force` скрипт пересобирает сохранённые голоса (все или перечисленные после флага), сначала выгружая их: иначе 409.
+
+**Перенос голосов.** `voices/<имя>.gguf` (~120 КБ) самодостаточен: мел-спектрограмма образца, эмбеддинг говорящего
+(CAM++), речевые токены и текст, без весов модели. Достаточно скопировать файл в `voices/` другого инстанса и
+перезапустить его; фронтенд там не нужен. Файл работает с любым квантом CosyVoice3, но не с другими семействами
+(CosyVoice2). Если формат сменится в новой cosyvoice.cpp, голоса пересобирают из образцов — поэтому пары `.wav` +
+`.txt` стоит хранить (в этом проекте — `voice-refs/cosyvoice/<набор>`); здесь фронтенд уже нужен.
+
+**Скорость** (Ryzen 5 5600G, RTX 3060 Ti, Q8_0): zero-shot 8,5 с звука на CPU — ~36 с, instruct 11,1 с — ~54 с;
+на GPU 6,7 и 8,3 с — ~2,1 с. RTF на CPU около 4 (для подготовки, не для живого диалога), на GPU 0,25–0,33, короткая
+фраза — 1,5–2,5 с. Ограничение CPU до 6 потоков (по физическим ядрам) было медленнее, поэтому потоков — по умолчанию.
+
+## Решение проблем
+
+| Симптом | Причина и решение |
+|---|---|
+| `Docker daemon не запущен` | Запустите Docker Desktop. |
+| `CPU без AVX2` | Процессор не поддерживается рантаймом; macOS на Apple Silicon и ARM-Linux тоже (бинарники под x86_64, эмуляция без AVX2). |
+| `bash\r: No such file or directory` | Скрипты сохранены с CRLF: `sed -i 's/\r$//' *.sh`. Репозиторий защищён `.gitattributes`. |
+| Извлечение голоса недоступно | Нет файлов в `models/frontend-onnx/`: `scripts/download-model.sh --frontend int8`. |
+| Сервер не стартует, несколько моделей | Выберите модель на вкладке «Сервер». |
+| Модель не качается | Скачайте вручную с Hugging Face в `models/` («Кванты CosyVoice3»). |
+| `Docker не видит GPU` | Обновите драйвер NVIDIA; в Docker Desktop — бэкенд WSL2, на Linux — NVIDIA Container Toolkit. Проверка: `docker run --rm --gpus all ubuntu:26.04 nvidia-smi`. |
+| На GPU тихий шум или мусор вместо речи | Нет `GGML_CUDA_DISABLE_GRAPHS=1` или включён `--llm-flash-attn` ([development.md](development.md), «Образы»). |
+| В начале фразы лишний звук («точка», «пой») | Особенность модели, и на CPU, примерно 1 фраза из 8. Сгенерируйте заново с другим `seed`. |

@@ -1,4 +1,4 @@
-"""Docker для пользователя — готовый образ из GHCR и один docker-compose.yml (README, «Docker: установка»): без
+"""Docker для пользователя — готовый образ из GHCR и один docker-compose.yml (README, «Установка» → «Docker»): без
 процесса stream-tts и без docker, секунды.
 
 - docker-compose.yml берёт образ ghcr.io/<репозиторий>:latest — тот, что публикует docker.yml по тегу, и того же
