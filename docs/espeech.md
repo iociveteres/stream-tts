@@ -178,14 +178,17 @@ Docker (`PACKAGES`, `WIN_TORCH`, `LINUX_TORCH` в `packaging/pin-espeech.py`, н
   запрос: CUDA заводит ресурсы на поток), схема настроек `PARAMS` для `/status`; `wire.py` — multipart, PCM16 и
   заголовок WAV.
 
-**API** — подмножество cosyvoice-server, чтобы клиент движков в stream-tts был общим, плюс расширения в `/status`:
+**API** — подмножество cosyvoice-server, чтобы клиент движков в stream-tts был общим, плюс расширения в `/status`.
+Пароля нет, сервер слушает 127.0.0.1, поэтому запросы из браузера отсекаются (`wire.refuse_browser`, так же у
+supertonic-server): с заголовком `Origin` — 403 (чужая страница или DNS rebinding), тело JSON без `Content-Type:
+application/json` — 415 (`text/plain` браузер шлёт с чужой страницы без проверки CORS).
 
 | Запрос | Что |
 |---|---|
 | `GET /status` | `model_loaded`, `engine: espeech`, `api_version`, `device`, `capabilities` (stream, accent, extract, train, voice_formats, user_accents), `params` — схема настроек для админки (`nfe_steps`: 16 / 32 / 12), `memory` (uss, видеопамять), `error`, `training` — кратко об обучении (`state`, `voice`, `step`, `steps`) |
 | `GET /speaker` | имена голосов; папка перечитывается при каждом запросе — новые файлы без перезапуска |
 | `POST /speaker?type=extract` | голос из образца в памяти: multipart `name`, `text` (ударения в словах без «+» ставит RUAccent, стоящие остаются), `audio` (WAV PCM16 моно 24 кГц, до 12 с), необязательные `tempo`, `title`; 409 — имя занято |
-| `POST /speaker/save {name, path}` | голос в файл `.espeech`; относительный `path` — от папки `--voices` (`<набор>/<имя>.espeech`: так сохраняет редактор stream-tts) |
+| `POST /speaker/save {name, path}` | голос в файл `.espeech`; `path` — только от папки `--voices` (`<набор>/<имя>.espeech`: так сохраняет редактор stream-tts), абсолютный, вне папки и не `.espeech` — 400 |
 | `DELETE /speaker/<имя>` | выгрузить; голос из файла вернётся, когда файл изменится, или после перезапуска |
 | `POST /tts {text, voice, seed?, stream?, nfe_steps?, adapter?}` | WAV PCM16 24 кГц; `stream` — заголовок с неизвестной длиной и PCM по мере готовности кусков (chunked); `seed` по умолчанию случайный, один на все куски фразы; `adapter` — прослушивание обучения: `last` / `best` — снимок обучения вместо адаптера голоса (409 — его нет), `none` — голос без адаптера; поля cosyvoice (`chunk_tokens` и др.) игнорируются |
 | `POST /tts/stop` | остановить текущий синтез: видеокарта свободна через 0,1–0,2 с, целиком — ответ с тем, что успело |

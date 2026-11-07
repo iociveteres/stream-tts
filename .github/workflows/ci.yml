@@ -1,8 +1,9 @@
 # Конвейер для main: тесты (tests.yml), после них — образы (docker.yml) и установщик (windows.yml). На dev CI не
 # запускается: там тесты гоняются локально по надобности (docs/development.md, «Тесты»), а любой из трёх файлов можно
 # запустить и вручную на любой ветке (Actions → … → Run workflow).
-# Выпуск — push в main и тег v<версия>: прогон по main собирает образы и установщик-артефакт, прогон по тегу —
-# установщик и релиз на GitHub (образы по тегу не собираются: тот же коммит уже собран по main). PR в main — только тесты.
+# Выпуск — push в main и тег v<версия>: прогон по main проверяет образ и собирает установщик-артефакт, прогон по
+# тегу — образ в GHCR (docker-compose.yml пользователя берёт его оттуда), установщик и релиз на GitHub. PR в main —
+# только тесты.
 name: ci
 
 on:
@@ -24,7 +25,10 @@ jobs:
 
   docker:
     needs: tests
-    if: github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/')
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write   # docker push в ghcr.io по тегу
     uses: ./.github/workflows/docker.yml
 
   windows:

@@ -18,11 +18,50 @@ function renderSettings() {
   const c = S.config;
   $("#server-info").replaceChildren(
     h("div", {}, S.cosy.title + ": ", h("code", {}, S.cosy.url), runtimeInfo(S.cosy.runtime)),
-    h("div", {}, T(c.password ? "Интерфейс: {addr}, пароль задан" : "Интерфейс: {addr}, пароль не задан (доступ только с этого ПК)",
-      { addr: `${c.bind}:${c.port}` })));
-  $("#logout-link").hidden = !c.password;
+    h("div", {}, T("Интерфейс: {addr}", { addr: `${c.bind}:${c.port}` })));
+  renderAccess(c);
   $("#cosy-settings").hidden = S.cosy.engine !== "cosyvoice";   // chunk_tokens и max_token_text_ratio — CosyVoice
 }
+// --- доступ: пароль админки (access.py; переменная STREAM_TTS_PASSWORD главнее и закрывает поля) ---
+function renderAccess(c) {
+  const pw = c.password, f = $("#password-form");
+  $("#access-info").textContent = {
+    env: T("Пароль задан переменной STREAM_TTS_PASSWORD — меняется там, с перезапуском."),
+    file: T("Пароль задан: админка открыта отовсюду после входа."),
+  }[pw] || T("Пароля нет: админка открыта с этого ПК и из локальной сети. Из интернета, через туннель или прокси — только с паролем.");
+  const r = c.refused;
+  $("#access-refused").hidden = !r;
+  if (r) $("#access-refused").textContent = T("{time} отклонён запрос с {addr} по адресу {host}: не из локальной сети. Задайте пароль, если открываете админку оттуда.",
+    { time: new Date(r.ts * 1000).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }), addr: r.addr, host: r.host });
+  f.hidden = pw === "env";
+  $("#pw-current").hidden = pw !== "file";
+  f.current.required = pw === "file";
+  $("#pw-save").textContent = pw === "file" ? T("Сменить пароль") : T("Задать пароль");
+  f.new.minLength = c.min_password;
+  $("#pw-remove").hidden = pw !== "file";
+  $("#logout-link").hidden = !pw;
+}
+async function sendPassword(body, done) {
+  authChanged = true;   // сокет закроется кодом 4001 — этой вкладке переподключиться, а не перезагружаться
+  const j = await api("/api/password", body);
+  if (!j.ok) { authChanged = false; return; }
+  $("#password-form").reset();
+  toast(done);
+}
+$("#password-form").onsubmit = e => {
+  e.preventDefault();
+  const f = e.target;
+  if (f.new.value !== f.repeat.value) { toast(T("Пароли не совпадают"), true); return; }
+  const had = S.config.password === "file";
+  sendPassword({ current: f.current.value, new: f.new.value }, had ? T("Пароль изменён") : T("Пароль задан"));
+};
+$("#pw-remove").onclick = async e => {
+  e.preventDefault();
+  const f = $("#password-form");
+  if (!f.current.value) { toast(T("Введите текущий пароль"), true); f.current.focus(); return; }
+  if (!await ask(T("Снять пароль? Админка будет открыта без входа всем в локальной сети."), T("Снять пароль"), true)) return;
+  sendPassword({ current: f.current.value, new: "" }, T("Пароль снят"));
+};
 $("#settings").onchange = async e => {
   const el = e.target;
   if (!el.name) return;

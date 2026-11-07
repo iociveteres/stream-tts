@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Единая точка входа: ./setup.sh [КВАНТ] [--frontend int8|full|none] [--gpu]
-# Скачивает модель (её можно скачать и в админке stream-tts), пишет в .env порт и набор compose-файлов, собирает и
-# запускает stream-tts со встроенным cosyvoice-server. Работает из Linux, WSL2 и Git Bash на Windows.
+# Единая точка входа: ./setup.sh [КВАНТ] [--frontend int8|full|none] [--gpu] [--build]
+# Скачивает модель (её можно скачать и в админке stream-tts), пишет в .env порт и набор compose-файлов, скачивает
+# готовый образ из GHCR (с --build — собирает из Dockerfile, с папками проекта: docker-compose.dev.yml) и запускает
+# stream-tts со встроенным cosyvoice-server. Работает из Linux, WSL2 и Git Bash на Windows.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 QUANT="Q8_0"
 GPU=0
+BUILD=0
 dl_args=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --frontend) dl_args+=("$1" "${2:?}"); shift ;;
         --gpu) GPU=1 ;;
+        --build) BUILD=1 ;;
         *) QUANT="$1" ;;
     esac
     shift
@@ -31,26 +34,52 @@ echo "==> Модель"
 bash scripts/download-model.sh "$QUANT" "${dl_args[@]}"
 mkdir -p voices
 
-# .env читается compose автоматически: последующие 'docker compose up' возьмут тот же порт (а с --gpu и тот же
-# набор compose-файлов). Остальные строки (пароль, Client ID) не трогаются.
+# .env читается compose автоматически: последующие 'docker compose up' возьмут тот же порт (а с --gpu и --build и тот
+# же набор compose-файлов). Остальные строки (пароль, Client ID) не трогаются.
 # Модель в .env не пишется: stream-tts берёт выбранную в админке, а если в models/ она одна — её.
 touch .env
 sed -i -E '/^(PORT|COMPOSE_FILE|COMPOSE_PATH_SEPARATOR)=/d' .env
 printf 'PORT=%s\n' "$PORT" >> .env
-if [ "$GPU" -eq 1 ]; then
-    printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml\nCOMPOSE_PATH_SEPARATOR=:\n' >> .env
+files=docker-compose.yml
+if [ "$BUILD" -eq 1 ]; then files="$files:docker-compose.dev.yml"; fi
+if [ "$GPU" -eq 1 ]; then files="$files:docker-compose.gpu.yml"; fi
+if [ "$files" != docker-compose.yml ]; then
+    printf 'COMPOSE_FILE=%s\nCOMPOSE_PATH_SEPARATOR=:\n' "$files" >> .env
 fi
 
-echo "==> Собираю и запускаю контейнер"
 # --remove-orphans: контейнер отдельного cosyvoice из прежних версий занял бы порт сервера и видеокарту
-docker compose up --build -d --remove-orphans
+if [ "$BUILD" -eq 1 ]; then
+    echo "==> Собираю образ и запускаю контейнер"
+    docker compose up --build -d --remove-orphans
+else
+    echo "==> Скачиваю образ и запускаю контейнер"
+    docker compose pull
+    docker compose up -d --remove-orphans
+fi
+
+# Адрес компьютера в локальной сети — для админки и оверлея с другого ПК. Из WSL и Git Bash — адрес Windows:
+# у WSL свой внутренний адрес, с других ПК недоступный
+lan_ip() {
+    if grep -qi microsoft /proc/version 2>/dev/null || [ -n "${WINDIR:-}" ]; then
+        powershell.exe -NoProfile -Command "Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway } |
+            ForEach-Object { \$_.IPv4Address.IPAddress }" 2>/dev/null | tr -d '\r' | head -n 1
+    else
+        ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p'
+    fi
+}
 
 echo "==> Жду сервер"
 UI_PORT="$(sed -n 's/^STREAM_TTS_PORT=//p' .env | tail -n 1)"
 UI_PORT="${STREAM_TTS_PORT:-${UI_PORT:-8090}}"
+UI_BIND="$(sed -n 's/^STREAM_TTS_BIND=//p' .env | tail -n 1)"
+UI_BIND="${STREAM_TTS_BIND:-${UI_BIND:-0.0.0.0}}"
 for _ in $(seq 1 90); do
     if curl -fs -o /dev/null "http://127.0.0.1:${PORT}/ping"; then
         echo "Готово. Админка: http://localhost:${UI_PORT} | WebUI сервера: http://localhost:${PORT}"
+        if [ "$UI_BIND" = "0.0.0.0" ] && LAN="$(lan_ip)" && [ -n "$LAN" ]; then
+            echo "С другого ПК в локальной сети: http://${LAN}:${UI_PORT} (без пароля; для доступа из интернета"
+            echo "задайте пароль в админке: «Настройки» → «Сервер»)"
+        fi
         echo "Логи: docker compose logs -f | Стоп: docker compose down"
         # CUDA в образ не входит: её (~590 МБ) качает админка в ./cuda, пока синтез идёт на процессоре
         if [ "$GPU" -eq 1 ] && [ ! -f cuda/libggml-cuda.so ]; then

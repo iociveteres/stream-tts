@@ -7,17 +7,18 @@
 
 ```
 .
-├── setup.sh               # единая точка входа: модель, .env, сборка и запуск
+├── setup.sh               # установка из репозитория: модель, .env, образ из GHCR (--build — сборка) и запуск
 ├── Dockerfile             # образ stream-tts со встроенным сервером
 ├── .dockerignore          # контекст сборки — весь проект, в него пускаются только нужные образам файлы
-├── docker-compose.yml     # stream-tts
+├── docker-compose.yml     # stream-tts из готового образа GHCR; пользователь скачивает только его (README)
 ├── docker-compose.gpu.yml # надстройка для видеокарты NVIDIA
+├── docker-compose.dev.yml # надстройка для репозитория: сборка из Dockerfile, effects/ и voice-refs/ проекта
 ├── README.md              # для пользователя: установка и работа
 ├── AGENTS.md              # заметки для ИИ-агентов (CLAUDE.md ссылается на него)
 ├── .gitattributes         # LF для shell-скриптов, Dockerfile и *.yml; .gitignore — данные не в git
 ├── .claude/launch.json    # конфигурации preview (раздел «Запуск»)
 ├── .github/workflows/     # GitHub Actions: ci.yml (конвейер main: тесты → образы и установщик, раздел «Ветки»),
-│                          # tests.yml (раздел «Тесты»), docker.yml (сборка образов, раздел «Образы»), windows.yml
+│                          # tests.yml (раздел «Тесты»), docker.yml (образ и его публикация в GHCR, раздел «Образы»), windows.yml
 │                          # (установщик и релиз, docs/stream-tts-windows.md)
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
 ├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): __init__.py (папки
@@ -45,6 +46,7 @@
 │       ├── __main__.py    # точка входа python -m streamtts: сборка частей, веб-сервер, остановка
 │       ├── __init__.py    # __version__ — единственное место версии
 │       ├── paths.py       # пути по способу запуска (исходники, Docker, exe); config.py — переменные окружения
+│       ├── access.py      # доступ к админке: пароль (переменная или scrypt-хэш в admin-password), локальная сеть
 │       ├── engine.py      # очередь: приём, итог, синтез, воспроизведение
 │       ├── rules.py       # доступ, кулдауны, ответ зрителю об отказе (R_*, REPLIES, ACCESS_WHO)
 │       ├── commands.py    # команды чата !tts*, SERVICE_COMMANDS
@@ -62,7 +64,7 @@
 │       ├── chat_irc.py    # режим «Только чтение чата»: анонимный IRC
 │       ├── i18n.py        # язык интерфейса, tr()
 │       ├── runtime.py     # встроенный сервер: процесс, порт, перезапуски, paused, выгрузка
-│       ├── web/           # HTTP: __init__.py — make_app, пароль, Origin, страницы и сокеты, сводный POSTS;
+│       ├── web/           # HTTP: __init__.py — make_app, доступ и смена пароля, Origin, страницы и сокеты, POSTS;
 │       │                  # common.py — ответы, обёртка POST, приём файла сырым телом (upload), _restart_guard;
 │       │                  # роуты по модулям, у каждого своя таблица POSTS: state.py (состояние админки),
 │       │                  # admin.py (настройки, голоса, очередь, баны, Twitch), model.py (модель, «как
@@ -99,7 +101,8 @@
 │   ├── pin-espeech.py     # загрузки ESpeech в downloads.json для обеих систем и списки заглушек библиотек CUDA:
 │                          # windows/stubs/*.def, linux/stubs/**/*.map
 │   ├── linux/             # заглушки .so для torch ESpeech в Docker: stubs/<soname>.map (скрипты версий ld; в cublas/ —
-│                          # cudart и cuBLAS для образа без CUDA), build-stubs.sh (сборка, стадия espeech-stubs Dockerfile)
+│                          # cudart и cuBLAS для образа без CUDA), build-stubs.sh (сборка, стадия espeech-stubs Dockerfile);
+│                          # licenses.txt (тексты лицензий для образа, url и sha256), THIRD-PARTY.txt (стороннее в образе)
 ├── packaging/windows/     # программа и установщик для Windows: build-runtime.py (рантайм с DLL VC++, код
 │                          # espeech-server и DLL-заглушки из stubs/*.def), build-exe.py (Nuitka), StreamTTS.iss (Inno Setup,
 │                          # ничего не качает: модель и CUDA — в админке),
@@ -145,7 +148,8 @@
 │                          # test_invariants.py, пути и вопросы docs/index.md — test_index.py, роуты —
 │                          # test_routes.py, скрипты админки и она сама в браузере — test_admin_scripts.py,
 │                          # test_admin_smoke.py, общий код tools/ — test_tools_common.py, границы слоёв
-│                          # streamtts — test_layers.py),
+│                          # streamtts — test_layers.py, Docker для пользователя (образ GHCR, compose-файлы,
+│                          # эффекты и лицензии в образе) — test_docker.py),
 │                          # test_real.py и test_real_espeech.py
 │                          # (настоящие модели),
 │                          # asr.py (faster-whisper для test_real.py, запускается из корневого .venv)
@@ -182,7 +186,8 @@
 
 ## Образы
 
-Корневой `Dockerfile`, цель `stream-tts` (`stream-tts:latest`, один и с видеокартой, и без) — stream-tts со
+Корневой `Dockerfile`, цель `stream-tts` (`ghcr.io/iociveteres/stream-tts`, из исходников — `stream-tts:latest`; один
+и с видеокартой, и без) — stream-tts со
 встроенным cosyvoice-server ([stream-tts-deploy.md](stream-tts-deploy.md#docker)); CUDA в него не входит, её качает
 админка в том `./cuda`. Инструменты подготовки голосов (`scripts/`, `tools/`) ходят к тому же серверу: порт 8080
 контейнера проброшен на `127.0.0.1`. Отдельного образа «только сервер» (профиля `server-only`) больше нет: он
@@ -192,15 +197,27 @@
 2.41).
 - Стадия `fetch` скачивает:
   - архив cosyvoice.cpp (`cosyvoice-server`, `cosyvoice-cli`, `quantize`, `libcosyvoice`, ONNX Runtime);
-  - все `libggml*.so*` из релиза llama.cpp.
+  - все `libggml*.so*` из релиза llama.cpp;
+  - FFmpeg 8.1 — сборку BtbN lgpl-shared (`ffmpeg`, `ffprobe`, `libav*`, `libsw*`, лицензия) со сверкой sha256, ту
+    же, что у программы для Windows. Не из apt: у ffmpeg Ubuntu `--enable-gpl` и GPL-библиотеки (x264, x265), а
+    образ публикуется. Обновляя — сборка последнего дня месяца (ежедневные BtbN удаляет через ~2 недели) и новый
+    `FFMPEG_SHA256`.
 - Стадия `espeech-stubs` собирает gcc заглушки библиотек CUDA для облегчённого torch ESpeech
   (`packaging/linux/build-stubs.sh` по спискам `packaging/linux/stubs`; [espeech.md](espeech.md), «Поставка»).
-- Стадия `base` — рантайм-библиотеки сервера (ICU, libgomp, FFmpeg `libav*`) и `/opt/cosyvoice`, без curl и
-  компиляторов. Цель `stream-tts` добавляет Python 3.14 из apt (пакеты — в venv `/opt/venv`, PEP 668), ffmpeg и
-  `/opt/cosyvoice/espeech` — код espeech-server и заглушки (сотни КБ; torch и модель качает админка в тома).
+- Стадия `base` — рантайм-библиотеки сервера (ICU, libgomp), `/opt/cosyvoice` и `/opt/ffmpeg` (библиотеки — через
+  `ldconfig`, `ffmpeg` и `ffprobe` — в `/usr/local/bin`), без curl и компиляторов. Цель `stream-tts` добавляет
+  Python 3.14 из apt (пакеты — в venv `/opt/venv`, PEP 668) и `/opt/cosyvoice/espeech` — код espeech-server и заглушки (сотни КБ; torch и модель качает админка в тома).
 - `LD_LIBRARY_PATH=/opt/cosyvoice` в образе не задан: там свой `libonnxruntime.so` (1.30), он перебил бы
   onnxruntime из venv, поэтому путь серверу добавляет `engines/cosyvoice/launch.py`.
-- Контекст сборки — весь проект, `.dockerignore` пускает в него только `stream-tts/requirements.txt`, `stream-tts/streamtts/`, `espeech/*.py` (с `THIRD-PARTY.txt`) и `packaging/linux/`.
+- Контекст сборки — весь проект, `.dockerignore` пускает в него только `stream-tts/requirements.txt`, `stream-tts/streamtts/`, `espeech/*.py` и `supertonic/*.py` (с `THIRD-PARTY.txt`), `packaging/linux/`, `effects/*.py` и `LICENSE`.
+- Эффекты (`effects/*.py`) лежат в образе в `/project/effects`: без них не работали бы `post` наборов голосов у того,
+  кто ставит образ без репозитория. Тексты лицензий — в `/opt/licenses` (`packaging/linux/licenses.txt`: те же файлы,
+  что у программы для Windows, со сверкой sha256; `THIRD-PARTY.txt` — список стороннего), у FFmpeg — в `/opt/ffmpeg`.
+- Compose-файлов три. `docker-compose.yml` — для пользователя: готовый образ из GHCR и только папки данных (папка
+  проекта, которой нет рядом, создалась бы пустой и закрыла бы файлы образа; `tests/e2e/test_docker.py`).
+  `docker-compose.dev.yml` — для репозитория: `build` из `Dockerfile` с именем `stream-tts:latest` и `effects/`,
+  `voice-refs/` проекта поверх образа. `docker-compose.gpu.yml` — видеокарта. Набор — в `COMPOSE_FILE` в `.env`
+  (`setup.sh --build`, `--gpu`).
 
 **GGML** в релизах cosyvoice.cpp не поставляется, его берут из llama.cpp. Копируются все варианты
 `libggml-cpu-<isa>.so`, и сервер сам выбирает лучший для текущего процессора (на Zen 3 это `haswell`).
@@ -227,14 +244,21 @@ CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`; по умолчан
 `scripts/import-voices.sh` и `tools/voices/synth.py` (`POST /frontend/model/load`). Так сервер не держит ~300 МБ,
 пока голоса не создаются.
 
-**Сеть:** порты пробрасываются только на `127.0.0.1`. Чтобы открыть сервер для локальной сети, уберите `127.0.0.1:`
-у порта 8080 в `docker-compose.yml` и задайте серверу `--api-key`.
+**Сеть:** порт stream-tts (8090) открыт в сеть: без пароля stream-tts пускает только адреса локальной сети, пароль
+задаётся в админке ([stream-tts-deploy.md](stream-tts-deploy.md), «Доступ»); `STREAM_TTS_BIND=127.0.0.1` в `.env` —
+только с этого компьютера. Порт сервера синтеза (8080) — только на `127.0.0.1`: чтобы открыть его для локальной сети,
+уберите `127.0.0.1:` у порта 8080 в `docker-compose.yml` и задайте серверу `--api-key`.
 
 `--max-llm-len` (по умолчанию 4096) на видеопамять не влияет, а 1024 уже не хватает длинным образцам.
 
-**CI** — `.github/workflows/docker.yml`, из `ci.yml` после тестов на push в main (или вручную): собирает
-`stream-tts` (кэш слоёв — в GitHub Actions) и проверяет запуск без видеокарты: `cosyvoice-server --help`, `ldd` всех библиотек в `/opt/cosyvoice` (кроме `libcuda.so.1` — её даёт
-драйвер), `stream-tts` отвечает на `/overlay` и не пишет `Traceback`. Образы никуда не публикуются.
+**CI** — `.github/workflows/docker.yml`, из `ci.yml` после тестов на push в main и по тегу `v*` (или вручную):
+собирает `stream-tts` (кэш слоёв — в GitHub Actions) и проверяет запуск без видеокарты: `cosyvoice-server --help`,
+`ldd` всех библиотек в `/opt/cosyvoice` (кроме `libcuda.so.1` — её даёт драйвер), FFmpeg — LGPL-сборка с фильтрами
+и mp3, в образе есть эффекты и лицензии, `stream-tts` отвечает на `/overlay` и не пишет `Traceback`. По тегу
+`v<версия>` (она обязана совпасть с `__version__`) проверенный образ уходит в GHCR как
+`ghcr.io/<владелец>/<репозиторий>:<версия>` и `:latest` — его и берёт `docker-compose.yml` пользователя. Пакет в
+GHCR после первой публикации надо один раз сделать публичным (Package settings → Change visibility), иначе
+`docker compose pull` без входа в GHCR не скачает образ.
 
 ## Обновление версий
 
@@ -260,7 +284,8 @@ docker run --rm --gpus all -v ./cuda:/cuda -e LD_LIBRARY_PATH=/opt/cosyvoice:/cu
 
 ## Запуск
 
-- Стек: `docker compose up -d --build` (`.env` настроен на GPU) — stream-tts со встроенным сервером; после правок —
+- Стек: `docker compose up -d --build` (`.env`: `COMPOSE_FILE` с `docker-compose.dev.yml` и GPU) — stream-tts со
+  встроенным сервером из исходников; после правок —
   `docker compose up -d --build stream-tts`. `scripts/` и `tools/` ходят к его серверу на 8080. Сервисы могут быть
   в работе (стрим): перезапуск контейнеров — по согласованию с пользователем.
 - Окружения Python: `stream-tts/.venv` (3.14) — stream-tts и `tests/e2e`; `espeech/.venv` (3.14,
@@ -378,7 +403,9 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
   `docker stop`. Что остановка при открытых админке и оверлее не ждёт их сокетов — `test_access.py` (только Linux, в
   CI); награда на паузу при остановке тестами не проверяется.
 
-Сценарии: `test_access.py` — запуск, голоса и примеры, пароль, защита POST, `STREAM_TTS_BIND` без пароля,
+Сценарии: `test_access.py` — запуск, голоса и примеры, пароль из переменной (и по-русски) и из админки (задать,
+сменить, снять, хэш в файле, выход старых входов и сокетов), без пароля — только локальная сеть (адрес, прокси,
+`Host`: DNS rebinding, публичное имя или IP), защита POST, `Origin` сокетов,
 настройки после перезапуска, пропажа cosyvoice, остановка по SIGTERM с открытыми сокетами; `test_queue.py` — очередь через `/api/test`: голос и порядок,
 громкость, отказы, фильтры, стриминг и `chunk_tokens`, обрезка, ошибка синтеза, пропуск и очистка, оверлеи;
 `test_chat.py` — режим «Только чтение чата»: подключение и «канал не найден», команда озвучки (доступ по бейджам,
@@ -427,7 +454,11 @@ stream-tts (`voicesets.py` напрямую): коллекции CosyVoice и ES
 запросы в сеть), новый роут без группы — ошибка. `test_invariants.py` — без процесса stream-tts, секунды: компиляция
 всех `.py` из git, `check-i18n.py`, `docker compose config -q` (без docker — пропуск), флаги GPU у встроенного
 сервера, в `Dockerfile` и `docker-compose.gpu.yml`, `KEEPALIVE` < 5 с, `__version__` только в
-`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. `test_tools_common.py` — в `tools/` нет своих копий
+`streamtts/__init__.py`, фильтр `scripts/pack-handoff.py`. `test_docker.py` — Docker для пользователя без docker:
+`docker-compose.yml` берёт `ghcr.io/<репозиторий>:latest` (тот, что публикует `docker.yml`, и тот репозиторий, откуда
+README велит качать compose-файлы), без `build` и только с папками данных; `docker-compose.dev.yml` собирает под
+своим именем; эффекты копируются в образ; `packaging/linux/licenses.txt` совпадает с `LICENSE_URLS` сборки для
+Windows. `test_tools_common.py` — в `tools/` нет своих копий
 функций `tools/common.py` и загрузчиков по пути, у `common.py` импорты верхнего уровня только из stdlib.
 `test_layers.py` — импорты `streamtts/**/*.py` разбором AST: `aiohttp.web` только в `web/` и `__main__.py`, движки не
 импортируют слои над собой (`ABOVE_ENGINES`), циклов импорта нет, считая импорты внутри функций; сам разбор

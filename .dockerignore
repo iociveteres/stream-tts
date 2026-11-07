@@ -10,5 +10,8 @@
 !supertonic/*.py
 !supertonic/THIRD-PARTY.txt
 !packaging/linux/
+# Эффекты post и лицензия программы — в образ (Dockerfile)
+!effects/*.py
+!LICENSE
 **/__pycache__
 **/*.pyc

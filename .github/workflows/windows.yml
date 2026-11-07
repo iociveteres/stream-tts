@@ -14,6 +14,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write   # gh release create
+    # Вывод в CI идёт в pipe, и Python пишет его в cp1252 раннера: русский print роняет скрипты сборки
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v5
 

@@ -2,15 +2,16 @@
 на отдельном порту (public.py).
 
 Роуты API — в модулях пакета (MODULES): у модуля таблицы GETS, POSTS (тело — JSON, обёртка common.json_post) и RAW
-(файл сырым телом, допустимые типы — в UPLOADS). Здесь — сборка приложения, пароль и защита POST, страницы."""
-import asyncio, hashlib, hmac, json, os, secrets, weakref
+(файл сырым телом, допустимые типы — в UPLOADS). Здесь — сборка приложения, доступ (пароль, локальная сеть) и защита
+POST, страницы. Пароль хранит access.py."""
+import asyncio, hashlib, hmac, json, logging, os, secrets, weakref
 
 from aiohttp import WSCloseCode, WSMsgType, web
 
-from .. import config, i18n, overlay
+from .. import access, config, i18n, overlay
 from ..i18n import tr
 from . import admin, editor, model, public, server, state, train
-from .common import json_post
+from .common import fail, json_post, ok
 from .public import demo, voices_page
 
 STATIC = os.path.join(config.HERE, "static")
@@ -18,6 +19,7 @@ COOKIE = "stream_tts"
 PUBLIC = ("/overlay", "/voices", "/static/overlay", "/static/common", "/static/i18n.js", "/login", "/favicon")
 # Файлы, которые меняются под тем же адресом: статика при обновлении программы, примеры голосов при смене фразы
 REVALIDATE = ("/static/", "/voices/demos/")
+log = logging.getLogger("stream-tts")
 UPLOADS = {"/api/voicesets/import": ("application/zip", "application/x-zip-compressed", "application/octet-stream"),
            "/api/draft/upload": ("application/octet-stream",), "/api/train/upload": ("application/octet-stream",)}
 
@@ -37,10 +39,11 @@ def make_app(ctx):
     app = web.Application(middlewares=[auth_middleware], client_max_size=1 << 20)
     app["ctx"] = ctx
     app["sockets"] = weakref.WeakSet()
+    app["admin_sockets"] = weakref.WeakSet()   # /api/ws: закрываются при смене пароля
     app.on_response_prepare.append(no_cache)
     app.on_response_prepare.append(track_socket)
     app.on_shutdown.append(close_sockets)
-    app["token"] = hmac.new(_secret().encode(), config.PASSWORD.encode(), hashlib.sha256).hexdigest()
+    app["token"] = token()
     r = app.router
     r.add_get("/", page("admin.html", edit=True))
     r.add_get("/login", page("login.html"))
@@ -77,6 +80,8 @@ async def no_cache(request, response):
 async def track_socket(request, response):
     if isinstance(response, web.WebSocketResponse):
         request.app["sockets"].add(response)
+        if request.path == "/api/ws":
+            request.app["admin_sockets"].add(response)
 
 
 async def close_sockets(app):
@@ -96,18 +101,47 @@ def page(name, edit=False):
     return handler
 
 
+def foreign_origin(request):
+    origin = request.headers.get("Origin")
+    return bool(origin) and origin.split("://", 1)[-1] != request.host
+
+
+def token():
+    return hmac.new(_secret().encode(), access.fingerprint().encode(), hashlib.sha256).hexdigest()
+
+
+def logged_in(request):
+    return hmac.compare_digest(request.cookies.get(COOKIE, "").encode(), request.app["token"].encode())
+
+
+def local_request(request):
+    return access.local_request(request.remote, request.host, request.headers)
+
+
 @web.middleware
 async def auth_middleware(request, handler):
     path = request.path
-    if config.PASSWORD and not path.startswith(PUBLIC):
-        if not hmac.compare_digest(request.cookies.get(COOKIE, ""), request.app["token"]):
-            if path.startswith("/api/"):
-                raise web.HTTPUnauthorized(text=tr("нужен пароль"))
-            raise web.HTTPFound("/login")
+    if not access.source():
+        # Без пароля — только локальная сеть: адрес клиента и имя в Host (DNS rebinding, публичное имя или IP
+        # при пробросе порта). Оверлей тоже: в интернете без пароля нечего делать и ему.
+        if not local_request(request):
+            if access.refuse(request.remote, request.host, request.headers):
+                log.warning("без пароля отклонён запрос с %s по адресу %s: не из локальной сети",
+                            access.refused["addr"], request.host)
+            raise web.HTTPForbidden(text=tr("без пароля stream-tts открыт только из локальной сети: откройте его "
+                                            "по IP-адресу сервера или задайте пароль в админке (Настройки → Сервер)"))
+    elif not path.startswith(PUBLIC) and not logged_in(request):
+        # С паролем Host не проверяется: страницу с DNS rebinding останавливает cookie, она привязана к настоящему адресу
+        if path.startswith("/api/"):
+            raise web.HTTPUnauthorized(text=tr("нужен пароль"))
+        raise web.HTTPFound("/login")
+    # WebSocket браузер открывает с любой страницы без CORS: чужая страница читала бы очередь и настройки (/api/ws)
+    # или перехватывала звук оверлея
+    if request.headers.get("Upgrade", "").lower() == "websocket" and foreign_origin(request):
+        raise web.HTTPForbidden(text=tr("чужой Origin"))
     if request.method == "POST" and path.startswith("/api/"):
         # Защита от запросов с чужих страниц: только JSON и только со своего адреса
-        origin = request.headers.get("Origin")
-        if origin and origin.split("://", 1)[-1] != request.host:
+        if foreign_origin(request):
             raise web.HTTPForbidden(text=tr("чужой Origin"))
         # Загрузка файла — сырым телом с нестандартным типом: такой запрос с чужой страницы требует CORS-проверки
         if request.content_type != "application/json" and request.content_type not in UPLOADS.get(path, ()):
@@ -115,11 +149,15 @@ async def auth_middleware(request, handler):
     return await handler(request)
 
 
+def set_login(resp, request):
+    resp.set_cookie(COOKIE, request.app["token"], max_age=180 * 86400, httponly=True, samesite="Strict")
+
+
 async def login(request):
     form = await request.post()
-    if config.PASSWORD and hmac.compare_digest(str(form.get("password", "")), config.PASSWORD):
+    if access.source() and await asyncio.to_thread(access.check, str(form.get("password", ""))):
         resp = web.HTTPFound("/")
-        resp.set_cookie(COOKIE, request.app["token"], max_age=180 * 86400, httponly=True, samesite="Strict")
+        set_login(resp, request)
         raise resp
     await asyncio.sleep(1)
     raise web.HTTPFound("/login?bad=1")
@@ -129,6 +167,36 @@ async def logout(request):
     resp = web.HTTPFound("/login")
     resp.del_cookie(COOKIE)
     raise resp
+
+
+async def post_password(request, ctx, data):
+    """Пароль из админки: {current, new}; new="" — снять. Пароль из переменной окружения здесь не меняется.
+    Смена — новый токен: этот ответ ставит новую cookie, остальные входы и вкладки выходят на страницу входа."""
+    current, new = str(data.get("current", "")), str(data["new"])
+    src = access.source()
+    if src == "env":
+        return fail(tr("пароль задан переменной STREAM_TTS_PASSWORD — меняется там, с перезапуском"), 409)
+    if src and not await asyncio.to_thread(access.check, current):
+        await asyncio.sleep(1)   # как у входа: подбор пароля через открытую вкладку не быстрее формы входа
+        return fail(tr("неверный текущий пароль"), 403)
+    if new and len(new) < access.MIN_LEN:
+        return fail(tr("пароль короче {n} символов", n=access.MIN_LEN))
+    if not new and not local_request(request):
+        # без пароля этот адрес не пускается: следующий же запрос — 403, и войти больше нельзя
+        return fail(tr("снять пароль можно только из локальной сети: отсюда без пароля админка не откроется"), 409)
+    await asyncio.to_thread(access.set_password, new)
+    request.app["token"] = token()
+    log.info("пароль админки %s", "задан" if new else "снят")
+    resp = ok(password=access.source())
+    if new:
+        set_login(resp, request)
+    # Ответ с новой cookie — раньше закрытия сокетов: вкладка, сменившая пароль, переподключается уже с ней.
+    # Остальные по коду 4001 перезагружаются: со старой cookie — на страницу входа, без пароля — с новым состоянием.
+    await resp.prepare(request)
+    await resp.write_eof()
+    socks = list(request.app["admin_sockets"])
+    await asyncio.gather(*(ws.close(code=4001, message=b"password") for ws in socks), return_exceptions=True)
+    return resp
 
 
 # --- открытые страницы ---
@@ -157,3 +225,4 @@ async def voices_zip(request):
 
 MODULES = (admin, state, model, server, editor, train)
 POSTS = {path: json_post(fn) for m in MODULES for path, fn in getattr(m, "POSTS", {}).items()}
+POSTS["/api/password"] = json_post(post_password)

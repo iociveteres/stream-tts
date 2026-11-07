@@ -526,7 +526,18 @@
       <div class="card">
         <h2>Сервер</h2>
         <p id="server-info" class="muted small"></p>
-        <p class="small"><a href="/logout" id="logout-link">Выйти из админки</a></p>
+        <h3 class="mt">Доступ</h3>
+        <p id="access-info" class="small"></p>
+        <p id="access-refused" class="warn small" hidden></p>
+        <form id="password-form" class="row end">
+          <label class="grow" id="pw-current">Текущий пароль
+            <input type="password" name="current" autocomplete="current-password"></label>
+          <label class="grow">Новый пароль <input type="password" name="new" autocomplete="new-password" required></label>
+          <label class="grow">Повторить <input type="password" name="repeat" autocomplete="new-password" required></label>
+          <button class="primary" id="pw-save"></button>
+        </form>
+        <p class="row small mt"><a href="#" id="pw-remove">Снять пароль</a>
+          <a href="/logout" id="logout-link">Выйти из админки</a></p>
       </div>
     </div>
   </div>

@@ -63,7 +63,7 @@ def test_i18n_missing_recipe(tmp_path, monkeypatch, capsys):
     shutil.copytree(ci.STATIC, static)
     en = json.loads((static / "en.json").read_text(encoding="utf-8"))
     drop = ["ожидалось {values}", "Войти", "Качество синтеза",
-            next(k for k in en if k.startswith("Пароль задаётся переменной <code>"))]
+            next(k for k in en if k.startswith("Забыли пароль — удалите файл <code>"))]
     for k in drop:
         del en[k]
     (static / "en.json").write_text(json.dumps(en, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -96,8 +96,10 @@ def test_i18n_unused_key(tmp_path, monkeypatch, capsys):
 def test_compose_config():
     if not shutil.which("docker"):
         pytest.skip("docker не найден")
-    for files in (["docker-compose.yml"], ["docker-compose.yml", "docker-compose.gpu.yml"]):
+    base, dev, gpu = "docker-compose.yml", "docker-compose.dev.yml", "docker-compose.gpu.yml"
+    for files in ([base], [base, gpu], [base, dev], [base, dev, gpu]):
         args = [a for f in files for a in ("-f", f)]
+        # COMPOSE_FILE из .env не мешает: -f главнее
         r = subprocess.run(["docker", "compose", *args, "config", "-q"], cwd=ROOT, capture_output=True, text=True)
         if r.returncode and "is not a docker command" in r.stderr:
             pytest.skip("нет docker compose")

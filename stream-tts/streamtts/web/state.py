@@ -3,7 +3,7 @@ import asyncio, contextlib, time
 
 from aiohttp import web
 
-from .. import config, install, separate
+from .. import access, config, install, separate
 from ..i18n import tr
 from .admin import SETTINGS_KEYS
 
@@ -38,7 +38,9 @@ def state(ctx, full=True):
             settings={k: s[k] for k in SETTINGS_KEYS},
             voices=ctx.voices.public(),
             bans=ctx.db.bans(),
-            config=dict(password=bool(config.PASSWORD), bind=config.BIND, port=config.PORT),
+            # password: "env" | "file" | None; refused — последний отказ без пароля «не из локальной сети»
+            config=dict(password=access.source(), refused=access.refused if not access.source() else None,
+                        bind=config.BIND, port=config.PORT, min_password=access.MIN_LEN),
         )
     return out
 

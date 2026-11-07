@@ -67,10 +67,10 @@ class Server:
     def conn(self, timeout=120):
         return http.client.HTTPConnection("127.0.0.1", self.port, timeout=timeout)
 
-    def request(self, method, path, body=None, timeout=120):
+    def request(self, method, path, body=None, timeout=120, headers=None):
         c = self.conn(timeout)
         c.request(method, path, json.dumps(body) if isinstance(body, dict) else body,
-                  {"Content-Type": "application/json"} if isinstance(body, dict) else {})
+                  headers or ({"Content-Type": "application/json"} if isinstance(body, dict) else {}))
         r = c.getresponse()
         data = r.read()
         c.close()
@@ -153,7 +153,16 @@ def test_errors(srv):
                 dict(lang="xx"), dict(seed=-1), dict(seed=True)):
         st, data = srv.request("POST", "/tts", dict(dict(text=SHORT, voice="M1"), **bad))
         assert st == 400, (bad, st, data)
-    assert srv.request("POST", "/tts", b"[]")[0] == 400
+    assert srv.request("POST", "/tts", b"[]", headers={"Content-Type": "application/json"})[0] == 400
+
+
+def test_refuses_browser(srv):
+    """Запрос из браузера (Origin) — 403, JSON без application/json — 415: так espeech.wire отсекает чужие страницы и
+    DNS rebinding у сервера без пароля."""
+    body = json.dumps(dict(text=SHORT, voice="M1"))
+    assert srv.request("POST", "/tts", body, headers={"Content-Type": "application/json",
+                                                       "Origin": "http://evil.example"})[0] == 403
+    assert srv.request("POST", "/tts", body, headers={"Content-Type": "text/plain"})[0] == 415
 
 
 def test_whole_wav(srv):

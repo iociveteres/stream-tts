@@ -127,6 +127,10 @@ def test_bad_archives(voices, tmp_path):
             voicesets._check_zip(make_zip(tmp_path, "s.zip", {"s.supertonic": bad}), "s.zip")
     with pytest.raises(ValueError, match=r"нет голосов \(\*\.gguf, \*\.espeech, \*\.supertonic\)"):
         voicesets._check_zip(make_zip(tmp_path, "c.zip", {"readme.txt": b"hi"}), "c.zip")
+    # zip-бомба в manifest.json: читается в память целиком, поэтому размер проверяется до чтения
+    bomb = make_zip(tmp_path, "m.zip", {"m/a.gguf": GGUF, "m/manifest.json": b" " * (voicesets.MAX_MANIFEST + 1)})
+    with pytest.raises(ValueError, match="manifest.json больше 1 МБ"):
+        voicesets._check_zip(bomb, "m.zip")
 
 
 @pytest.mark.parametrize("voice", ["Артес", "-thrall", ".thrall", "_thrall", "thrall\n", "a" * 65])

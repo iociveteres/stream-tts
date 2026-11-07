@@ -1,0 +1,13 @@
+# Тексты лицензий для образа Docker: в архивах cosyvoice.cpp и llama.cpp их нет, а MIT/BSD требуют прикладывать их к
+# бинарникам. Те же файлы и версии, что у программы для Windows (LICENSE_URLS в packaging/windows/build-runtime.py):
+# обновил версию там — обнови и здесь. Стадия fetch в Dockerfile качает их в /opt/licenses и сверяет sha256.
+# Формат: <имя в /opt/licenses> <sha256> <url>
+cosyvoice.cpp-LICENSE 1626472fca8e6ff90fa9d1561cff421b8b67f3383d171b76ae93e7ed404a3ab2 https://raw.githubusercontent.com/Lourdle/cosyvoice.cpp/v0.2.0/LICENSE
+cosyvoice.cpp-THIRD_PARTY_NOTICES.md 6a641347ac09a78c925837eb817925f1aea25a7f7684c09b4545f5eb97d21b4e https://raw.githubusercontent.com/Lourdle/cosyvoice.cpp/v0.2.0/THIRD_PARTY_NOTICES.md
+cosyvoice.cpp-FFmpeg-NOTICE.md 9f3b2c7d1883b0e9e9b10a51a17c4891f5ffa191268c892b59a1d78cb269bb9c https://raw.githubusercontent.com/Lourdle/cosyvoice.cpp/v0.2.0/FFmpeg-NOTICE.md
+cpp-httplib-LICENSE 4b45cbe16d7b71b89ae6127e26e0d90a029198ca5e958ad8e3d0b8bbed364d8b https://raw.githubusercontent.com/Lourdle/cosyvoice.cpp/v0.2.0/vendor/cpp-httplib/LICENSE
+nlohmann-json-LICENSE.MIT 46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603 https://raw.githubusercontent.com/nlohmann/json/v3.12.0/LICENSE.MIT
+pcre2-LICENCE.md 197d8a73ffee0d6b09adba2f9c677b5f5aede24edf89258a68e48248d010d811 https://raw.githubusercontent.com/PCRE2Project/pcre2/7978954dbd2efc6f2196869290553cf1871b4ce6/LICENCE.md
+llama.cpp-LICENSE 94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d https://raw.githubusercontent.com/ggml-org/llama.cpp/b11500/LICENSE
+onnxruntime-LICENSE 2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c https://raw.githubusercontent.com/microsoft/onnxruntime/v1.30.0/LICENSE
+onnxruntime-ThirdPartyNotices.txt 143764b952fdb1a7c69ce653bfba74a7744d6a8a573bfb73e235fba356c83de3 https://raw.githubusercontent.com/microsoft/onnxruntime/v1.30.0/ThirdPartyNotices.txt

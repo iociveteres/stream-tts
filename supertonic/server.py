@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
 
-from espeech.wire import HTTPError, pcm16, wav_header
+from espeech.wire import HTTPError, pcm16, refuse_browser, require_json, wav_header
 
 from . import model as M
 from .text import prepare
@@ -119,8 +119,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(n) if n else b""
 
     def json(self):
+        body = self.body()
+        require_json(self.headers, body)
         try:
-            d = json.loads(self.body() or b"{}")
+            d = json.loads(body or b"{}")
         except ValueError:
             raise HTTPError(400, "тело запроса — не JSON")
         if not isinstance(d, dict):
@@ -131,6 +133,7 @@ class Handler(BaseHTTPRequestHandler):
         self._read = False
         path = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
         try:
+            refuse_browser(self.headers)
             fn = ROUTES.get((method, path))
             if fn is None and method == "DELETE" and path.startswith("/speaker/"):
                 fn = Handler.speaker_delete

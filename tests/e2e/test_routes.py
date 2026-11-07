@@ -7,7 +7,7 @@ from harness import make_app
 
 ROUTES = {
     "GET /",
-    "GET /login", "POST /login", "GET /logout",
+    "GET /login", "POST /login", "GET /logout", "POST /api/password",
     "GET /overlay", "GET /overlay/ws",
     "GET /voices", "GET /voices/", "GET /voices/demos/{name}.mp3", "GET /voices.zip",
     "GET /static",

@@ -50,7 +50,11 @@ class Overlay:
         if data.get("type") == "ready":
             c.ready = bool(data.get("ready", True))
         elif data.get("type") == "ended":
-            self.engine.ended.add(data.get("id"))
+            # Только от играющего оверлея и про текущую фразу: оверлей открыт без пароля, а любой id раньше
+            # пропускал фразу и копился в ended
+            cur = self.engine.current
+            if c is self.active and cur is not None and data.get("id") == cur.id:
+                self.engine.ended.add(cur.id)
         await self.engine.poke()
 
     async def disconnect(self, c):

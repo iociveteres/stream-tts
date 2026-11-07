@@ -87,6 +87,8 @@ stream-tts/.venv/Scripts/python -m supertonic --models models/supertonic --voice
 - `DELETE /speaker/<имя>` → 200 — забыть голос (файл не трогается; голос вернётся, когда файл изменится, или после
   перезапуска), 404 — нет такого.
 - `POST /speaker?type=extract`, `POST /speaker/save` → 501 `{error: "unsupported", message}`.
+- Запрос с заголовком `Origin` (из браузера) — 403, тело JSON без `Content-Type: application/json` — 415
+  (`espeech.wire.refuse_browser`, `require_json`; как у espeech-server).
 - `POST /tts` JSON `{text, voice, stream?: false, seed?: int ≥ 0, total_step?: int, speed?: float, lang?: "ru"}` →
   200 `audio/wav`, PCM16 моно 24000 Гц. `stream: true` — `Transfer-Encoding: chunked`: сначала WAV-заголовок с
   неизвестной длиной (`0xFFFFFFFF`, как у cosyvoice-server), затем PCM каждого куска по мере синтеза; в потоке
