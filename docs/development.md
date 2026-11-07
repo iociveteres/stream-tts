@@ -93,8 +93,8 @@
 │       └── static/        # admin.html, admin.css, common.css; admin.js — общее админки, вкладки —
 │                          # admin-queue.js, admin-twitch.js, admin-voices.js, admin-server.js,
 │                          # admin-settings.js, admin-stats.js, admin-downloads.js (модели, CUDA, пакеты и
-│                          # очередь загрузок); admin-start.js — старт после всех вкладок;
-│                          # editor.js, train.js — редактор и обучение; overlay.html, voices.html, login.html;
+│                          # очередь загрузок); editor.js, train.js — редактор и
+│                          # обучение; admin-start.js — старт, последним из всех скриптов; overlay.html, voices.html, login.html;
 │                          # en.json — английский словарь, i18n.js — перевод страниц; ui-edit.js и ui-edit.css —
 │                          # режим правки строк; samples/ — примеры звучания моделей для вкладки «Загрузки»
 ├── packaging/
