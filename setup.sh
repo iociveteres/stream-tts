@@ -45,12 +45,29 @@ echo "==> Собираю и запускаю контейнер"
 # --remove-orphans: контейнер отдельного cosyvoice из прежних версий занял бы порт сервера и видеокарту
 docker compose up --build -d --remove-orphans
 
+# Адрес компьютера в локальной сети — для админки и оверлея с другого ПК. Из WSL и Git Bash — адрес Windows:
+# у WSL свой внутренний адрес, с других ПК недоступный
+lan_ip() {
+    if grep -qi microsoft /proc/version 2>/dev/null || [ -n "${WINDIR:-}" ]; then
+        powershell.exe -NoProfile -Command "Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway } |
+            ForEach-Object { \$_.IPv4Address.IPAddress }" 2>/dev/null | tr -d '\r' | head -n 1
+    else
+        ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p'
+    fi
+}
+
 echo "==> Жду сервер"
 UI_PORT="$(sed -n 's/^STREAM_TTS_PORT=//p' .env | tail -n 1)"
 UI_PORT="${STREAM_TTS_PORT:-${UI_PORT:-8090}}"
+UI_BIND="$(sed -n 's/^STREAM_TTS_BIND=//p' .env | tail -n 1)"
+UI_BIND="${STREAM_TTS_BIND:-${UI_BIND:-0.0.0.0}}"
 for _ in $(seq 1 90); do
     if curl -fs -o /dev/null "http://127.0.0.1:${PORT}/ping"; then
         echo "Готово. Админка: http://localhost:${UI_PORT} | WebUI сервера: http://localhost:${PORT}"
+        if [ "$UI_BIND" = "0.0.0.0" ] && LAN="$(lan_ip)" && [ -n "$LAN" ]; then
+            echo "С другого ПК в локальной сети: http://${LAN}:${UI_PORT} (без пароля; для доступа из интернета"
+            echo "задайте пароль в админке: «Настройки» → «Сервер»)"
+        fi
         echo "Логи: docker compose logs -f | Стоп: docker compose down"
         # CUDA в образ не входит: её (~590 МБ) качает админка в ./cuda, пока синтез идёт на процессоре
         if [ "$GPU" -eq 1 ] && [ ! -f cuda/libggml-cuda.so ]; then

@@ -89,20 +89,26 @@ addEventListener("hashchange", () => S && showTab(location.hash.slice(1)));
 
 // --- WebSocket: состояние раз в 2 с и сразу после изменений ---
 let wsOnline = false;
+let authChanged = false;   // эта вкладка сменила пароль: закрытие сокета 4001 — не повод перезагружаться
 function connect() {
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/ws");
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     wsOnline = true;
     trackLoad(m.load);
-    if (m.settings) { S = m; renderAll(); }
+    if (m.settings) { S = m; authChanged = false; renderAll(); }
     else if (S) {
       Object.assign(S, m);
       if (m.voices) { renderVoices(); renderTestVoices(); }   // набор установлен или готов пример
       renderLive();
     }
   };
-  ws.onclose = () => { wsOnline = false; if (S) renderHeader(); setTimeout(connect, 2000); };
+  ws.onclose = e => {
+    // 4001 — сменился пароль (web/__init__.py, post_password): вкладка, которая его меняла, уже с новой cookie и
+    // переподключается за полным состоянием; остальные перезагружаются — на вход или с новыми настройками доступа
+    if (e.code === 4001 && !authChanged) { location.reload(); return; }
+    wsOnline = false; if (S) renderHeader(); setTimeout(connect, e.code === 4001 ? 0 : 2000);
+  };
 }
 
 function renderAll() {

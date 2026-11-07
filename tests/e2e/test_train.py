@@ -340,7 +340,8 @@ KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/r
          "/api/models/load": dict(id="tts"), "/api/accent": {}, "/api/accents": {}, "/api/accents/delete": {},
          "/api/draft": {}, "/api/draft/accent": {}, "/api/draft/source/delete": {}, "/api/draft/save": {},
          "/api/draft/discard": {}, "/api/draft/upload": None, "/api/update/dismiss": {},
-         "/api/tunnel": dict(on=False)}   # туннель к странице голосов (tunnel.py) — отдельный процесс cloudflared
+         "/api/tunnel": dict(on=False),
+         "/api/password": {}}   # пароль админки (без new — отказ: иначе тесту понадобился бы вход)   # туннель к странице голосов (tunnel.py) — отдельный процесс cloudflared
 # Не проверяются здесь: свои ручки обучения (/api/train/*, выше) и запросы в сеть. Загрузки (/api/download) и
 # удаление — в RESTARTS: модель после загрузки и на время удаления перезапускает сервер; кроме пакетов, которых
 # сервер не читает, — это сторож пропускает (web/server.py, _restarts).

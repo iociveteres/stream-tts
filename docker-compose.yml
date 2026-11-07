@@ -8,9 +8,9 @@ services:
     image: stream-tts:latest   # один образ с видеокартой и без: CUDA качается по кнопке в ./cuda
     init: true
     ports:
-      # STREAM_TTS_BIND=0.0.0.0 открывает интерфейс и оверлей в сеть (для OBS на другом ПК),
-      # тогда обязателен STREAM_TTS_PASSWORD
-      - "${STREAM_TTS_BIND:-127.0.0.1}:${STREAM_TTS_PORT:-8090}:8090"
+      # Админка и оверлей открыты в сеть: без пароля stream-tts пускает только адреса локальной сети, пароль для
+      # доступа из интернета задаётся в админке. STREAM_TTS_BIND=127.0.0.1 — только с этого компьютера
+      - "${STREAM_TTS_BIND:-0.0.0.0}:${STREAM_TTS_PORT:-8090}:8090"
       # WebUI и API cosyvoice-server для инструментов (scripts/, tools/). Только localhost; для доступа из сети
       # уберите "127.0.0.1:" и задайте серверу --api-key
       - "127.0.0.1:${PORT:-8080}:8080"
@@ -25,9 +25,9 @@ services:
       # Остальным режимам effects/villager-fx.py нужны звуки жителя:
       # - ./voice-origs/minecraft-villager:/project/voice-origs/minecraft-villager:ro
     environment:
-      STREAM_TTS_BIND: "${STREAM_TTS_BIND:-127.0.0.1}"
+      STREAM_TTS_BIND: "${STREAM_TTS_BIND:-0.0.0.0}"
       STREAM_TTS_PORT: "${STREAM_TTS_PORT:-8090}"
-      STREAM_TTS_PASSWORD: "${STREAM_TTS_PASSWORD:-}"
+      STREAM_TTS_PASSWORD: "${STREAM_TTS_PASSWORD:-}"   # необязателен: пароль задаётся в админке, переменная главнее
       STREAM_TTS_LANG: "${STREAM_TTS_LANG:-}"      # ru | en: язык при первом запуске, потом — в админке
       # MODEL сюда не передаётся: он закрепил бы модель и отключил выбор в админке.
       COSYVOICE_BACKEND: "${COSYVOICE_BACKEND:-}"  # auto | cuda | cpu, иначе выбор в админке

@@ -95,9 +95,6 @@ async def on_cleanup(app):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s", datefmt="%H:%M:%S")
     logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
-    if config.BIND not in config.LOCAL_BINDS and not config.PASSWORD:
-        log.error("STREAM_TTS_BIND=%s открывает админку в сеть: задайте STREAM_TTS_PASSWORD в .env", config.BIND)
-        sys.exit(1)
     os.makedirs(config.DATA, exist_ok=True)
     prof = os.path.join(config.DATA, "profanity.txt")
     if not os.path.exists(prof):

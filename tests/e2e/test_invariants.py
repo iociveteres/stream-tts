@@ -63,7 +63,7 @@ def test_i18n_missing_recipe(tmp_path, monkeypatch, capsys):
     shutil.copytree(ci.STATIC, static)
     en = json.loads((static / "en.json").read_text(encoding="utf-8"))
     drop = ["ожидалось {values}", "Войти", "Качество синтеза",
-            next(k for k in en if k.startswith("Пароль задаётся переменной <code>"))]
+            next(k for k in en if k.startswith("Забыли пароль — удалите файл <code>"))]
     for k in drop:
         del en[k]
     (static / "en.json").write_text(json.dumps(en, ensure_ascii=False, indent=1), encoding="utf-8")
