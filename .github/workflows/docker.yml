@@ -1,7 +1,9 @@
-# Сборка образа stream-tts из Dockerfile без публикации: проверка, что образ собирается и запускается. Вызывается из
-# ci.yml после тестов (push в main) или вручную. Образ без CUDA (её качает админка). Проверка запуска: бинарник
-# сервера находит свои библиотеки (--help), stream-tts отвечает на :8090 и не пишет Traceback в лог. Видеокарты на
-# раннере нет.
+# Образ stream-tts из Dockerfile: сборка и проверка, а по тегу v<версия> — публикация в GHCR
+# (ghcr.io/<владелец>/<репозиторий>:<версия> и :latest), откуда его берёт docker-compose.yml пользователя. Вызывается
+# из ci.yml после тестов (push в main и тег) или вручную. Образ без CUDA (её качает админка). Проверка: бинарник
+# сервера находит свои библиотеки (--help), FFmpeg — LGPL-сборка с нужными stream-tts фильтрами и mp3, в образе есть
+# эффекты и тексты лицензий, stream-tts отвечает на :8090 и не пишет Traceback в лог. Видеокарты на раннере нет.
+# Публикуется ровно тот образ, что прошёл проверки.
 name: docker
 
 on:
@@ -12,10 +14,26 @@ jobs:
   stream-tts:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write   # docker push в ghcr.io по тегу
     env:
       IMAGE: stream-tts:ci
     steps:
       - uses: actions/checkout@v5
+
+      # Версия для метки образа и тега в GHCR: по тегу — из него (и она обязана совпасть с __version__), иначе — коммит
+      - name: Версия
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+            code=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' stream-tts/streamtts/__init__.py)
+            [ "$ver" = "$code" ] || { echo "тег $GITHUB_REF_NAME, а __version__ = $code"; exit 1; }
+          else
+            ver="${GITHUB_SHA::12}"
+          fi
+          echo "VERSION=$ver" >> "$GITHUB_ENV"
+          echo "REGISTRY_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -27,6 +45,14 @@ jobs:
           target: stream-tts
           tags: ${{ env.IMAGE }}
           load: true
+          # source связывает пакет в GHCR с репозиторием: страница пакета, README, права
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=StreamTTS
+            org.opencontainers.image.description=Озвучка наград Twitch локальным синтезом речи
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=stream-tts-none
           cache-to: type=gha,mode=max,scope=stream-tts-none
 
@@ -41,6 +67,30 @@ jobs:
             | grep -v ': libcuda.so.1$' || true)
           if [ -n "$missing" ]; then echo "не найдены библиотеки:"; echo "$missing"; exit 1; fi
 
+      # FFmpeg из BtbN lgpl-shared (Dockerfile): в образе не должно быть GPL-сборки и libav* из apt. Фильтры — как в
+      # редакторе голоса (afftdn) и эффекте villager-fx (highpass, lowpass, equalizer), кодек — mp3 примеров голосов
+      - name: FFmpeg — LGPL, фильтры и mp3
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE" -c '
+            set -e
+            if ffmpeg -hide_banner -buildconf | grep -q -- --enable-gpl; then echo "FFmpeg собран с --enable-gpl"; exit 1; fi
+            if ls /usr/lib/x86_64-linux-gnu | grep -qE "^lib(av|sw|postproc)"; then echo "libav* из apt"; exit 1; fi
+            ldd /opt/cosyvoice/cosyvoice-server /opt/cosyvoice/*.so* | grep -E "libav|libsw" | grep -v "=> /opt/ffmpeg/lib/" && exit 1
+            ffmpeg -v error -f lavfi -i sine=d=1 -ar 24000 -ac 1 \
+              -af "afftdn=nf=-25,highpass=f=300,lowpass=f=3400,equalizer=f=1000:t=q:w=1.2:g=6" \
+              -c:a libmp3lame -f mp3 /tmp/a.mp3
+            [ "$(ffprobe -v error -show_entries stream=codec_name -of csv=p=0 /tmp/a.mp3)" = mp3 ]'
+
+      - name: Эффекты и лицензии в образе
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE" -c '
+            set -e
+            ls /project/effects/*.py
+            for f in StreamTTS-LICENSE.txt THIRD-PARTY.txt cosyvoice.cpp-LICENSE llama.cpp-LICENSE onnxruntime-LICENSE; do
+              [ -s "/opt/licenses/$f" ] || { echo "нет /opt/licenses/$f"; exit 1; }
+            done
+            [ -s /opt/ffmpeg/LICENSE.txt ]'
+
       - name: stream-tts отвечает
         run: |
           docker run -d --name smoke "$IMAGE"
@@ -54,3 +104,21 @@ jobs:
           docker rm -f smoke >/dev/null
           [ "${ok:-}" = 1 ] || { echo "stream-tts не ответил за 30 с"; exit 1; }
           if grep -q Traceback <<<"$logs"; then echo "Traceback в логе"; exit 1; fi
+
+      # Только по тегу и только после проверок выше: в GHCR уходит проверенный образ
+      - name: Вход в GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Публикация в GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          for tag in "$VERSION" latest; do
+            docker tag "$IMAGE" "$REGISTRY_IMAGE:$tag"
+            docker push "$REGISTRY_IMAGE:$tag"
+          done
+          echo "Опубликован $REGISTRY_IMAGE:$VERSION (и :latest)" >> "$GITHUB_STEP_SUMMARY"

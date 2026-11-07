@@ -21,8 +21,38 @@ ARG LLAMACPP_TAG=b11500
 ARG GPU=none
 ARG CUDA_VERSION=13.4
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+# FFmpeg — сборка BtbN lgpl-shared, та же, что у программы для Windows (packaging/windows/build-runtime.py): у ffmpeg
+# из Ubuntu --enable-gpl и GPL-библиотеки (x264, x265), а образ с ними для публикации пришлось бы выпускать по
+# условиям GPL. Сервер слинкован с libavcodec.so.62 и др. — это FFmpeg 8.x. Ежедневные сборки BtbN удаляет через
+# ~2 недели, сборки последнего дня месяца хранит годами: обновляя, брать autobuild-<год>-<мм>-<последний день>-*.
+ARG FFMPEG_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n8.1.3-27-g8dca1586f4-linux64-lgpl-shared-8.1.tar.xz
+ARG FFMPEG_SHA256=493e89a48da02b9a7d217b60f7f60c3c917c9bed73459d8a106e5e987da082ef
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# В образ — только ffmpeg, ffprobe, библиотеки и текст лицензии: без ffplay (22 МБ), заголовков и документации
+RUN set -eux; \
+    curl -fsSL -o /tmp/ffmpeg.tar.xz "$FFMPEG_URL"; \
+    echo "$FFMPEG_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -; \
+    mkdir -p /tmp/ffmpeg /opt/ffmpeg/bin; \
+    tar xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1; \
+    cp -a /tmp/ffmpeg/bin/ffmpeg /tmp/ffmpeg/bin/ffprobe /opt/ffmpeg/bin/; \
+    mkdir -p /opt/ffmpeg/lib; \
+    cp -a /tmp/ffmpeg/lib/*.so* /opt/ffmpeg/lib/; \
+    cp /tmp/ffmpeg/LICENSE.txt /opt/ffmpeg/; \
+    printf 'FFmpeg %s (BtbN lgpl-shared), LGPL 2.1 or later: LICENSE.txt\nSource: https://github.com/FFmpeg/FFmpeg (branch release/8.1)\nBuild: https://github.com/BtbN/FFmpeg-Builds\n' \
+        "$(basename "$FFMPEG_URL" .tar.xz)" > /opt/ffmpeg/NOTICE.txt; \
+    rm -rf /tmp/ffmpeg /tmp/ffmpeg.tar.xz
+
+# Тексты лицензий cosyvoice.cpp, GGML и ONNX Runtime: в их архивах текстов нет, а образ публикуется
+COPY packaging/linux/licenses.txt /tmp/licenses.txt
+RUN set -eux; \
+    mkdir -p /opt/licenses; \
+    grep -v '^#' /tmp/licenses.txt | while read -r name sum url; do \
+        curl -fsSL -o "/opt/licenses/$name" "$url"; \
+        echo "$sum  /opt/licenses/$name" | sha256sum -c -; \
+    done
 
 RUN set -eux; \
     mkdir -p /opt/cosyvoice /tmp/llama; \
@@ -61,19 +91,21 @@ FROM ${UBUNTU} AS base
 ENV DEBIAN_FRONTEND=noninteractive \
     GGML_CUDA_DISABLE_GRAPHS=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libicu78 libgomp1 \
-        libavcodec62 libavformat62 libavutil60 libswresample6 \
+RUN apt-get update && apt-get install -y --no-install-recommends libicu78 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=fetch /opt/cosyvoice /opt/cosyvoice
+# Библиотеки FFmpeg — через ldconfig, как раньше из apt: их находят и сервер, и ffmpeg (stream-tts: mp3 примеров
+# голосов, эффекты post, приведение записей в редакторе голоса)
+COPY --from=fetch /opt/ffmpeg /opt/ffmpeg
+RUN echo /opt/ffmpeg/lib > /etc/ld.so.conf.d/ffmpeg.conf && ldconfig \
+    && ln -s /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
 
 # --- stream-tts со встроенным сервером ---
 FROM base AS stream-tts
 
-# Python из apt (в 26.04 — 3.14) ставит пакеты только в venv (PEP 668).
-# ffmpeg: mp3 для примеров голосов и чтение звука в эффектах (post).
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg \
+# Python из apt (в 26.04 — 3.14) ставит пакеты только в venv (PEP 668). ffmpeg — из стадии base (BtbN, LGPL).
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/venv
 
@@ -91,6 +123,13 @@ COPY espeech/*.py espeech/THIRD-PARTY.txt /opt/cosyvoice/espeech/espeech/
 # (engines/supertonic/launch.py и download.py)
 COPY supertonic/*.py supertonic/THIRD-PARTY.txt /opt/cosyvoice/supertonic/supertonic/
 COPY stream-tts/streamtts ./streamtts
+# Эффекты (post в manifest.json наборов голосов) — в образе: у того, кто ставит образ без репозитория, их больше
+# неоткуда взять. docker-compose.dev.yml подключает поверх папку effects/ проекта
+COPY effects/*.py /project/effects/
+# Лицензии: тексты из стадии fetch, список стороннего и лицензия самой программы
+COPY --from=fetch /opt/licenses /opt/licenses
+COPY LICENSE /opt/licenses/StreamTTS-LICENSE.txt
+COPY packaging/linux/THIRD-PARTY.txt /opt/licenses/THIRD-PARTY.txt
 
 # LD_LIBRARY_PATH не задаётся: в /opt/cosyvoice свой libonnxruntime.so (1.30), он перебил бы onnxruntime из venv;
 # серверу путь добавляет engines/cosyvoice/launch.py. Сервер запускает stream-tts; COSYVOICE_HOST=0.0.0.0 открывает

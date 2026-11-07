@@ -1,0 +1,52 @@
+StreamTTS (образ Docker) — MIT, см. /opt/licenses/StreamTTS-LICENSE.txt.
+Исходный код: https://github.com/iociveteres/stream-tts
+
+Ниже — всё стороннее, что есть в образе, и что программа может скачать по
+кнопке. Полные тексты лицензий — в /opt/licenses/, у FFmpeg — в
+/opt/ffmpeg/, у пакетов Ubuntu — в /usr/share/doc/<пакет>/copyright, у
+пакетов Python — в /opt/venv/lib/python3.14/site-packages/*.dist-info.
+
+== В образе ==
+
+cosyvoice.cpp v0.2.0 (cosyvoice-server, cosyvoice-cli, libcosyvoice.so) — MIT,
+  см. cosyvoice.cpp-LICENSE и cosyvoice.cpp-THIRD_PARTY_NOTICES.md
+  https://github.com/Lourdle/cosyvoice.cpp
+  В его составе: PCRE2 — BSD-3-Clause WITH PCRE2-exception,
+  см. pcre2-LICENCE.md; cpp-httplib — MIT, см. cpp-httplib-LICENSE;
+  nlohmann/json — MIT, см. nlohmann-json-LICENSE.MIT
+GGML из llama.cpp b11500 (libggml*.so) — MIT, см. llama.cpp-LICENSE
+  https://github.com/ggml-org/llama.cpp
+ONNX Runtime 1.30 (libonnxruntime*.so) — MIT,
+  см. onnxruntime-LICENSE и onnxruntime-ThirdPartyNotices.txt
+  https://github.com/microsoft/onnxruntime
+FFmpeg 8.1 (/opt/ffmpeg: libav*.so, libsw*.so, ffmpeg, ffprobe), сборка
+  BtbN lgpl-shared — LGPL 2.1 or later, см. /opt/ffmpeg/LICENSE.txt
+  Исходный код: https://github.com/FFmpeg/FFmpeg (ветка release/8.1)
+  Сборка: https://github.com/BtbN/FFmpeg-Builds
+Ubuntu 26.04 и пакеты из неё (Python 3.14, ICU 78, libgomp и другие) —
+  лицензии каждого пакета в /usr/share/doc/<пакет>/copyright
+Пакеты Python (aiohttp, numpy, onnxruntime и другие) — их лицензии в
+  /opt/venv/lib/python3.14/site-packages/*.dist-info
+espeech-server (/opt/cosyvoice/espeech) — MIT; код модели в нём — по
+  F5-TTS, Vocos и x-transformers (MIT), см. espeech/THIRD-PARTY.txt там же
+supertonic-server (/opt/cosyvoice/supertonic) — MIT; подготовка текста и
+  синтез в нём — перенос кода Supertone (MIT), см. supertonic/THIRD-PARTY.txt
+  там же, https://github.com/supertone-inc/supertonic
+
+== Скачивается по кнопке в программе ==
+
+Модель синтеза CosyVoice3 0.5B (GGUF) и её ONNX-фронтенд — Apache-2.0
+  https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF
+CUDA для видеокарт NVIDIA: libggml-cuda.so — MIT (llama.cpp); CUDA Runtime
+  и cuBLAS — NVIDIA CUDA Toolkit EULA: https://docs.nvidia.com/cuda/eula/
+Модель ESpeech: веса https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K
+  (на Hugging Face указана Apache-2.0, но это, похоже, дообученная F5-TTS,
+  а её веса — CC-BY-NC-4.0, только некоммерческое использование), вокодер
+  Vocos — MIT, ударения RUAccent — Apache-2.0 и MIT; Python 3.14 с PyTorch —
+  PSF-2.0, BSD-3-Clause и другие
+Модель Supertonic 3 — BigScience OpenRAIL-M: программа показывает условия
+  перед загрузкой и кладёт текст лицензии рядом с весами
+  https://huggingface.co/Supertone/supertonic-3
+Остальное (очистка образца от музыки, туннель для страницы голосов) — как
+  у программы для Windows, см. packaging/windows/THIRD-PARTY.txt в
+  репозитории.

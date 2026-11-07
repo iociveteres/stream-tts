@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Единая точка входа: ./setup.sh [КВАНТ] [--frontend int8|full|none] [--gpu]
-# Скачивает модель (её можно скачать и в админке stream-tts), пишет в .env порт и набор compose-файлов, собирает и
-# запускает stream-tts со встроенным cosyvoice-server. Работает из Linux, WSL2 и Git Bash на Windows.
+# Единая точка входа: ./setup.sh [КВАНТ] [--frontend int8|full|none] [--gpu] [--build]
+# Скачивает модель (её можно скачать и в админке stream-tts), пишет в .env порт и набор compose-файлов, скачивает
+# готовый образ из GHCR (с --build — собирает из Dockerfile, с папками проекта: docker-compose.dev.yml) и запускает
+# stream-tts со встроенным cosyvoice-server. Работает из Linux, WSL2 и Git Bash на Windows.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 QUANT="Q8_0"
 GPU=0
+BUILD=0
 dl_args=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --frontend) dl_args+=("$1" "${2:?}"); shift ;;
         --gpu) GPU=1 ;;
+        --build) BUILD=1 ;;
         *) QUANT="$1" ;;
     esac
     shift
@@ -31,19 +34,28 @@ echo "==> Модель"
 bash scripts/download-model.sh "$QUANT" "${dl_args[@]}"
 mkdir -p voices
 
-# .env читается compose автоматически: последующие 'docker compose up' возьмут тот же порт (а с --gpu и тот же
-# набор compose-файлов). Остальные строки (пароль, Client ID) не трогаются.
+# .env читается compose автоматически: последующие 'docker compose up' возьмут тот же порт (а с --gpu и --build и тот
+# же набор compose-файлов). Остальные строки (пароль, Client ID) не трогаются.
 # Модель в .env не пишется: stream-tts берёт выбранную в админке, а если в models/ она одна — её.
 touch .env
 sed -i -E '/^(PORT|COMPOSE_FILE|COMPOSE_PATH_SEPARATOR)=/d' .env
 printf 'PORT=%s\n' "$PORT" >> .env
-if [ "$GPU" -eq 1 ]; then
-    printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml\nCOMPOSE_PATH_SEPARATOR=:\n' >> .env
+files=docker-compose.yml
+if [ "$BUILD" -eq 1 ]; then files="$files:docker-compose.dev.yml"; fi
+if [ "$GPU" -eq 1 ]; then files="$files:docker-compose.gpu.yml"; fi
+if [ "$files" != docker-compose.yml ]; then
+    printf 'COMPOSE_FILE=%s\nCOMPOSE_PATH_SEPARATOR=:\n' "$files" >> .env
 fi
 
-echo "==> Собираю и запускаю контейнер"
 # --remove-orphans: контейнер отдельного cosyvoice из прежних версий занял бы порт сервера и видеокарту
-docker compose up --build -d --remove-orphans
+if [ "$BUILD" -eq 1 ]; then
+    echo "==> Собираю образ и запускаю контейнер"
+    docker compose up --build -d --remove-orphans
+else
+    echo "==> Скачиваю образ и запускаю контейнер"
+    docker compose pull
+    docker compose up -d --remove-orphans
+fi
 
 # Адрес компьютера в локальной сети — для админки и оверлея с другого ПК. Из WSL и Git Bash — адрес Windows:
 # у WSL свой внутренний адрес, с других ПК недоступный

@@ -96,8 +96,10 @@ def test_i18n_unused_key(tmp_path, monkeypatch, capsys):
 def test_compose_config():
     if not shutil.which("docker"):
         pytest.skip("docker не найден")
-    for files in (["docker-compose.yml"], ["docker-compose.yml", "docker-compose.gpu.yml"]):
+    base, dev, gpu = "docker-compose.yml", "docker-compose.dev.yml", "docker-compose.gpu.yml"
+    for files in ([base], [base, gpu], [base, dev], [base, dev, gpu]):
         args = [a for f in files for a in ("-f", f)]
+        # COMPOSE_FILE из .env не мешает: -f главнее
         r = subprocess.run(["docker", "compose", *args, "config", "-q"], cwd=ROOT, capture_output=True, text=True)
         if r.returncode and "is not a docker command" in r.stderr:
             pytest.skip("нет docker compose")

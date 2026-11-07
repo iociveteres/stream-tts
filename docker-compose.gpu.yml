@@ -1,6 +1,6 @@
 # Запуск на видеокарте NVIDIA поверх docker-compose.yml:
-#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
-# (или ./setup.sh --gpu, который прописывает оба файла в .env)
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# (или ./setup.sh --gpu, который прописывает файлы в .env; из исходников — ещё docker-compose.dev.yml)
 services:
   # Образ тот же, что без видеокарты: CUDA качает кнопка на вкладке «Загрузки» в том ./cuda (install.py), а этот
   # файл только даёт контейнеру видеокарту. Встроенный сервер сам выбирает CUDA и добавляет --llm-flash-attn 0

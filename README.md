@@ -1,30 +1,111 @@
-# Local Voice Gen: cosyvoice-server в Docker
+# StreamTTS: озвучка наград Twitch локальным синтезом речи
 
-Локальный синтез речи с клонированием голоса на базе [cosyvoice.cpp](https://github.com/Lourdle/cosyvoice.cpp)
-(C++/GGML-порт CosyVoice3) и модели [Fun-CosyVoice3-0.5B-2512-GGUF](https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF).
+Зритель активирует награду за баллы канала или пишет команду в чат, и текст звучит на стриме выбранным голосом.
+Синтез идёт на вашем компьютере, без облачных сервисов:
+- [CosyVoice3](https://huggingface.co/Lourdle/Fun-CosyVoice3-0.5B-2512-GGUF) через
+  [cosyvoice.cpp](https://github.com/Lourdle/cosyvoice.cpp) — клонирование голоса по короткой записи, работает на
+  CPU, а на видеокарте NVIDIA примерно в 15 раз быстрее;
+- [ESpeech](#вторая-модель-espeech) (F5-TTS) — естественнее звучит, нужна видеокарта, умеет дообучаться (LoRA);
+- [Supertonic 3](#третья-модель-supertonic-3) — лёгкая модель на процессоре с 10 готовыми голосами.
 
-- Работает на CPU, а на видеокарте NVIDIA (`./setup.sh --gpu`) примерно в 15 раз быстрее.
-- WebUI в браузере и HTTP API.
-- Клонирование голоса по короткой записи и управление стилем текстовой инструкцией.
-- Модель не вшита в образ, а подключается из папки `./models`.
-- Всё поднимается одной командой `./setup.sh`: сервер синтеза работает внутри stream-tts (озвучка наград Twitch),
-  модель, устройство и наборы голосов выбираются в его админке.
+Всё настраивается в админке в браузере: Twitch, очередь, голоса, загрузка моделей. Модели в программу и образ не
+входят, админка качает их по кнопкам.
 
-## Требования
+## Установка
+
+Два способа:
+- **Программа для Windows** — установщик без Docker и Python.
+- **Docker** — Linux или Windows с Docker Desktop: готовый образ, две команды. Подходит и для отдельного сервера,
+  к админке которого ходят по локальной сети.
+
+### Программа для Windows
+
+Скачайте `StreamTTS-Setup-<версия>.exe` со страницы
+[Releases](https://github.com/iociveteres/stream-tts/releases) и запустите. Права администратора не нужны, всё
+хранится в папке программы. После установки откроется админка: на вкладке «Загрузки» скачайте модель (и CUDA, если
+есть видеокарта NVIDIA). Подробнее: [docs/stream-tts-windows.md](docs/stream-tts-windows.md).
+
+### Docker: требования
 
 | | |
 |---|---|
 | Процессор | x86_64 с **AVX2** (Intel с 4-го поколения, AMD Zen и новее) |
 | ОС | Linux или Windows 10/11 с Docker Desktop (бэкенд WSL2) |
 | Docker | Docker Engine с Compose v2 (`docker compose`) |
-| Shell | bash: Linux, WSL2 или Git Bash на Windows |
 | RAM | около 4 ГБ свободной памяти для Q8_0 |
-| Диск | около 2,1 ГБ (образ 862 МБ, модель 944 МБ, фронтенд 250 МБ); с GPU ещё ~730 МБ CUDA (качается в админке) |
+| Диск | около 1,8 ГБ (образ 597 МБ, модель 944 МБ, фронтенд 250 МБ); с GPU ещё ~730 МБ CUDA (качается в админке) |
 | GPU (необязательно) | NVIDIA с драйвером для CUDA 13 (R580+), 1,5–2 ГБ видеопамяти для Q8_0; Docker с доступом к GPU (Docker Desktop с WSL2 или NVIDIA Container Toolkit) |
 
 macOS на Apple Silicon и ARM-Linux не поддерживаются: бинарники собраны под x86_64, а при эмуляции нет AVX2.
 
-## Быстрый старт
+### Docker: установка
+
+В пустой папке скачайте `docker-compose.yml` и запустите его. Образ (`ghcr.io/iociveteres/stream-tts`) Docker
+скачает сам, папки для настроек, моделей и голосов создаст рядом с файлом.
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/iociveteres/stream-tts/main/docker-compose.yml
+```
+
+```bash
+docker compose up -d
+```
+
+В PowerShell на Windows вместо `curl` пишите `curl.exe`: просто `curl` там — другая команда.
+
+Откройте админку **http://localhost:8090** и на вкладке «Загрузки» скачайте модель. Дальше всё в ней: Twitch, очередь,
+голоса (раздел [«Озвучка наград Twitch»](#озвучка-наград-twitch-stream-tts)).
+
+**С видеокартой NVIDIA** скачайте ещё `docker-compose.gpu.yml` — он даёт контейнеру видеокарту:
+
+```bash
+curl -fsSL --remote-name-all https://raw.githubusercontent.com/iociveteres/stream-tts/main/docker-compose.yml https://raw.githubusercontent.com/iociveteres/stream-tts/main/docker-compose.gpu.yml
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+Образ тот же, что без видеокарты: CUDA (~590 МБ загрузки) скачивается кнопкой на вкладке «Загрузки» (карточка
+«Видеокарта NVIDIA») в папку `./cuda`. Чтобы не писать `-f` в каждой команде, положите рядом файл `.env` со строками
+`COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml` и `COMPOSE_PATH_SEPARATOR=:`.
+
+Управление контейнером (из той же папки):
+
+```bash
+docker compose logs -f   # логи
+docker compose down      # остановить
+docker compose up -d     # запустить снова (модель — выбранная в админке)
+```
+
+Обновление до новой версии:
+
+```bash
+docker compose pull
+```
+
+```bash
+docker compose up -d
+```
+
+Админка открыта в локальной сети: с другого ПК — `http://<адрес компьютера>:8090`, без пароля и настроек. Из
+интернета (проброс порта, туннель, прокси) админка пускает только с паролем — он задаётся в админке: «Настройки» →
+«Сервер». Забыли пароль — удалите `stream-tts-data/admin-password` и перезапустите контейнер. Только с этого
+компьютера — `STREAM_TTS_BIND=127.0.0.1` в `.env`. Остальные переменные `.env` (порт, язык, Client ID) — в
+[docs/stream-tts-deploy.md](docs/stream-tts-deploy.md#переменные).
+
+### Docker из репозитория: `setup.sh`
+
+Нужен для инструментов подготовки голосов (`scripts/`, `tools/`), выбора кванта модели при установке и сборки образа
+из исходников. Команды выполняются в bash: Linux, WSL2 или Git Bash на Windows (см. [ниже](#windows)).
+
+```bash
+git clone https://github.com/iociveteres/stream-tts.git
+```
+
+```bash
+cd stream-tts
+```
 
 ```bash
 ./setup.sh
@@ -33,12 +114,12 @@ macOS на Apple Silicon и ARM-Linux не поддерживаются: бин�
 Скрипт выполняет пять шагов:
 1. Проверяет, что Docker установлен и запущен.
 2. Скачивает модель (по умолчанию `Q8_0`) и ONNX-фронтенд для клонирования в `./models`. Если файлы уже есть, пропускает их.
-3. Записывает в `.env` порт и (с `--gpu`) набор compose-файлов.
-4. Собирает образ и запускает контейнер stream-tts со встроенным cosyvoice-server.
-5. Ждёт, пока сервер ответит, и выводит адреса.
+3. Записывает в `.env` порт и (с `--gpu` или `--build`) набор compose-файлов.
+4. Скачивает готовый образ (с `--build` — собирает его из `Dockerfile`) и запускает контейнер stream-tts со
+   встроенным cosyvoice-server.
+5. Ждёт, пока сервер ответит, и выводит адреса, в том числе адрес для других ПК в локальной сети.
 
 После этого WebUI сервера доступен по адресу **http://localhost:8080**, админка stream-tts — **http://localhost:8090**.
-Модель можно не качать заранее: её скачивает и вкладка «Загрузки» в админке.
 
 Параметры:
 
@@ -46,33 +127,20 @@ macOS на Apple Silicon и ARM-Linux не поддерживаются: бин�
 ./setup.sh Q6_K                  # другой квант
 ./setup.sh Q8_0 --frontend full  # полный ONNX-фронтенд (~1 ГБ) вместо int8
 ./setup.sh Q8_0 --frontend none  # без фронтенда (клонирование из аудио будет недоступно)
-PORT=9000 ./setup.sh             # другой порт на хосте
+PORT=9000 ./setup.sh             # другой порт сервера синтеза на хосте
 ./setup.sh Q8_0 --gpu            # на видеокарте NVIDIA (CUDA)
+./setup.sh Q8_0 --build          # образ из исходников, эффекты и manifest.json голосов — из папок проекта
 ```
 
-С `--gpu` скрипт проверяет, что Docker видит видеокарту, и прописывает в `.env` оба compose-файла
-(`COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml`). Поэтому обычные `docker compose up/down/logs`
-дальше работают с GPU-вариантом. Образ тот же, что без видеокарты: CUDA (~590 МБ загрузки) скачивается кнопкой на
-вкладке «Загрузки» (карточка «Видеокарта NVIDIA») в папку `./cuda`, пересборка образа её не трогает. Чтобы вернуться на CPU, удалите из `.env` строки `COMPOSE_FILE` и
-`COMPOSE_PATH_SEPARATOR` (или запустите `./setup.sh` без `--gpu`) и выполните `docker compose up -d`.
-
-Управление контейнером:
-
-```bash
-docker compose logs -f   # логи
-docker compose down      # остановить
-docker compose up -d     # запустить снова (модель — выбранная в админке)
-```
+Скрипт прописывает в `.env` нужные compose-файлы (`COMPOSE_FILE`): с `--gpu` — `docker-compose.gpu.yml`, с `--build`
+— `docker-compose.dev.yml`. Поэтому обычные `docker compose up/down/logs` дальше работают с тем же набором. Чтобы
+вернуться на CPU или к готовому образу, запустите `./setup.sh` без этих флагов. После `git pull` с `--build` —
+`docker compose up -d --build`.
 
 Инструменты подготовки голосов (`scripts/`, `tools/`) работают с сервером внутри контейнера stream-tts — порт 8080,
 отдельный сервис не нужен. Пока они работают, не заказывайте озвучку: сервер выполняет запросы строго по одному.
 
-Админка открыта в локальной сети: с другого ПК — `http://<адрес сервера>:8090` (`setup.sh` печатает его в конце),
-без пароля и настроек. Из интернета (проброс порта, туннель, прокси) админка пускает только с паролем — он задаётся
-в админке: «Настройки» → «Сервер». Забыли пароль — удалите `stream-tts-data/admin-password` и перезапустите
-контейнер. Только с этого компьютера — `STREAM_TTS_BIND=127.0.0.1` в `.env`.
-
-### Windows
+#### Windows
 
 Docker Desktop должен быть запущен. Скрипт выполняется из Git Bash или из WSL2-дистрибутива, из PowerShell напрямую не запустится.
 Если работаете в WSL, держите проект в домашней папке WSL (`~/...`), а не на `/mnt/c/...`: модель будет загружаться заметно быстрее.
@@ -149,7 +217,7 @@ curl -X POST "http://localhost:8080/speaker?type=extract" \
 ```bash
 curl -X POST http://localhost:8080/tts \
   -H 'Content-Type: application/json' \
-  -d '{"text":"Привет!","voice":"myvoice","mode":"zero-shot","response_format":"wav"}' \
+  -d '{"text":"Привет!","voice":"myvoice","mode":"zero-shot","format":"wav"}' \
   -o out.wav
 ```
 
@@ -168,23 +236,19 @@ curl -X POST http://localhost:8080/speaker/save \
 Учтите, что `POST /model/load` на самом деле ждёт поле `model`, а не `model_path`, как написано там.
 Кроме того, после выгрузки модели все зарегистрированные голоса сбрасываются.
 
-Форматы вывода: `wav`, `mp3`, `opus`, `flac`, `aac`, `m4a`, `pcm`.
+Форматы вывода — поле `format` (не `response_format`, как у OpenAI: его сервер молча пропускает и отдаёт
+WAV): `wav`, `mp3`, `opus`, `flac`, `aac`, `m4a`, `pcm`.
 
-### Готовые голоса
+### Голоса
 
-В `voices/` лежат голоса, собранные в этом проекте. Они подключаются при старте, как любые голоса из `./voices`.
-Каталог: [docs/voices.md](docs/voices.md).
+Голосов CosyVoice3 и ESpeech в репозитории и установщике нет: их образцы — реплики из игр и чужие записи. Голос
+делается из своей записи — «+ Добавить голос» на вкладке «Голоса», вкладка **Extract** в WebUI (выше) или
+`scripts/import-voices.sh` (ниже). Готовую коллекцию (zip с файлами `.gguf` или `.espeech`) ставят на вкладке
+«Голоса» → «Наборы голосов». У Supertonic 3 голоса готовые, они ставятся вместе с моделью.
 
-- **Warcraft III (64 голоса `wc3-*`)** из оригинального русского дубляжа (RoC + TFT, 2002–2003): персонажи кампаний
-  (`wc3-arthas`, `wc3-thrall`, `wc3-jaina`, `wc3-illidan`, `wc3-narrator`…) и юниты (`wc3-peasant`, `wc3-footman`,
-  `wc3-peon`…). Полный список и откуда взяты реплики: [docs/voices-wc3.md](docs/voices-wc3.md).
-- **Другие игры**: `dota2-pudge`, `portal-glados`, `stalker-bandit`, `villager`, `neco-arc`, `neco-arc-angry`,
-  `neco-arc-ja`.
-- **Голоса реальных людей** — только для шуток на стриме: не выдавайте синтез за их настоящие слова.
-
-```bash
-curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json'   -d '{"text":"Работа никогда не заканчивается.","voice":"wc3-thrall","mode":"zero-shot","response_format":"wav"}'   -o out.wav
-```
+Голоса, собранные автором проекта (Warcraft III из русского дубляжа 2002–2003, другие игры), описаны в
+[docs/voices.md](docs/voices.md) и [docs/voices-wc3.md](docs/voices-wc3.md), но в репозиторий не входят. Голоса
+реальных людей — только для шуток на стриме: не выдавайте синтез за их настоящие слова.
 
 Как подбираются образцы (варианты, синтез тестовых фраз, оценки и модель эмоций, выбор на слух на локальной
 странице, установка): [docs/voice-pipeline.md](docs/voice-pipeline.md).
@@ -197,10 +261,7 @@ curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json'   -d 
 
 Основной сервис, cosyvoice-server работает внутри него: зритель активирует награду за баллы канала, вводит текст, и
 тот звучит на стриме выбранным голосом (как в JeetBot TTS). Полная спецификация: [docs/stream-tts.md](docs/stream-tts.md).
-
-```bash
-docker compose up -d --build   # после git pull: пересобрать и перезапустить вместе с сервером
-```
+Установка — [выше](#установка).
 
 Интерфейс: **http://localhost:8090**. Дальше всё в нём:
 1. **Twitch** → гайд по шагам: 2FA, своё приложение на dev.twitch.tv (Client Type: **Public**), Client ID.
@@ -226,9 +287,7 @@ docker compose up -d --build   # после git pull: пересобрать и 
 Данные лежат в `./stream-tts-data` (в git не попадает): `settings.json`, `token.json`, `stream-tts.sqlite`
 (история за 30 дней), `profanity.txt` (корни мата, правится и из интерфейса), `demos/` (mp3-примеры голосов).
 
-Программа для Windows без Docker и Python (установщик без прав администратора, всё в папке программы; модель, CUDA,
-вторая модель ESpeech, ~2,3 ГБ, и третья, Supertonic 3, ~380 МБ, качаются по кнопкам на вкладке «Загрузки»):
-[docs/stream-tts-windows.md](docs/stream-tts-windows.md).
+Программа для Windows без Docker и Python — [в начале](#программа-для-windows).
 
 ### Вторая модель: ESpeech
 
@@ -275,10 +334,10 @@ docker compose up -d --build   # после git pull: пересобрать и 
 - файл работает с любым квантом CosyVoice3 (Q8_0, Q6_K и т.д.), но не с другими семействами моделей, например CosyVoice2;
 - голоса, созданные через WebUI или API без **Save speaker**, живут только в памяти и пропадут после перезапуска.
 
-Если формат голосов сменится в новой версии cosyvoice.cpp, их можно пересобрать из исходных образцов.
-Для этого перенесите `voice-refs/` и выполните `scripts/import-voices.sh voice-refs/cosyvoice/<набор>` для каждого
-набора (папки в `voice-refs/cosyvoice/`: `wc3`, `streamers`, игры). Здесь фронтенд уже нужен: файлы в `models/frontend-onnx/`, а загружает его в
-сервер сам скрипт.
+Если формат голосов сменится в новой версии cosyvoice.cpp, их можно пересобрать из исходных образцов, поэтому
+пары `<имя>.wav` + `<имя>.txt` стоит хранить: `scripts/import-voices.sh <папка>` для каждого набора (в этом проекте
+образцы лежат в `voice-refs/cosyvoice/<набор>`). Здесь фронтенд уже нужен: файлы в `models/frontend-onnx/`, а
+загружает его в сервер сам скрипт.
 
 ## Производительность
 
@@ -323,7 +382,8 @@ docker compose up -d --build   # после git pull: пересобрать и 
   готовый голос `boris`.
 - cosyvoice.cpp: MIT.
 - Модели CosyVoice3 GGUF: Apache-2.0.
-- FFmpeg из репозиториев Ubuntu может включать GPL-компоненты. Это важно только при публикации образа.
+- FFmpeg в образе Docker — сборка [BtbN](https://github.com/BtbN/FFmpeg-Builds) lgpl-shared, LGPL 2.1+: текст и
+  ссылки на исходники — `/opt/ffmpeg/LICENSE.txt` и `NOTICE.txt` в образе.
 - Программа для Windows: всё, что она ставит и качает по кнопкам, с лицензиями —
   [packaging/windows/THIRD-PARTY.txt](packaging/windows/THIRD-PARTY.txt) (страница «Информация» установщика).
 

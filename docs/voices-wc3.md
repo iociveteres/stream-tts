@@ -38,7 +38,7 @@
 
 ```bash
 curl -X POST http://localhost:8080/tts -H 'Content-Type: application/json' \
-  -d '{"text":"Работа никогда не заканчивается.","voice":"wc3-thrall","mode":"zero-shot","response_format":"wav"}' \
+  -d '{"text":"Работа никогда не заканчивается.","voice":"wc3-thrall","mode":"zero-shot","format":"wav"}' \
   -o out.wav
 ```
 

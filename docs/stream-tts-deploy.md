@@ -133,13 +133,14 @@ CUDA 0,22–0,32, Vulkan 0,22–0,38 (первый запрос на новой 
 ## Docker
 
 Сервис `stream-tts` в `docker-compose.yml` — со встроенным сервером из того же образа (корневой
-`Dockerfile`, цель `stream-tts`), `restart: unless-stopped`. Возможности те же, что у программы для Windows:
+`Dockerfile`, цель `stream-tts`; пользователь берёт готовый `ghcr.io/iociveteres/stream-tts`, из репозитория —
+сборка через `docker-compose.dev.yml`, [development.md](development.md), «Образы»), `restart: unless-stopped`. Возможности те же, что у программы для Windows:
 вкладки «Сервер» и «Загрузки», наборы голосов из zip, загрузка пакетов, выгрузка модели, очистка образца от музыки. Образ один —
 с видеокартой и без: CUDA (два архива релиза llama.cpp, ~590 МБ, на диске ~730 МБ; `cuda.linux` в `downloads.json`)
 качает кнопка в карточке «Видеокарта NVIDIA» на вкладке «Загрузки» в том `./cuda`, если контейнер видит видеокарту NVIDIA (запуск с
 `docker-compose.gpu.yml` или `--gpus all`: тогда в контейнере есть `libcuda.so.1`). Сервер подключает её из тома
 (`GGML_BACKEND_PATH`, `engines/cosyvoice/launch.py`), пересборка образа её не трогает. Проверка обновлений выключена:
-обновление — `git pull && docker compose up -d --build`. ESpeech — так же, как у программы: в образе только код
+обновление — `docker compose pull && docker compose up -d` (из исходников — `git pull && docker compose up -d --build`). ESpeech — так же, как у программы: в образе только код
 espeech-server и заглушки библиотек CUDA (сотни КБ), Python 3.14 с torch (скачать ~580 МБ, на диске ~1,4 ГБ) и
 модель (1,8 ГБ) качает кнопка «Скачать» в карточке «ESpeech» на вкладке «Загрузки» в тома `./espeech-runtime` и
 `./models` — пересборка образа их не трогает. С CUDA ESpeech работает на видеокарте (cuBLAS и cudart torch берёт из

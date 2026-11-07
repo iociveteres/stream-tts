@@ -1,11 +1,14 @@
+# StreamTTS из готового образа: этот файл можно скачать один, без репозитория (README, «Docker: установка»), и
+# запустить в пустой папке: docker compose up -d. Папки данных ниже Docker создаст рядом с ним. Обновление —
+# docker compose pull && docker compose up -d. Видеокарта NVIDIA — ещё docker-compose.gpu.yml; сборка образа из
+# исходников и папки проекта (эффекты, voice-refs) — docker-compose.dev.yml (его подключает ./setup.sh --build).
+# Сюда — только папки данных: смонтированная папка проекта, которой нет рядом, создалась бы пустой и закрыла бы
+# собой файлы образа (эффекты лежат в образе в /project/effects; tests/e2e/test_docker.py).
 services:
   # Озвучка наград Twitch (docs/stream-tts.md) со встроенным cosyvoice-server: модель, устройство
   # и наборы голосов выбираются в админке, сервер запускается и останавливается вместе с stream-tts.
   stream-tts:
-    build:
-      context: .
-      target: stream-tts
-    image: stream-tts:latest   # один образ с видеокартой и без: CUDA качается по кнопке в ./cuda
+    image: ghcr.io/iociveteres/stream-tts:latest   # один образ с видеокартой и без: CUDA качается по кнопке в ./cuda
     init: true
     ports:
       # Админка и оверлей открыты в сеть: без пароля stream-tts пускает только адреса локальной сети, пароль для
@@ -20,10 +23,6 @@ services:
       - ./espeech-runtime:/espeech-runtime            # Python с torch для ESpeech (~1,3 ГБ), качает админка
       - ./cuda:/cuda                                  # CUDA для видеокарт NVIDIA (~730 МБ), качает админка
       - ./voices:/voices                              # голоса .gguf и наборы в подпапках
-      - ./voice-refs:/project/voice-refs:ro           # manifest.json с эффектами post
-      - ./effects:/project/effects:ro                 # скрипты эффектов (post); режим cut звуков жителя не читает
-      # Остальным режимам effects/villager-fx.py нужны звуки жителя:
-      # - ./voice-origs/minecraft-villager:/project/voice-origs/minecraft-villager:ro
     environment:
       STREAM_TTS_BIND: "${STREAM_TTS_BIND:-0.0.0.0}"
       STREAM_TTS_PORT: "${STREAM_TTS_PORT:-8090}"

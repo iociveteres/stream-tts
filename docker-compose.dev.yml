@@ -1,0 +1,15 @@
+# Надстройка над docker-compose.yml для работы из репозитория: образ собирается из Dockerfile (а не берётся из
+# GHCR), эффекты и manifest.json голосов — из папок проекта, правки видны без пересборки.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+# (или ./setup.sh --build, который прописывает файлы в .env; с видеокартой — ещё docker-compose.gpu.yml)
+services:
+  stream-tts:
+    build:
+      context: .
+      target: stream-tts
+    image: stream-tts:latest   # своё имя: собранный образ не подменяет скачанный из GHCR
+    volumes:
+      - ./voice-refs:/project/voice-refs:ro           # manifest.json с группами и эффектами post
+      - ./effects:/project/effects:ro                 # скрипты эффектов (post) поверх тех, что в образе
+      # Режиму cut звуки жителя не нужны, остальным режимам effects/villager-fx.py — нужны:
+      # - ./voice-origs/minecraft-villager:/project/voice-origs/minecraft-villager:ro
