@@ -63,7 +63,7 @@ def test_docker_one_image():
     assert re.search(r"^\s*STREAM_TTS_CUDA=/cuda\b", read("Dockerfile"), re.M)
     assert re.search(r"^\s*- \./cuda:/cuda\s", read("docker-compose.yml"), re.M)
     gpu = read("docker-compose.gpu.yml")
-    st = gpu[gpu.index("  stream-tts:"):gpu.index("\n  cosyvoice:")]
+    st = gpu[gpu.index("  stream-tts:"):]
     assert "build:" not in st and "image:" not in st, "docker-compose.gpu.yml собирает свой образ stream-tts"
     assert "capabilities: [gpu]" in st
 

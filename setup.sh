@@ -32,7 +32,7 @@ bash scripts/download-model.sh "$QUANT" "${dl_args[@]}"
 mkdir -p voices
 
 # .env читается compose автоматически: последующие 'docker compose up' возьмут тот же порт (а с --gpu и тот же
-# набор compose-файлов). Остальные строки (пароль, Client ID, MODEL для профиля server-only) не трогаются.
+# набор compose-файлов). Остальные строки (пароль, Client ID) не трогаются.
 # Модель в .env не пишется: stream-tts берёт выбранную в админке, а если в models/ она одна — её.
 touch .env
 sed -i -E '/^(PORT|COMPOSE_FILE|COMPOSE_PATH_SEPARATOR)=/d' .env
@@ -42,9 +42,8 @@ if [ "$GPU" -eq 1 ]; then
 fi
 
 echo "==> Собираю и запускаю контейнер"
-# Отдельный cosyvoice (профиль server-only или старая схема) занял бы порт сервера и видеокарту
-docker compose rm -sf cosyvoice >/dev/null 2>&1 || true
-docker compose up --build -d
+# --remove-orphans: контейнер отдельного cosyvoice из прежних версий занял бы порт сервера и видеокарту
+docker compose up --build -d --remove-orphans
 
 echo "==> Жду сервер"
 UI_PORT="$(sed -n 's/^STREAM_TTS_PORT=//p' .env | tail -n 1)"

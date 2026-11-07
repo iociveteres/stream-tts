@@ -183,7 +183,8 @@ llama.cpp — новые `LLAMA` и `ASSETS` в `build-runtime.py` и новые
   Setup 6.7.3). Inno Setup можно не ставить в систему: `innosetup-6.x.exe /PORTABLE=1 /CURRENTUSER /VERYSILENT
   /DIR=packaging\windows\.inno` (папка в `.gitignore`, `build-exe.py` ищет ISCC там) или в любую папку и путь к
   `ISCC.exe` в переменной `ISCC`.
-- `.github/workflows/windows.yml` — то же в GitHub Actions (`windows-latest`, по кнопке или тегу `v*`), установщик —
+- `.github/workflows/windows.yml` — то же в GitHub Actions (`windows-latest`; из `ci.yml` после тестов на push в main
+  и тег `v*` или по кнопке), установщик —
   артефакт сборки, а по тегу ещё и релиз на GitHub (`gh release create`): установщик и `latest.json`.
 - `release.py` — файлы релиза: `dist/latest.json` и текст релиза из сообщения аннотированного тега. Версия одна —
   `__version__` в `stream-tts/streamtts/__init__.py` (её берёт `build-exe.py`, показывает админка); CI до сборки
@@ -194,7 +195,8 @@ packaging/windows/.venv/Scripts/python.exe packaging/windows/build-runtime.py
 packaging/windows/.venv/Scripts/python.exe packaging/windows/build-exe.py --setup
 ```
 
-Выпуск версии: поднять `__version__`, закоммитить, `git tag -a v0.2.0 -m "что нового"` и `git push --tags`.
+Выпуск версии: поднять `__version__` в `dev`, сквош в `main` (docs/development.md, «Ветки»), на нём
+`git tag -a v1.0.0 -m "что нового"` и `git push origin main dev v1.0.0`: CI прогонит тесты и опубликует релиз.
 
 ## Обновления
 

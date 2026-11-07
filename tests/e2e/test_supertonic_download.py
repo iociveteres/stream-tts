@@ -257,7 +257,10 @@ def test_find_server_program_and_docker(tmp_path, monkeypatch):
 def test_program_entry_runs_server(tmp_path):
     """StreamTTS.py (главный модуль сборки) с --supertonic — supertonic-server проекта, а не stream-tts: без модели он
     выходит с кодом 2 и списком недостающих файлов, не трогая данные программы."""
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join((STREAM_TTS, ROOT)), STREAM_TTS_DATA=str(tmp_path / "data"))
+    # PYTHONIOENCODING — как у Launcher.env(): без него на Windows с кодировкой cp1252 (раннер GitHub) кириллица в
+    # stderr приходит экранированной (в…)
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join((STREAM_TTS, ROOT)), STREAM_TTS_DATA=str(tmp_path / "data"),
+               PYTHONIOENCODING="utf-8")
     r = subprocess.run([sys.executable, os.path.join(ROOT, "packaging", "windows", "StreamTTS.py"), "--supertonic",
                         "--models", str(tmp_path / "none"), "--port", "1"], env=env, capture_output=True,
                        text=True, encoding="utf-8", errors="replace", timeout=60)

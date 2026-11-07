@@ -49,14 +49,14 @@ en.json правкой по последней строке (`tail -n 2` — п�
 | `stream-tts/streamtts/engines/` | модели синтеза: `cosyvoice/`, `espeech/`, `supertonic/` — описание, запуск, клиент, особенности редактора; `client.py` — общий протокол и очередь к серверу | [stream-tts.md](stream-tts.md), «Модели синтеза» |
 | `espeech/` | espeech-server: синтез ESpeech (F5-TTS + RUAccent), HTTP API как у cosyvoice-server, обучение LoRA | [espeech.md](espeech.md) |
 | `supertonic/` | supertonic-server: синтез Supertonic 3 на onnxruntime, только CPU, 10 готовых голосов; тесты — `tests/supertonic/` | [supertonic.md](supertonic.md) |
-| `setup.sh`, `Dockerfile`, `docker-compose.yml`, `cosyvoice/` | Docker: stream-tts со встроенным cosyvoice-server; профиль `server-only` — только сервер для `scripts/` и `tools/` (`cosyvoice/entrypoint.sh`); образы из готовых релизов cosyvoice.cpp и llama.cpp, код сервера не наш; сборка в CI — `docker.yml` в `.github/workflows/` | [development.md](development.md), «Образы» |
-| `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+); CI — `.github/workflows/windows.yml`; `stubs/*.def` — DLL-заглушки torch ESpeech; `.venv`, `.inno`, `build/`, `dist/` — не в git | [stream-tts-windows.md](stream-tts-windows.md) |
+| `setup.sh`, `Dockerfile`, `docker-compose.yml` | Docker: stream-tts со встроенным cosyvoice-server, он же сервер для `scripts/` и `tools/` (порт 8080); образ из готовых релизов cosyvoice.cpp и llama.cpp, код сервера не наш; сборка в CI — `docker.yml` в `.github/workflows/` (после тестов на push в main, `ci.yml`) | [development.md](development.md), «Образы» |
+| `packaging/windows/` | программа (Nuitka) и установщик (Inno Setup 6.5+); CI — `.github/workflows/windows.yml` (после тестов на push в main и тег, `ci.yml`); `stubs/*.def` — DLL-заглушки torch ESpeech; `.venv`, `.inno`, `build/`, `dist/` — не в git | [stream-tts-windows.md](stream-tts-windows.md) |
 | `packaging/pin-espeech.py`, `packaging/linux/` | загрузки ESpeech для обеих систем, заглушки библиотек torch | [espeech.md](espeech.md), «Поставка» |
 | `scripts/` | загрузка модели, импорт голосов в `voices/*.gguf`, архив для внешнего исполнителя, этот замер | [voice-pipeline.md](voice-pipeline.md) |
 | `tools/voices/`, `tools/wc3/`, `tools/sources/` | подбор образцов: страница выбора, синтез, оценки, коллекции наборов; реплики WC3 и других источников | [voice-pipeline.md](voice-pipeline.md), [voices-wc3.md](voices-wc3.md), [voices.md](voices.md) |
 | `tools/espeech/` | папка модели ESpeech, голоса `.espeech`, обучение LoRA из командной строки | [espeech.md](espeech.md) |
 | `effects/` | эффекты поверх синтеза (`post`) | [stream-tts.md](stream-tts.md), «Синтез и воспроизведение» |
-| `tests/e2e/`, `tests/espeech/` | e2e stream-tts на поддельных сервере синтеза, IRC и Twitch; тесты espeech-server; в CI на push и PR — `tests.yml` в `.github/workflows/` | [development.md](development.md), «Тесты» |
+| `tests/e2e/`, `tests/espeech/` | e2e stream-tts на поддельных сервере синтеза, IRC и Twitch; тесты espeech-server; в CI на push в main и PR в main — `tests.yml` в `.github/workflows/` (из `ci.yml`), на dev — локально | [development.md](development.md), «Тесты» |
 
 ## Данные (не в git)
 

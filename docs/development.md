@@ -8,19 +8,18 @@
 ```
 .
 ├── setup.sh               # единая точка входа: модель, .env, сборка и запуск
-├── Dockerfile             # образы stream-tts (со встроенным сервером) и cosyvoice (только сервер)
+├── Dockerfile             # образ stream-tts со встроенным сервером
 ├── .dockerignore          # контекст сборки — весь проект, в него пускаются только нужные образам файлы
-├── docker-compose.yml     # stream-tts; cosyvoice — в профиле server-only
+├── docker-compose.yml     # stream-tts
 ├── docker-compose.gpu.yml # надстройка для видеокарты NVIDIA
 ├── README.md              # для пользователя: установка и работа
 ├── AGENTS.md              # заметки для ИИ-агентов (CLAUDE.md ссылается на него)
 ├── .gitattributes         # LF для shell-скриптов, Dockerfile и *.yml; .gitignore — данные не в git
 ├── .claude/launch.json    # конфигурации preview (раздел «Запуск»)
-├── .github/workflows/     # GitHub Actions: tests.yml (тесты на push и PR, раздел «Тесты»), docker.yml (сборка образов,
-│                          # раздел «Образы»), windows.yml (установщик и релиз, docs/stream-tts-windows.md)
+├── .github/workflows/     # GitHub Actions: ci.yml (конвейер main: тесты → образы и установщик, раздел «Ветки»),
+│                          # tests.yml (раздел «Тесты»), docker.yml (сборка образов, раздел «Образы»), windows.yml
+│                          # (установщик и релиз, docs/stream-tts-windows.md)
 ├── LICENSE                # MIT — код проекта (что не входит — в README, «Лицензии»)
-├── cosyvoice/
-│   └── entrypoint.sh      # профиль server-only: собирает аргументы сервера из /models и /voices
 ├── espeech/               # espeech-server — синтез ESpeech для stream-tts (docs/espeech.md): __init__.py (папки
 │                          # библиотек CUDA до torch), __main__.py (python -m espeech), server.py (HTTP API
 │                          # как у cosyvoice-server: обработчик и роуты), engine.py (модель в рабочем потоке),
@@ -183,13 +182,13 @@
 
 ## Образы
 
-Корневой `Dockerfile`, цели выбирает `docker-compose.yml`:
-- `stream-tts` (`stream-tts:latest`, один и с видеокартой, и без) — stream-tts со встроенным cosyvoice-server
-  ([stream-tts-deploy.md](stream-tts-deploy.md#docker)); CUDA в него не входит, её качает админка в том `./cuda`;
-- `cosyvoice` (`cosyvoice-server:cpu`, `cosyvoice-server:cuda`) — только сервер для инструментов подготовки голосов
-  (`scripts/`, `tools/`), профиль `server-only`.
+Корневой `Dockerfile`, цель `stream-tts` (`stream-tts:latest`, один и с видеокартой, и без) — stream-tts со
+встроенным cosyvoice-server ([stream-tts-deploy.md](stream-tts-deploy.md#docker)); CUDA в него не входит, её качает
+админка в том `./cuda`. Инструменты подготовки голосов (`scripts/`, `tools/`) ходят к тому же серверу: порт 8080
+контейнера проброшен на `127.0.0.1`. Отдельного образа «только сервер» (профиля `server-only`) больше нет: он
+дублировал встроенный сервер.
 
-Обе цели на `ubuntu:26.04`: релизы cosyvoice.cpp собраны там и требуют glibc 2.43 и ICU 78 (в `python:*-slim` —
+Образ на `ubuntu:26.04`: релизы cosyvoice.cpp собраны там и требуют glibc 2.43 и ICU 78 (в `python:*-slim` —
 2.41).
 - Стадия `fetch` скачивает:
   - архив cosyvoice.cpp (`cosyvoice-server`, `cosyvoice-cli`, `quantize`, `libcosyvoice`, ONNX Runtime);
@@ -199,16 +198,15 @@
 - Стадия `base` — рантайм-библиотеки сервера (ICU, libgomp, FFmpeg `libav*`) и `/opt/cosyvoice`, без curl и
   компиляторов. Цель `stream-tts` добавляет Python 3.14 из apt (пакеты — в venv `/opt/venv`, PEP 668), ffmpeg и
   `/opt/cosyvoice/espeech` — код espeech-server и заглушки (сотни КБ; torch и модель качает админка в тома).
-- `LD_LIBRARY_PATH=/opt/cosyvoice` задан только в цели `cosyvoice`: там свой `libonnxruntime.so` (1.30), в
-  stream-tts он перебил бы onnxruntime из venv, поэтому путь серверу добавляет `engines/cosyvoice/launch.py`.
-- Контекст сборки — весь проект, `.dockerignore` пускает в него только `cosyvoice/entrypoint.sh`,
-  `stream-tts/requirements.txt`, `stream-tts/streamtts/`, `espeech/*.py` (с `THIRD-PARTY.txt`) и `packaging/linux/`.
+- `LD_LIBRARY_PATH=/opt/cosyvoice` в образе не задан: там свой `libonnxruntime.so` (1.30), он перебил бы
+  onnxruntime из venv, поэтому путь серверу добавляет `engines/cosyvoice/launch.py`.
+- Контекст сборки — весь проект, `.dockerignore` пускает в него только `stream-tts/requirements.txt`, `stream-tts/streamtts/`, `espeech/*.py` (с `THIRD-PARTY.txt`) и `packaging/linux/`.
 
 **GGML** в релизах cosyvoice.cpp не поставляется, его берут из llama.cpp. Копируются все варианты
 `libggml-cpu-<isa>.so`, и сервер сам выбирает лучший для текущего процессора (на Zen 3 это `haswell`).
 
-**GPU.** Образ `cosyvoice-server:cuda` (`GPU=cuda`) берёт GGML из CUDA-сборки того же релиза llama.cpp
-(`libggml-cuda.so`) и рантайм CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`. У `stream-tts` CUDA в образе нет:
+**GPU.** С `GPU=cuda` образ берёт GGML из CUDA-сборки того же релиза llama.cpp (`libggml-cuda.so`) и рантайм
+CUDA 13 (cudart, cuBLAS) из архива `cudart-llama-*`; по умолчанию так не собирается, CUDA в образе нет:
 те же два архива (`cuda.linux` в `downloads.json`) качает кнопка на вкладке «Загрузки» в том `/cuda`
 (`STREAM_TTS_CUDA`), а `engines/cosyvoice/launch.py` подключает оттуда `libggml-cuda.so` через `GGML_BACKEND_PATH` и
 её библиотеки через `LD_LIBRARY_PATH`. Ядро GGML в образе при этом из сборки для процессора: `libggml-base.so` у
@@ -220,28 +218,22 @@
   вместо −17) и шумный, а с flash attention в LLM вместо речи получается мусор. Ошибок в логах при этом нет. Это тот
   же эффект, что в [Lourdle/cosyvoice.cpp#15](https://github.com/Lourdle/cosyvoice.cpp/issues/15). GGML,
   собранный из исходников, без этой настройки ведёт себя так же, поэтому образ использует готовую сборку.
-- `--llm-flash-attn 0` (`engines/cosyvoice/launch.py` на бэкенде CUDA, для `server-only` — `docker-compose.gpu.yml`). С flash
+- `--llm-flash-attn 0` (`engines/cosyvoice/launch.py` на бэкенде CUDA). С flash
   attention в LLM в начале фразы чаще появляются лишние звуки: 8 из 24 тестовых фраз против 4 из 24 без него и
   3 из 24 на CPU с теми же seed. Flash attention во flow на качество не влияет и остаётся включённым.
 
-**`cosyvoice/entrypoint.sh`** (только профиль `server-only`; встроенному серверу аргументы собирает `engines/cosyvoice/launch.py`):
-- проверяет поддержку AVX2;
-- передаёт серверу `--model`: из `MODEL` или единственный `*.gguf` в `/models`;
-- регистрирует голоса из `/voices/**/*.gguf` (путь в подпапках превращается в имя через `_`; у встроенного сервера
-  имя голоса — имя файла);
-- передаёт пути ONNX-фронтенда (`--speech-tokenizer`, `--campplus`). В режиме WebUI флаги фронтенд не загружают, а
-  только задают пути (`GET /frontend/model`): загружают его по ним те, кому он нужен, — stream-tts при создании
-  голоса, `scripts/import-voices.sh` и `tools/voices/synth.py` (`POST /frontend/model/load`). Так сервер не держит
-  ~300 МБ, пока голоса не создаются.
+**ONNX-фронтенд** (`--speech-tokenizer`, `--campplus`): в режиме WebUI флаги фронтенд не загружают, а только задают
+пути (`GET /frontend/model`): загружают его по ним те, кому он нужен, — stream-tts при создании голоса,
+`scripts/import-voices.sh` и `tools/voices/synth.py` (`POST /frontend/model/load`). Так сервер не держит ~300 МБ,
+пока голоса не создаются.
 
 **Сеть:** порты пробрасываются только на `127.0.0.1`. Чтобы открыть сервер для локальной сети, уберите `127.0.0.1:`
 у порта 8080 в `docker-compose.yml` и задайте серверу `--api-key`.
 
 `--max-llm-len` (по умолчанию 4096) на видеопамять не влияет, а 1024 уже не хватает длинным образцам.
 
-**CI** — `.github/workflows/docker.yml`, на push в main и PR, если менялось то, что попадает в образ: собирает
-`stream-tts`, `cosyvoice` и `cosyvoice` с `GPU=cuda` (кэш слоёв — в GitHub Actions) и проверяет запуск без
-видеокарты: `cosyvoice-server --help`, `ldd` всех библиотек в `/opt/cosyvoice` (кроме `libcuda.so.1` — её даёт
+**CI** — `.github/workflows/docker.yml`, из `ci.yml` после тестов на push в main (или вручную): собирает
+`stream-tts` (кэш слоёв — в GitHub Actions) и проверяет запуск без видеокарты: `cosyvoice-server --help`, `ldd` всех библиотек в `/opt/cosyvoice` (кроме `libcuda.so.1` — её даёт
 драйвер), `stream-tts` отвечает на `/overlay` и не пишет `Traceback`. Образы никуда не публикуются.
 
 ## Обновление версий
@@ -269,9 +261,8 @@ docker run --rm --gpus all -v ./cuda:/cuda -e LD_LIBRARY_PATH=/opt/cosyvoice:/cu
 ## Запуск
 
 - Стек: `docker compose up -d --build` (`.env` настроен на GPU) — stream-tts со встроенным сервером; после правок —
-  `docker compose up -d --build stream-tts`. Только сервер — `docker compose up -d cosyvoice` (профиль `server-only`),
-  stream-tts сначала остановить: оба занимают 8080 и видеокарту. Сервисы могут быть в работе (стрим): перезапуск
-  контейнеров — по согласованию с пользователем.
+  `docker compose up -d --build stream-tts`. `scripts/` и `tools/` ходят к его серверу на 8080. Сервисы могут быть
+  в работе (стрим): перезапуск контейнеров — по согласованию с пользователем.
 - Окружения Python: `stream-tts/.venv` (3.14) — stream-tts и `tests/e2e`; `espeech/.venv` (3.14,
   `espeech/requirements.txt`) — espeech-server и `tests/espeech`; корневой `.venv` (3.11) — инструменты `tools/`
   (numpy, onnxruntime, faster-whisper, torch cu124 и др.; cuBLAS и cuDNN для faster-whisper — из `torch/lib`) и
@@ -325,6 +316,10 @@ Supertonic 3) — или `SUPERTONIC_PORT`.
 git switch main && git merge --squash dev && git commit   # сообщение — что нового с прошлого выпуска
 git switch dev && git merge main                          # main снова предок dev: следующий сквош — от этой точки
 ```
+
+CI (`.github/workflows/ci.yml`) работает только для `main`: на push — тесты, после них образы Docker и установщик
+(артефакт), на тег `v*` — тесты и релиз, на PR в `main` — только тесты. Коммиты в `dev` CI не запускают: тесты перед
+выпуском — локально (раздел «Тесты») или вручную в Actions (`tests`, `docker`, `windows` → Run workflow на ветке `dev`).
 
 ## Тесты
 
@@ -501,7 +496,8 @@ multipart): ошибки запроса, ход, 409 на второй стар�
 нехватка видеопамяти (второй сервер с `--vram-limit-mb 1400`: ошибка `oom`, память вернулась, с checkpointing
 идёт). ~2 мин на видеокарте всё вместе.
 
-**CI** — `.github/workflows/tests.yml`, на push в main и dev и на PR, на `windows-latest` и `ubuntu-latest` (Python 3.14,
+**CI** — `.github/workflows/tests.yml`, из `ci.yml` на push в main, тег `v*` и PR в main (на dev — только вручную,
+обычно тесты там гоняют локально), на `windows-latest` и `ubuntu-latest` (Python 3.14,
 ffmpeg ставится, Chrome и Node в образах раннеров есть): `tests/e2e`, `tests/supertonic` и
 `tests/espeech/test_normalize_corpus.py` — всё, что идёт без видеокарты, модели и torch; `real` и остальное
 `tests/espeech` — только локально. Checkout со всей историей: `test_index.py` сверяет пути с коммитом базы.
