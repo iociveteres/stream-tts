@@ -22,6 +22,7 @@ MAX_VOICE = 64 << 20       # голос CosyVoice ~200 КБ, ESpeech с адап
 EXT_MODEL = {E.VOICE_EXT: i for i, E in ENGINES.items()}
 VOICE_EXTS = tuple(EXT_MODEL)
 MAX_ZIP_FILES = 2000
+MAX_MANIFEST = 1 << 20     # manifest.json читается в память целиком: zip-бомба на гигабайты съела бы её
 
 
 def _voice_files(d):
@@ -102,6 +103,8 @@ def _check_zip(path, filename):
             if "/" in rel:  # только верхний уровень набора
                 ignored.append(i.filename)
             elif base == "manifest.json":
+                if i.file_size > MAX_MANIFEST:   # zipfile не читает больше file_size: его и проверяем
+                    raise ValueError(tr("manifest.json больше 1 МБ"))
                 manifest = i.filename
             elif ext in EXT_MODEL:
                 if not VOICE_NAME.fullmatch(voice):

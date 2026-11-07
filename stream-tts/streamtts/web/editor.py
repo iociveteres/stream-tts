@@ -68,7 +68,10 @@ async def post_draft_accent(request, ctx, data):
 
 
 async def post_draft_source_delete(request, ctx, data):
-    ctx.editor.delete_source(str(data["id"]))
+    try:
+        ctx.editor.delete_source(str(data["id"]))
+    except ValueError as e:
+        return fail(str(e))
     return ok(draft=ctx.editor.public())
 
 

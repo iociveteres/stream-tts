@@ -11,6 +11,20 @@ class HTTPError(Exception):
         self.status = status
 
 
+def refuse_browser(headers):
+    """Сервер без пароля на 127.0.0.1: его клиенты (stream-tts, tools/, тесты) — не браузер. Браузер ставит Origin на
+    любой POST/DELETE с чужой страницы и при DNS rebinding — такой запрос мог бы сохранить голос куда угодно (403)."""
+    if headers.get("Origin"):
+        raise HTTPError(403, "запросы из браузера запрещены")
+
+
+def require_json(headers, body):
+    """Тело JSON — только с Content-Type application/json: text/plain браузер шлёт с чужой страницы без проверки CORS."""
+    ctype = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if body and ctype != "application/json":
+        raise HTTPError(415, "нужен Content-Type: application/json")
+
+
 def multipart(ctype, body):
     """multipart/form-data → [(имя, имя файла или None, bytes)] по порядку (поля могут повторяться)."""
     m = re.search(r'boundary="?([^";]+)"?', ctype)

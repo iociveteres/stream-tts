@@ -96,7 +96,7 @@ def jaina(srv):
     st, _ = srv.request("POST", "/speaker?type=extract", body, {"Content-Type": f"multipart/form-data; boundary={b}"})
     assert st == 409
     path = os.path.join(srv.voices, "wc3", "jaina.espeech")
-    st, data = srv.request("POST", "/speaker/save", dict(name="jaina", path=path))
+    st, data = srv.request("POST", "/speaker/save", dict(name="jaina", path="wc3/jaina.espeech"))
     assert st == 200, data
     assert srv.request("DELETE", "/speaker/jaina")[0] == 200   # из памяти; остаётся голос из файла
     ref, md, _ = V.load(path)
@@ -228,6 +228,26 @@ def test_save_relative_path(srv, jaina):
         assert srv.request("POST", "/speaker/save", dict(name=jaina, path="../out.espeech"))[0] == 400
     finally:
         os.remove(path)
+
+
+def test_save_only_inside_voices(srv, jaina):
+    """Абсолютный путь и не .espeech — 400: иначе запрос записал бы голос куда угодно (автозагрузка, чужие файлы)."""
+    outside = os.path.join(os.path.dirname(srv.voices), "outside.espeech")
+    for p in (outside, os.path.join(srv.voices, "abs.espeech"), "rel/jaina.bat"):
+        assert srv.request("POST", "/speaker/save", dict(name=jaina, path=p))[0] == 400, p
+    assert not os.path.exists(outside) and not os.path.exists(os.path.join(srv.voices, "abs.espeech"))
+
+
+def test_refuses_browser(srv, jaina):
+    """Запрос из браузера (Origin: чужая страница или DNS rebinding) — 403; JSON без application/json — 415:
+    text/plain браузер шлёт с чужой страницы без проверки CORS."""
+    body = json.dumps(dict(name=jaina, path="rel/evil.espeech"))
+    st, _ = srv.request("POST", "/speaker/save", body,
+                        {"Content-Type": "application/json", "Origin": "http://evil.example"})
+    assert st == 403
+    assert srv.request("GET", "/speaker", headers={"Origin": "http://evil.example"})[0] == 403
+    assert srv.request("POST", "/speaker/save", body, {"Content-Type": "text/plain"})[0] == 415
+    assert not os.path.exists(os.path.join(srv.voices, "rel", "evil.espeech"))
 
 
 def test_user_accents(srv, jaina):

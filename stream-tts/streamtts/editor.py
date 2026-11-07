@@ -212,6 +212,8 @@ class Editor:
         return dict(source=src, cut=cut)
 
     def delete_source(self, sid):
+        if not ID.fullmatch(sid):   # id идёт в путь файла: «../../x» удалил бы любой .wav
+            raise ValueError(tr("нет такой записи"))
         d = self._load()
         d["sources"] = [s for s in d["sources"] if s["id"] != sid]
         d["variants"] = [v for v in d["variants"] if v["src"] != sid]

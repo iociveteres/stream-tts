@@ -1,15 +1,16 @@
 """espeech-server: HTTP API синтеза ESpeech для stream-tts — подмножество API cosyvoice-server, чтобы клиент у
 движков был общий, и расширения, объявленные в /status.
 
-API (всё JSON, кроме звука):
+API (всё JSON, кроме звука; тело JSON — с Content-Type application/json, иначе 415; запрос с Origin — из
+браузера — 403, wire.refuse_browser):
 - GET  /status — model_loaded, model, engine=espeech, api_version, device, capabilities {stream, accent, extract,
   train, voice_formats}, params — схема настроек модели для админки (nfe_steps: 16 / 32 / 12), memory {uss_mb,
   vram_mb}, error — почему модель не загружена;
 - GET  /speaker — имена голосов (папка --voices перечитывается при каждом запросе);
 - POST /speaker?type=extract — голос из образца в памяти: multipart name, text (то, что звучит; без «+» — ударения
   ставит RUAccent), audio (WAV PCM16 моно 24 кГц, 4–12 с), необязательные tempo (кадров на байт), title; 409 — имя занято;
-- POST /speaker/save {name, path} — голос в файл .espeech (path — на машине сервера; относительный — от папки
-  --voices, например «<набор>/<имя>.espeech»);
+- POST /speaker/save {name, path} — голос в файл .espeech; path — только от папки --voices, например
+  «<набор>/<имя>.espeech» (абсолютный и вне папки — 400);
 - DELETE /speaker/<имя> — выгрузить голос (файл остаётся; голос вернётся, когда файл изменится, или после перезапуска);
 - POST /tts {text, voice, seed?, stream?, nfe_steps?, adapter?} — WAV 24 кГц PCM16; stream=true — WAV-заголовок с
   неизвестной длиной и PCM по мере готовности кусков (chunked); adapter — прослушивание обучения: last / best
@@ -39,7 +40,7 @@ import numpy as np
 from . import pairs as P, trainjob
 from .engine import STEPS, Engine
 from .trainjob import TrainError
-from .wire import HTTPError, multipart, pcm16, wav_header
+from .wire import HTTPError, multipart, pcm16, refuse_browser, require_json, wav_header
 
 log = logging.getLogger("espeech")
 
@@ -92,8 +93,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.rfile.read(n)
 
     def json(self):
+        body = self.body()
+        require_json(self.headers, body)
         try:
-            d = json.loads(self.body() or b"{}")
+            d = json.loads(body or b"{}")
         except ValueError:
             raise HTTPError(400, "bad json")
         if not isinstance(d, dict):
@@ -105,6 +108,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         path, query = url.path.rstrip("/") or "/", dict(urllib.parse.parse_qsl(url.query))
         try:
+            refuse_browser(self.headers)
             fn = ROUTES.get((method, path))
             if fn is None and path.startswith("/speaker/") and method == "DELETE":
                 fn = Handler.speaker_delete
@@ -175,11 +179,18 @@ class Handler(BaseHTTPRequestHandler):
         name, target = d.get("name"), d.get("path")
         if not name or not target:
             raise HTTPError(400, "name и path обязательны")
-        if not os.path.isabs(target):   # от папки голосов: так голос из редактора stream-tts ложится в набор
-            root = os.path.abspath(e.args.voices or "")
-            target = os.path.abspath(os.path.join(root, target))
-            if not e.args.voices or os.path.commonpath([root, target]) != root:
-                raise HTTPError(400, "относительный path — внутри папки --voices")
+        # Только от папки голосов (так сохраняет редактор stream-tts): абсолютный путь позволял записать файл куда
+        # угодно — в автозагрузку, поверх чужих файлов
+        from .voices import EXT
+        root = os.path.abspath(e.args.voices or "")
+        full = os.path.abspath(os.path.join(root, str(target)))
+        try:
+            inside = os.path.commonpath([root, full]) == root
+        except ValueError:   # другой диск Windows («D:x»)
+            inside = False
+        if not e.args.voices or os.path.isabs(target) or not inside or not full.endswith(EXT):
+            raise HTTPError(400, "path — внутри папки --voices, файл .espeech")
+        target = full
         try:
             e.voices.save(name, target)
         except KeyError:

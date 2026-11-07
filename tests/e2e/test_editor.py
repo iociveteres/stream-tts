@@ -85,6 +85,17 @@ def test_upload_errors_and_limit(editor):
     add_source(editor.api, short, "again.wav")
 
 
+def test_delete_source_stays_in_draft(editor):
+    """id записи идёт в путь файла: «../…» и абсолютный путь — отказ, файл вне черновика цел."""
+    victim = os.path.join(editor.server.dir, "victim.wav")
+    with open(victim, "wb") as f:
+        f.write(make_wav(sine(500, 0.1)))
+    for sid in (os.path.relpath(victim[:-4], os.path.join(editor.server.data, "draft", "sources")), victim[:-4]):
+        r = editor.api.post("/api/draft/source/delete", dict(id=sid))
+        assert r.status == 400 and r.json()["error"] == "нет такой записи", r.text
+    assert os.path.isfile(victim)
+
+
 # --- варианты образца ---
 def test_variant_sample(editor):
     """Вариант — отрезок записи с затуханием по краям, по желанию с шумоподавлением; /api/draft/sample отдаёт его."""

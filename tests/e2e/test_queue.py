@@ -243,6 +243,19 @@ def test_last_overlay_plays(tts):
     wait_for(lambda: first.active is True, 5, "active первому оверлею")
 
 
+def test_overlay_ended_only_current(tts):
+    """ended с чужим id фразу не завершает: оверлей открыт без пароля, а раньше любой id пропускал фразу и копился."""
+    ov = tts.overlay()
+    ov.auto_end = False
+    rid = tts.api.test("фраза до настоящего конца", voice="alpha")
+    ov.played(rid)
+    ov.ended("test-bogus")
+    time.sleep(0.5)
+    assert [q["id"] for q in tts.api.state()["engine"]["queue"]] == [rid]
+    ov.ended(rid)
+    wait_for(lambda: tts.event(rid)["outcome"] == "played", 5, "played после настоящего ended")
+
+
 def test_overlay_lost_mid_phrase(tts):
     """Оверлей отключился, не доиграв: фраза остаётся в очереди и звучит в следующем."""
     ov = tts.overlay()

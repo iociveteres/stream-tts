@@ -892,6 +892,7 @@
  "голоса и примеры звучания: {url}": "voices and samples: {url}",
  "страница голосов для туннеля не запущена": "the voices page for the tunnel is not running",
  "Модель синтеза речи: <b>%MODEL%</b>": "Speech synthesis model: <b>%MODEL%</b>",
+ "manifest.json больше 1 МБ": "manifest.json is larger than 1 MB",
  "Доступ": "Access",
  "Текущий пароль": "Current password",
  "Новый пароль": "New password",
