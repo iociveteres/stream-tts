@@ -277,13 +277,22 @@ class Voices:
                 .replace("%PHRASE%", html.escape(self.s["demo_phrase"]))
                 .replace("%SECTIONS%", "\n".join(sections)))
 
+    def site(self):
+        """Страница для зрителей файлами: {путь: bytes | путь к файлу} — для zip и GitHub Pages (pages.py)."""
+        out = {"index.html": self.page().encode()}
+        for n in self.enabled():
+            if self.has_demo(n):
+                out[f"demos/{n}.mp3"] = self.demo_path(n)
+        return out
+
     def zip(self):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-            z.writestr("index.html", self.page())
-            for n in self.enabled():
-                if self.has_demo(n):
-                    z.write(self.demo_path(n), f"demos/{n}.mp3", compress_type=zipfile.ZIP_STORED)
+            for path, src in self.site().items():
+                if isinstance(src, bytes):
+                    z.writestr(path, src)
+                else:
+                    z.write(src, path, compress_type=zipfile.ZIP_STORED)
         return buf.getvalue()
 
     def public(self):

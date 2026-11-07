@@ -58,6 +58,7 @@ class Engine:
         self.s, self.db, self.tts, self.voices, self.profanity = settings, db, tts, voices, profanity
         self.twitch = None
         self.tunnel = None              # страница голосов в интернете (tunnel.py): адрес для !ttsvoices
+        self.pages = None               # она же на GitHub Pages (pages.py): постоянный адрес, главнее туннеля
         self.link_told = 0.0            # когда последний раз ответили на !ttsvoices
         self.queue = []
         self.current = None

@@ -3,7 +3,7 @@ import asyncio, contextlib, logging, os, shutil, sys
 
 from aiohttp import web
 
-from . import (bench, config, editor, engines, filters, i18n, install, paths, stats, store, tunnel, updates,
+from . import (bench, config, editor, engines, filters, i18n, install, pages, paths, stats, store, tunnel, updates,
                web as webapp)
 from .web import model as web_model, public as web_public
 from .i18n import tr
@@ -72,6 +72,7 @@ async def on_startup(app):
     ctx.public, ctx.tunnel.port = await web_public.start(ctx)   # порт страницы голосов для туннеля
     if ctx.settings["tunnel"]:
         ctx.tunnel.start()
+    await ctx.pages.start()
     ctx.tasks = [asyncio.create_task(c) for c in (
         ctx.engine.synth_worker(), ctx.engine.player(), ctx.voices.demo_worker(),
         tts_monitor(ctx), load_monitor(ctx), housekeeping(ctx), ctx.updates.worker())]
@@ -81,6 +82,7 @@ async def on_cleanup(app):
     ctx = app["ctx"]
     await ctx.twitch.stop()
     await ctx.tunnel.stop()
+    await ctx.pages.stop()
     await ctx.public.cleanup()
     for t in ctx.tasks:
         t.cancel()
@@ -136,6 +138,8 @@ def main():
     ctx.updates = updates.Updates(ctx.settings, ctx.engine.dirty.set)
     ctx.tunnel = tunnel.Tunnel(ctx.settings, ctx.engine.dirty.set)   # страница голосов в интернете
     ctx.engine.tunnel = ctx.tunnel   # адрес — ответом на !ttsvoices
+    ctx.pages = pages.Pages(ctx.voices, ctx.engine.dirty.set)   # постоянный адрес страницы голосов: GitHub Pages
+    ctx.engine.pages = ctx.pages     # для !ttsvoices главнее туннеля
 
     app = webapp.make_app(ctx)
     app.on_startup.append(on_startup)

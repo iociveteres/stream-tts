@@ -31,6 +31,7 @@ def state(ctx, full=True):
         bench=ctx.bench.public() if ctx.bench else None,
         update=ctx.updates.public(),
         tunnel=ctx.tunnel.public(),   # страница голосов в интернете (tunnel.py)
+        pages=ctx.pages.public(),     # она же на GitHub Pages (pages.py)
         ts=time.time(),
     )
     if full:

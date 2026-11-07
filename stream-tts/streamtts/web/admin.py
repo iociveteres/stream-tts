@@ -4,7 +4,7 @@ import re, secrets
 
 from aiohttp import web
 
-from .. import editor, i18n, stats, updates
+from .. import editor, i18n, pages, stats, updates
 from ..commands import SERVICE_COMMANDS
 from ..i18n import tr
 from ..twitch import TwitchError, explain
@@ -238,6 +238,29 @@ async def post_tunnel(request, ctx, data):
     return ok()
 
 
+async def post_pages_login(request, ctx, data):
+    """GitHub Pages (pages.py): начать вход по коду; код и ход входа — в /api/state (pages.device)."""
+    try:
+        await ctx.pages.login_start()
+    except pages.PagesError as e:
+        return fail(str(e))
+    return ok()
+
+
+async def post_pages_logout(request, ctx, data):
+    """Забыть вход в GitHub (и отменить вход по коду). Репозиторий и страница остаются на GitHub."""
+    await ctx.pages.logout()
+    return ok()
+
+
+async def post_pages_publish(request, ctx, data):
+    """Опубликовать сейчас, без ожидания (и проверить репозиторий заново после ошибки)."""
+    if not ctx.pages.tok:
+        return fail(tr("Сначала подключите GitHub"))
+    ctx.pages.publish_now()
+    return ok()
+
+
 async def post_ui_edit(request, ctx, data):
     """Режим правки строк (в разработке, STREAM_TTS_UI_EDITS): text=null — вернуть исходную строку."""
     text = data.get("text")
@@ -270,4 +293,7 @@ POSTS = {
     "/api/ban": post_ban,
     "/api/profanity": post_profanity,
     "/api/tunnel": post_tunnel,
+    "/api/pages/login": post_pages_login,
+    "/api/pages/logout": post_pages_logout,
+    "/api/pages/publish": post_pages_publish,
 }

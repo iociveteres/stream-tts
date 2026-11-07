@@ -60,6 +60,53 @@ function renderTunnel() {
 }
 $("#tunnel-toggle").onclick = () => api("/api/tunnel", { on: !S.tunnel.on });
 
+// --- страница голосов на GitHub Pages (pages.py): вход по коду, один шаг включения Pages, адрес ---
+let lastPages = "";
+function renderPages() {
+  const p = S.pages, key = JSON.stringify(p);
+  if (!p || key === lastPages) return;   // перерисовка — только при изменениях: кнопки не пересоздаются на каждом пуше
+  lastPages = key;
+  const link = (href, text, cls) => h("a", { href, target: "_blank", rel: "noopener noreferrer", class: cls || null }, text);
+  const kids = [];
+  if (!p.client) {
+    kids.push(h("p", { class: "muted" }, T("Вход через GitHub в этой сборке не настроен")));
+  } else if (p.state === "device" && p.device) {
+    kids.push(h("p", {}, T("Откройте страницу GitHub, войдите своим аккаунтом и введите код:")),
+      h("div", { class: "code" }, p.device.code),
+      h("div", { class: "row" }, link(p.device.uri, T("Открыть github.com/login/device"), "btn primary"),
+        copyBtn(p.device.code), h("span", { class: "muted small grow" }, T("код действует до {time}",
+          { time: new Date(p.device.expires * 1000).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) })),
+        h("button", { onclick: () => api("/api/pages/logout") }, T("Отмена"))),
+      h("p", { class: "muted small" }, T("Страница сама обновится, когда вы подтвердите вход. Разрешение — запись в " +
+        "публичные репозитории: программа создаст репозиторий tts-voices и будет выкладывать в него страницу.")));
+  } else if (!p.login) {
+    kids.push(h("div", { class: "row" }, h("span", { class: "grow muted" }, T("Не подключено")),
+      h("button", { class: "primary", onclick: () => api("/api/pages/login") }, T("Подключить GitHub"))));
+  } else {
+    kids.push(h("div", { class: "row" }, h("span", { class: "grow" }, T("Репозиторий: "), link(p.repo_url, p.repo)),
+      h("button", { onclick: () => api("/api/pages/publish") }, T("Опубликовать сейчас")),
+      h("button", { onclick: async () => await ask(T("Отключить GitHub? Страница и репозиторий останутся на GitHub, " +
+        "но перестанут обновляться."), T("Отключить")) && api("/api/pages/logout") }, T("Отключить"))));
+    if (p.checked && !p.pages)
+      kids.push(h("div", { class: "hint info mt" }, h("b", {}, T("Последний шаг — включите Pages (один раз)")),
+        h("ol", {}, h("li", {}, link(p.settings_url, T("Откройте настройки Pages репозитория"))),
+          h("li", {}, T("В «Branch» выберите {branch} и папку / (root), нажмите Save.", { branch: p.branch })),
+          h("li", {}, T("Программа заметит это сама, адрес появится здесь.")))));
+    if (p.url)
+      kids.push(h("div", { class: "row mt" }, link(p.url, p.url, "grow"), copyBtn(p.url)));
+    const line = p.state === "working" ? [T("Публикация…"), ""]
+      : p.state === "error" ? [T("Ошибка: {e}. Повтор через минуту.", { e: p.error }), "bad"]
+      : !p.checked ? [T("Проверка репозитория…"), "muted"]
+      : p.pending ? [T("Есть изменения — опубликую, когда голоса и примеры перестанут меняться."), "muted"]
+      : p.published ? [T("Опубликовано в {time}. GitHub обновляет страницу за минуту-две.",
+        { time: fmtClock(p.published) }), "good"]
+      : [T("Страница на GitHub актуальна."), "good"];
+    kids.push(h("p", { class: "small " + line[1] }, line[0]));
+  }
+  if (p.error && p.state !== "error") kids.push(h("p", { class: "bad" }, p.error));
+  $("#pages").replaceChildren(...kids);
+}
+
 function renderTestVoices() {
   const sel = $("#test select[name=voice]"), cur = sel.value;
   sel.replaceChildren(h("option", { value: "" }, T("как у зрителя (по нику)")),
