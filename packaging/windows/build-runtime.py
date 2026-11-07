@@ -29,8 +29,9 @@ CRT_MIN: папки Microsoft.VC14*.CRT установленных Visual Studio
 
 Версии проверены 17.10.2026 на RTX 3060 Ti (docs/stream-tts-deploy.md, «Рантайм и пути»): GGML в релизах cosyvoice.cpp не
 поставляется, его берут из llama.cpp; общие файлы GGML во всех архивах llama.cpp одинаковы, поэтому ядро берётся
-из Vulkan-архива (в нём есть и все ggml-cpu-*), а из CUDA-архива — только ggml-cuda.dll. Сборки FFmpeg у BtbN
-со временем удаляются: если ссылка пропала, взять свежую autobuild-* n8.1 lgpl-shared и обновить sha256.
+из Vulkan-архива (в нём есть и все ggml-cpu-*), а из CUDA-архива — только ggml-cuda.dll. Ежедневные сборки
+FFmpeg у BtbN удаляются через ~2 недели, а сборки последнего дня месяца хранятся годами: обновляя FFmpeg, брать
+autobuild-<год>-<мм>-<последний день>-* n8.1 lgpl-shared и обновить sha256.
 """
 import argparse, contextlib, glob, hashlib, json, os, shutil, subprocess, sys, urllib.request, zipfile
 
@@ -46,9 +47,10 @@ ASSETS = {
                "aff80157bf74a2f9a450e6946a9ce7bea0f4a47e65da1224ee36f7dcb965763e"),
     "icu": (f"{GH}/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-Win64-MSVC2022.zip",
             "446b671f9437227daa79e221d4521d75793f9ecd65ac44c06e34dd848f201ac2"),
-    "ffmpeg": (f"{GH}/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-16-13-04/"
-               "ffmpeg-n8.1.3-18-g46d899d7a0-win64-lgpl-shared-8.1.zip",
-               "35a7bd207e5dd6c3d1acbe22ed81ae195f081d3527e58f556b15468400252239"),
+    # Только сборка последнего дня месяца: BtbN хранит их годами, а ежедневные удаляет через ~2 недели
+    "ffmpeg": (f"{GH}/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/"
+               "ffmpeg-n8.1.3-27-g8dca1586f4-win64-lgpl-shared-8.1.zip",
+               "5cef7bc48e513f3cee7c881e8b2999d835541edb1846c3e89443a67f8f8556ab"),
 }
 # Закреплённые загрузки программы и установщика: архивы CUDA (llama.cpp) и модели
 ROOT = os.path.dirname(os.path.dirname(HERE))
