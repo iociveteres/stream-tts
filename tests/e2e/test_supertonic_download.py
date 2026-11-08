@@ -177,7 +177,10 @@ def test_download_resume_bad_sha_voices_delete(st):
     assert finished(api, "голосов")["state"] == "done" and not srv.requests
     assert (voices / "rita.supertonic").is_file() and setup(api)["supertonic"]["installed"]
 
-    pid = api.state()["cosy"]["runtime"]["pid"]
+    # pid — у запущенного сервера: сразу после установки голосов он бывает ещё без pid, и тогда
+    # проверка «pid сменился» ниже сравнивала None с None (падало в CI на ubuntu)
+    pid = wait_for(lambda: (lambda r: r["state"] == "running" and r["pid"])(api.state()["cosy"]["runtime"]), 30,
+                   f"сервера с pid перед удалением\n{st.server.tail()}")
     api.ok("/api/download/delete", dict(id="supertonic"))
     assert not models.exists()
     assert sorted(os.listdir(voices)) == ["mine.supertonic"], "голос пользователя удалён или готовые остались"
