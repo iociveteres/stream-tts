@@ -40,6 +40,7 @@
         <div class="row between">
           <h2>Сейчас</h2>
           <div class="row">
+            <button id="pause" title="Приостановить звук; следующая фраза ждёт, пока не продолжите"></button>
             <button id="skip" title="Прервать текущую фразу и вернуть баллы">⏭ Пропустить</button>
             <button id="clear" class="danger" title="Очистить очередь и вернуть баллы за всё в ней">Очистить</button>
           </div>
@@ -70,18 +71,31 @@
         <h2>Оверлей для OBS</h2>
         <p id="ovstate"></p>
         <div class="row"><code id="ovurl" class="grow"></code><button data-copy="ovurl">Копировать</button></div>
+        <label class="mt">Громкость на стриме
+          <span class="row"><input type="range" id="volume" min="0" max="100" step="1" class="grow">
+            <span id="volume-val" class="muted"></span></span></label>
+        <h3 class="mt">Док-панель OBS</h3>
+        <p class="muted small" data-t>Пауза, громкость и очередь прямо в окне OBS: <b>Док-панели → Пользовательские
+          док-панели браузера</b>, вставьте адрес. С паролем панель один раз попросит войти.</p>
+        <div class="row"><code id="dockurl" class="grow"></code><button data-copy="dockurl">Копировать</button></div>
       </div>
       <div class="card">
         <h2>Страница голосов для зрителей</h2>
         <div class="row"><code id="vurl" class="grow"></code><button data-copy="vurl">Копировать</button></div>
-        <h3 class="mt">В интернете</h3>
+        <h3 class="mt">Постоянный адрес — GitHub Pages</h3>
+        <div id="pages"></div>
+        <p class="muted small" data-t>Программа сама выкладывает страницу в репозиторий <code>tts-voices</code> на
+          вашем GitHub и обновляет её, когда меняются голоса. Страница работает и при выключенном компьютере, адрес не
+          меняется — его можно положить в описание канала. Нужен аккаунт GitHub; доступ — только к публичным
+          репозиториям.</p>
+        <h3 class="mt">Временный адрес — туннель Cloudflare</h3>
         <div class="row"><span id="tunnel-state" class="grow"></span><button id="tunnel-toggle"></button></div>
         <div class="row mt" id="tunnel-link" hidden><a id="tunnel-url" class="grow" target="_blank"
           rel="noopener noreferrer"></a><button data-copy="tunnel-url">Копировать</button></div>
-        <p class="muted small" data-t>Через туннель Cloudflare, без аккаунта и хостинга: страница работает, пока
-          запущена программа. Адрес меняется при каждом запуске — зрители получают текущий командой
-          <code>!ttsvoices</code> (ответ в чат — при входе через приложение Twitch). Постоянный адрес —
-          <a href="/voices.zip">скачайте zip</a> и выложите на любой хостинг.</p>
+        <p class="muted small" data-t>Без аккаунта и хостинга: страница работает, пока запущена программа, адрес
+          меняется при каждом запуске. Часть провайдеров обрывает соединения с Cloudflare — тогда страница не
+          откроется. Зрители получают адрес командой <code>!ttsvoices</code> (ответ в чат — при входе через приложение
+          Twitch; адрес GitHub Pages главнее). Свой хостинг — <a href="/voices.zip">скачайте zip</a>.</p>
       </div>
       <div class="card">
         <h2>Журнал</h2>
@@ -597,8 +611,8 @@
 <script src="/static/admin-downloads.js"></script>
 <script src="/static/admin-settings.js"></script>
 <script src="/static/admin-stats.js"></script>
-<script src="/static/admin-start.js"></script>
 <script src="/static/editor.js"></script>
 <script src="/static/train.js"></script>
+<script src="/static/admin-start.js"></script>
 </body>
 </html>

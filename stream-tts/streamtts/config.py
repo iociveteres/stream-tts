@@ -26,6 +26,9 @@ TEST_SERVERS = _test_servers()
 # (вход — <адрес>/oauth2, Helix — <адрес>/helix, EventSub — ws://…/ws), см. twitch/common.py
 TEST_TWITCH = env("STREAM_TTS_TEST_TWITCH").rstrip("/")
 TWITCH_CLIENT_ID = env("TWITCH_CLIENT_ID")
+# Только для тестов (tests/e2e/fake_github.py): поддельный GitHub вместо настоящего, STREAM_TTS_TEST_GITHUB=http://…
+# (вход — <адрес>/login, API — <адрес>/api), см. pages.py
+TEST_GITHUB = env("STREAM_TTS_TEST_GITHUB").rstrip("/")
 
 LOCAL_BINDS = {"127.0.0.1", "localhost", "::1"}
 

@@ -62,9 +62,9 @@ async def chat(engine, ev):
 
 
 def voices_link(engine, ev):
-    """!ttsvoices — ответом в чат текущий адрес страницы голосов (туннель, tunnel.py). Туннель выключен, ответить нечем
-    (режим «Только чтение чата») или ответ был недавно — молча."""
-    url = engine.tunnel.url if engine.tunnel else ""
+    """!ttsvoices — ответом в чат адрес страницы голосов: GitHub Pages (pages.py), иначе туннель (tunnel.py). Адреса
+    нет, ответить нечем (режим «Только чтение чата») или ответ был недавно — молча."""
+    url = (engine.pages.url if engine.pages else "") or (engine.tunnel.url if engine.tunnel else "")
     if not url or not engine.twitch or engine.twitch.state != "ok":
         return
     now = time.time()

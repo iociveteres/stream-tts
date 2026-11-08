@@ -128,6 +128,8 @@ def reset(ctx):
     ctx.cosy.reset()
     api.ok("/api/settings", DEFAULTS)
     api.ok("/api/enabled", dict(on=True))
+    api.ok("/api/pause", dict(on=False))
+    api.ok("/api/volume", dict(value=100))
     api.ok("/api/clear")
     state = api.state()
     for login in state["bans"]:

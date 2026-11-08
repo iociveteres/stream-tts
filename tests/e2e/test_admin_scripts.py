@@ -41,8 +41,9 @@ def declared(src):
 def test_scripts_exist():
     names = scripts()
     assert names[:2] == ["i18n.js", "admin.js"], names   # T() и перевод разметки, затем общее админки — до вкладок
-    admin = [n for n in names if n.startswith("admin")]
-    assert admin[-1] == "admin-start.js", admin   # старт — после всех вкладок: их функции рисуют состояние
+    # Старт — последним из всех, не только из admin*.js: renderAll зовёт функции editor.js и train.js, а ответ
+    # /api/state может прийти, пока они ещё не выполнились (1.0.1: trAvailable is not defined при первом открытии)
+    assert names[-1] == "admin-start.js", names
     missing = [n for n in names if not os.path.isfile(os.path.join(STATIC, n))]
     assert not missing, missing
 

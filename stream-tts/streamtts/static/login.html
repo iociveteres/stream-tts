@@ -11,12 +11,18 @@
   <h1>Stream TTS</h1>
   <label>Пароль админки <input type="password" name="password" autofocus required></label>
   <p class="bad" id="bad" hidden>Неверный пароль.</p>
+  <input type="hidden" name="next">
   <button class="primary">Войти</button>
   <p class="muted small" data-t>Забыли пароль — удалите файл <code>admin-password</code> в папке данных
     (у Docker — <code>stream-tts-data</code>) и перезапустите stream-tts. Оверлей и страница голосов открыты без
     пароля.</p>
 </form>
 <script src="/static/i18n.js"></script>
-<script>if (location.search.includes("bad")) document.getElementById("bad").hidden = false;</script>
+<script>
+const params = new URLSearchParams(location.search);
+if (params.has("bad")) document.getElementById("bad").hidden = false;
+// после входа — туда, откуда пришли (док-панель OBS — /dock); проверяет адрес сервер
+if (params.get("next")) document.querySelector("[name=next]").value = params.get("next");
+</script>
 </body>
 </html>

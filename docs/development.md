@@ -51,6 +51,7 @@
 │       ├── rules.py       # доступ, кулдауны, ответ зрителю об отказе (R_*, REPLIES, ACCESS_WHO)
 │       ├── commands.py    # команды чата !tts*, SERVICE_COMMANDS
 │       ├── tunnel.py      # страница голосов в интернете: cloudflared (быстрый туннель), загрузка, перезапуски
+│       ├── pages.py       # страница голосов на GitHub Pages: вход по коду, репозиторий, публикация (Git Data API)
 │       ├── overlay.py     # оверлеи без aiohttp: отправку и проверку «закрыт» передаёт web/
 │       ├── filters.py     # фильтры текста: ссылки, мат (profanity.txt — словарь)
 │       ├── audio.py       # громкость (LUFS), ограничитель пиков, перекодирование ffmpeg
@@ -93,8 +94,9 @@
 │       └── static/        # admin.html, admin.css, common.css; admin.js — общее админки, вкладки —
 │                          # admin-queue.js, admin-twitch.js, admin-voices.js, admin-server.js,
 │                          # admin-settings.js, admin-stats.js, admin-downloads.js (модели, CUDA, пакеты и
-│                          # очередь загрузок); admin-start.js — старт после всех вкладок;
-│                          # editor.js, train.js — редактор и обучение; overlay.html, voices.html, login.html;
+│                          # очередь загрузок); editor.js, train.js — редактор и
+│                          # обучение; admin-start.js — старт, последним из всех скриптов; overlay.html, voices.html, login.html;
+│                          # dock.html и dock.js — док-панель OBS (/dock, своя страница без скриптов админки);
 │                          # en.json — английский словарь, i18n.js — перевод страниц; ui-edit.js и ui-edit.css —
 │                          # режим правки строк; samples/ — примеры звучания моделей для вкладки «Загрузки»
 ├── packaging/
@@ -138,6 +140,8 @@
 │                          # fake_irc.py (поддельный IRC
 │                          # Twitch), fake_twitch.py (поддельный Twitch: вход, Helix, EventSub; сценарии —
 │                          # test_twitch.py), fake_cloudflared.py (поддельный туннель; сценарии — test_tunnel.py),
+│                          # fake_github.py (поддельный GitHub: вход по коду, репозиторий, Git Data API;
+│                          # сценарии — test_pages.py),
 │                          # harness.py (процесс, API, тестовый оверлей, разбор звука), conftest.py
 │                          # (фикстуры, маркер real), test_*.py (сценарии; редактор ESpeech и словарь ударений —
 │                          # test_editor_espeech.py, загрузка ESpeech программой — test_espeech_download.py,
@@ -385,6 +389,11 @@ espeech-server: `/status` с `engine`, `capabilities` и схемой `params`, 
   `harness.py`, пауза перезапуска `STREAM_TTS_TUNNEL_RETRY`): тесты не качают cloudflared и не ходят в Cloudflare.
   `test_tunnel.py` — кнопка, только страница голосов на порту туннеля, перезапуск с новым адресом, ошибка
   Cloudflare, туннель после перезапуска программы, `!ttsvoices`, загрузка cloudflared с проверкой sha256.
+- GitHub Pages — всегда поддельный GitHub (`fake_github.py`, `STREAM_TTS_TEST_GITHUB`, Client ID
+  `STREAM_TTS_GITHUB_CLIENT_ID=test-client`, паузы `STREAM_TTS_PAGES_DEBOUNCE`, `_CHECK`, `_RETRY`, `_SETTLE` — в
+  фикстуре `run` теста). `test_pages.py` — вход по коду, публикация одним коммитом без истории, шаг включения
+  Pages и адрес, вход после перезапуска, повторная публикация только изменившихся файлов, чужой репозиторий,
+  отозванный доступ и отказ во входе, `!ttsvoices` с адресом Pages, sha блоба как у git.
 - Чат Twitch — поддельный IRC (`fake_irc.py`, фикстура `chat`): stream-tts в режиме «Только чтение чата» читает
   канал `testchan`, а тест шлёт от имени Twitch сообщения с тегами (бейджи, эмоуты, биты, ответ), `CLEARMSG`,
   `CLEARCHAT` и `RECONNECT`. Адрес и таймауты — `STREAM_TTS_IRC_URL`, `STREAM_TTS_IRC_JOIN_WAIT`,

@@ -4,7 +4,7 @@
 Роуты API — в модулях пакета (MODULES): у модуля таблицы GETS, POSTS (тело — JSON, обёртка common.json_post) и RAW
 (файл сырым телом, допустимые типы — в UPLOADS). Здесь — сборка приложения, доступ (пароль, локальная сеть) и защита
 POST, страницы. Пароль хранит access.py."""
-import asyncio, hashlib, hmac, json, logging, os, secrets, weakref
+import asyncio, hashlib, hmac, json, logging, os, secrets, urllib.parse, weakref
 
 from aiohttp import WSCloseCode, WSMsgType, web
 
@@ -46,6 +46,7 @@ def make_app(ctx):
     app["token"] = token()
     r = app.router
     r.add_get("/", page("admin.html", edit=True))
+    r.add_get("/dock", page("dock.html"))   # док-панель OBS: управление очередью, под тем же паролем, что админка
     r.add_get("/login", page("login.html"))
     r.add_post("/login", login)
     r.add_get("/logout", logout)
@@ -134,7 +135,8 @@ async def auth_middleware(request, handler):
         # С паролем Host не проверяется: страницу с DNS rebinding останавливает cookie, она привязана к настоящему адресу
         if path.startswith("/api/"):
             raise web.HTTPUnauthorized(text=tr("нужен пароль"))
-        raise web.HTTPFound("/login")
+        # после входа — обратно: док-панель OBS открывает /dock, и вход не должен уводить её в админку
+        raise web.HTTPFound("/login" if path == "/" else "/login?" + urllib.parse.urlencode(dict(next=path)))
     # WebSocket браузер открывает с любой страницы без CORS: чужая страница читала бы очередь и настройки (/api/ws)
     # или перехватывала звук оверлея
     if request.headers.get("Upgrade", "").lower() == "websocket" and foreign_origin(request):
@@ -153,14 +155,22 @@ def set_login(resp, request):
     resp.set_cookie(COOKIE, request.app["token"], max_age=180 * 86400, httponly=True, samesite="Strict")
 
 
+def local_path(path):
+    """Адрес возврата после входа — только свой путь: «//host» и «/» с обратной косой браузер понимает как
+    чужой сайт."""
+    path = str(path or "")
+    return path if path.startswith("/") and not path.startswith(("//", "/\\")) else "/"
+
+
 async def login(request):
     form = await request.post()
+    nxt = local_path(form.get("next"))
     if access.source() and await asyncio.to_thread(access.check, str(form.get("password", ""))):
-        resp = web.HTTPFound("/")
+        resp = web.HTTPFound(nxt)
         set_login(resp, request)
         raise resp
     await asyncio.sleep(1)
-    raise web.HTTPFound("/login?bad=1")
+    raise web.HTTPFound("/login?bad=1" + ("&" + urllib.parse.urlencode(dict(next=nxt)) if nxt != "/" else ""))
 
 
 async def logout(request):

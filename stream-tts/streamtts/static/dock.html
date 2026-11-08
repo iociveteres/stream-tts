@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream TTS — док-панель</title>
+<link rel="stylesheet" href="/static/common.css">
+<style>
+  /* Док-панель OBS (OBS → Док-панели → Пользовательские док-панели браузера): узкая, всегда тёмная, как OBS */
+  :root { --accent: #a970ff; --accent-soft: rgba(169, 112, 255, .16); --on: #2fbf71; --on-soft: rgba(47, 191, 113, .14);
+    --bg: #0e0e10; --surface: #18181b; --surface-2: #232328; --line: #2f2f35; }
+  body { padding: 10px 10px 16px; font-size: 14px; }
+  svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; }
+  button { border-radius: 8px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .iconbtn { display: inline-flex; padding: 7px; border-radius: 8px; color: var(--ink-2); border: 1px solid transparent; }
+  .iconbtn:hover { color: var(--ink); border-color: var(--line); }
+  .iconbtn svg.i { width: 18px; height: 18px; }
+  #enabled { font-weight: 600; padding: 6px 12px; }
+  #enabled.on { color: var(--on); background: var(--on-soft); border-color: rgba(47, 191, 113, .35); }
+  #enabled:not(.on) { color: var(--muted); }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .controls button { justify-content: center; padding: 9px 8px; font-weight: 600; min-width: 0; }
+  .controls button span { overflow: hidden; text-overflow: ellipsis; }
+  #pause.paused { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .badge { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface); color: var(--muted);
+    font-size: 12px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+  button.confirm, #enabled.confirm { color: #fff; background: var(--bad); border-color: var(--bad); }
+  button.confirm .badge { background: rgba(0, 0, 0, .25); color: #fff; }
+  .volume { margin: 12px 0 4px; }
+  .volume .label { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  .vrow { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+  .vrow input { flex: 1; min-width: 0; height: 22px; }
+  #vval { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+  .notice { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; font-size: 13px; background: var(--surface); }
+  .notice.n-bad { border-left: 3px solid var(--bad); } .notice.n-warn { border-left: 3px solid var(--warn); }
+  .qhead { display: flex; align-items: center; gap: 6px; margin: 14px 0 8px; font-size: 14px; color: var(--ink-2); }
+  #queue { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }   /* ник и голос не распирают карточку */
+  .item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px 8px 10px; }
+  .item.now { border-left: 3px solid var(--accent); }
+  .item .head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .item .who { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .item .meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0; flex: 1; }
+  .item .acts { display: flex; gap: 2px; margin-left: auto; flex: none; }
+  .item .acts button { padding: 4px; border: 0; background: transparent; color: var(--ink-2); }
+  .item .acts button:hover { color: var(--ink); background: var(--surface-2); }
+  .item .text { margin-top: 3px; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3; overflow: hidden; cursor: pointer; }
+  .item .text.open { -webkit-line-clamp: unset; }
+  .tag { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 6px;
+    font-size: 12px; background: var(--surface-2); color: var(--ink-2); }
+  .tag.now { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tag.synth { color: var(--warn); } .tag.ready { color: var(--on); }
+  .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 10px; }
+  .eq i { width: 2px; height: 100%; background: currentColor; border-radius: 1px; transform-origin: bottom; }
+  .eq.on i { animation: eq .9s ease-in-out infinite; }
+  .eq.on i:nth-child(2) { animation-delay: -.3s; } .eq.on i:nth-child(3) { animation-delay: -.6s; }
+  .eq:not(.on) i:nth-child(1) { transform: scaleY(.5); } .eq:not(.on) i:nth-child(3) { transform: scaleY(.7); }
+  @keyframes eq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .eq.on i { animation: none; } }
+  #empty { margin: 4px 2px; }
+  #toast { position: fixed; left: 10px; right: 10px; bottom: 10px; display: grid; gap: 6px; }
+  #toast div { padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header class="top">
+  <button type="button" id="enabled" title="Выключено: награда на паузе, очередь очищена"></button>
+  <a class="iconbtn" href="/" target="_blank" rel="noopener" title="Админка" aria-label="Админка" data-icon="gear"></a>
+</header>
+<div class="controls">
+  <button type="button" id="pause" title="Приостановить звук; следующая фраза ждёт, пока не продолжите"></button>
+  <button type="button" id="clear" title="Убрать всё из очереди, включая текущую фразу, и вернуть баллы"></button>
+</div>
+<div class="volume">
+  <div class="label">Громкость на стриме (общая для канала)</div>
+  <div class="vrow"><span id="vicon"></span>
+    <input type="range" id="volume" min="0" max="100" step="1" aria-label="Громкость на стриме">
+    <span id="vval"></span></div>
+</div>
+<div id="notice"></div>
+<h2 class="qhead">Очередь <span class="muted">· <span id="qn">0</span></span></h2>
+<div id="queue"></div>
+<p id="empty" class="muted small" hidden>Очередь пуста</p>
+<div id="toast"></div>
+<script src="/static/i18n.js"></script>
+<script src="/static/dock.js"></script>
+</body>
+</html>

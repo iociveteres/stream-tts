@@ -9,6 +9,7 @@ DEFAULTS = {
     "twitch_mode": "app",       # app — вход через приложение Twitch, chat — только чтение чата (chat_irc.py)
     "chat_channel": "",         # канал для режима chat
     "enabled": True,
+    "volume": 100,              # общая громкость на стриме, %: применяет оверлей (док-панель OBS)
     "reward": {"id": "", "title": REWARD["title"]["ru"], "cost": 500, "cooldown": 0, "prompt": REWARD["prompt"]["ru"]},
     # Способы заказать озвучку: on, кто может (access: all | subs | vip | mods), allow — ники, которым способ доступен
     # всегда (мимо access и кулдаунов, но не мимо бана). У команды баллов нет, поэтому от спама — кулдауны, с.

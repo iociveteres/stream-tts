@@ -4,7 +4,7 @@ import re, secrets
 
 from aiohttp import web
 
-from .. import editor, i18n, stats, updates
+from .. import editor, i18n, pages, stats, updates
 from ..commands import SERVICE_COMMANDS
 from ..i18n import tr
 from ..twitch import TwitchError, explain
@@ -189,6 +189,21 @@ async def post_enabled(request, ctx, data):
     return ok()
 
 
+async def post_pause(request, ctx, data):
+    """Пауза озвучки: {on}. Звук приостанавливает оверлей, следующая фраза ждёт снятия паузы."""
+    await ctx.engine.set_paused(bool(data.get("on")))
+    return ok()
+
+
+async def post_volume(request, ctx, data):
+    """Общая громкость на стриме: {value} — 0…100 %."""
+    try:
+        await ctx.engine.set_volume(data["value"])
+    except (KeyError, TypeError, ValueError, OverflowError):   # json.loads пропускает NaN и Infinity
+        return fail(tr("громкость — число от 0 до 100"))
+    return ok()
+
+
 async def post_skip(request, ctx, data):
     await ctx.engine.skip()
     return ok()
@@ -238,6 +253,29 @@ async def post_tunnel(request, ctx, data):
     return ok()
 
 
+async def post_pages_login(request, ctx, data):
+    """GitHub Pages (pages.py): начать вход по коду; код и ход входа — в /api/state (pages.device)."""
+    try:
+        await ctx.pages.login_start()
+    except pages.PagesError as e:
+        return fail(str(e))
+    return ok()
+
+
+async def post_pages_logout(request, ctx, data):
+    """Забыть вход в GitHub (и отменить вход по коду). Репозиторий и страница остаются на GitHub."""
+    await ctx.pages.logout()
+    return ok()
+
+
+async def post_pages_publish(request, ctx, data):
+    """Опубликовать сейчас, без ожидания (и проверить репозиторий заново после ошибки)."""
+    if not ctx.pages.tok:
+        return fail(tr("Сначала подключите GitHub"))
+    ctx.pages.publish_now()
+    return ok()
+
+
 async def post_ui_edit(request, ctx, data):
     """Режим правки строк (в разработке, STREAM_TTS_UI_EDITS): text=null — вернуть исходную строку."""
     text = data.get("text")
@@ -263,6 +301,8 @@ POSTS = {
     "/api/reward": post_reward,
     "/api/reward/delete": post_reward_delete,
     "/api/enabled": post_enabled,
+    "/api/pause": post_pause,
+    "/api/volume": post_volume,
     "/api/skip": post_skip,
     "/api/clear": post_clear,
     "/api/remove": post_remove,
@@ -270,4 +310,7 @@ POSTS = {
     "/api/ban": post_ban,
     "/api/profanity": post_profanity,
     "/api/tunnel": post_tunnel,
+    "/api/pages/login": post_pages_login,
+    "/api/pages/logout": post_pages_logout,
+    "/api/pages/publish": post_pages_publish,
 }
