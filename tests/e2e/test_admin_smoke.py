@@ -1,7 +1,7 @@
 """Админка в настоящем браузере: headless Edge или Chrome через DevTools Protocol (CDP), ~10 с.
 
 stream-tts на английском с двумя поддельными серверами синтеза (CosyVoice с ONNX-фронтендом, ESpeech с обучением
-LoRA). Тест открывает админку, проходит все вкладки у обеих моделей и падает:
+LoRA). Тест открывает админку, проходит все вкладки у обеих моделей, затем док-панель OBS (/dock), и падает:
 - на исключениях JS и console.error (в том числе обращение к функции из ещё не загруженного скрипта при старте);
 - на ошибках загрузки ресурсов (скрипт из admin.html, которого нет);
 - на строках разметки без перевода — [...I18N_MISSING] из static/i18n.js (раньше — ручной просмотр консоли).
@@ -102,6 +102,11 @@ async def smoke(cdp, base, switch):
             lang = await page.js("document.documentElement.lang")
             # подсказка у поля с translate="no" не переводилась, хотя перевод в en.json был
             hint = await page.js("document.querySelector('#ed-save [name=name]').placeholder")
+            # док-панель OBS (/dock): своя страница, свой скрипт; строки без перевода копятся в том же I18N_MISSING
+            await page.call("Page.navigate", url=base + "/dock")
+            await page.until("document.readyState === 'complete' && document.querySelector('#enabled').textContent",
+                             "отрисовки док-панели")
+            missing += await page.js("[...I18N_MISSING]")
             page.reader.cancel()
             return seen, missing, lang, hint, page.errors
 

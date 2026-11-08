@@ -334,7 +334,8 @@ RESTARTS = {"/api/backend": dict(backend="cpu"), "/api/engine": dict(engine="esp
 # Сервер не трогают: после всех запросов (тело — {} или указанное) тот же процесс сервера и обучение идёт.
 KEEPS = {"/api/settings": {}, "/api/source": {}, "/api/voice": {}, "/api/demos/rebuild": {},
          "/api/twitch/client_id": {}, "/api/twitch/mode": {}, "/api/twitch/logout": {}, "/api/reward": {},
-         "/api/reward/delete": {}, "/api/enabled": dict(on=True), "/api/skip": {}, "/api/clear": {}, "/api/remove": {},
+         "/api/reward/delete": {}, "/api/enabled": dict(on=True), "/api/pause": dict(on=False),
+         "/api/volume": dict(value=100), "/api/skip": {}, "/api/clear": {}, "/api/remove": {},
          "/api/test": {}, "/api/ban": {}, "/api/profanity": {}, "/api/download/cancel": {}, "/api/download/unqueue": {},
          "/api/model/use": {},       # перезапуск — только когда выбрана CosyVoice, а обучение — у ESpeech
          "/api/models/load": dict(id="tts"), "/api/accent": {}, "/api/accents": {}, "/api/accents/delete": {},

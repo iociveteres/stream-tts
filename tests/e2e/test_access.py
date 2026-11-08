@@ -2,7 +2,7 @@
 админку и API, но не оверлей и страницу голосов; без пароля пускается только локальная сеть (адрес, прокси, Host:
 DNS rebinding, публичное имя или IP); POST в API только JSON со своего адреса, сокеты — без чужого Origin, настройки
 (и скрытые подсказки) переживают перезапуск, остановка по SIGTERM не ждёт открытых сокетов."""
-import asyncio, os, re, time
+import asyncio, os, re, time, urllib.parse
 
 import aiohttp
 import pytest
@@ -58,6 +58,16 @@ def test_password(spawn):
     # с паролем пускается и не локальная сеть (прокси, туннель), но только после входа
     assert api.get("/api/state", headers={"X-Forwarded-For": "93.184.216.34"}).status == 200
     assert Api(server.base).get("/api/state", headers={"X-Forwarded-For": "93.184.216.34"}).status == 401
+    # док-панель OBS: вход возвращает на неё, а не в админку; чужой адрес возврата — в админку
+    other = Api(server.base)
+    where = lambda r: urllib.parse.unquote(r.headers["Location"])
+    assert where(other.get("/dock")) == "/login?next=/dock"
+    assert where(other.request("POST", "/login", data=b"password=wrong&next=%2Fdock",
+                               headers={"Content-Type": "application/x-www-form-urlencoded"})) == "/login?bad=1&next=/dock"
+    for nxt, want in (("/dock", "/dock"), ("//evil.example", "/"), ("https://evil.example", "/")):
+        r = other.request("POST", "/login", data=urllib.parse.urlencode(dict(password="secret", next=nxt)).encode(),
+                          headers={"Content-Type": "application/x-www-form-urlencoded"})
+        assert where(r) == want, nxt
     # выход стирает cookie
     assert api.get("/logout").status == 302
     assert api.get("/api/state").status == 401

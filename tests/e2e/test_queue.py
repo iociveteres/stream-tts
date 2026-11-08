@@ -227,6 +227,52 @@ def test_disable_clears_queue(tts):
         refund(tts, rid, "озвучка выключена")
 
 
+def test_pause(tts):
+    """Пауза (док-панель): оверлей получает paused, текущая фраза доигрывает только после паузы — ожидание её конца
+    паузу не считает, — следующая не начинается, пока пауза не снята."""
+    ov = tts.overlay()
+    wait_for(lambda: ov.settings and ov.settings["paused"] is False, 5, "settings при подключении")
+    ov.auto_end = False
+    first = tts.api.test("эту фразу поставят на паузу", login="p1", voice="alpha")
+    ov.played(first)
+    tts.api.ok("/api/pause", dict(on=True))
+    wait_for(lambda: ov.settings["paused"] is True, 5, "пауза в оверлее")
+    assert tts.api.state()["engine"]["paused"] is True
+    second = tts.api.test("а эта ждёт конца паузы", login="p2", voice="bravo")
+    ov.ended(first)   # оверлей доиграл хвост после паузы
+    wait_for(lambda: tts.event(first)["outcome"] == "played", 5, "первая сыграна")
+    time.sleep(0.5)
+    assert [it.id for it in ov.items] == [first]   # вторая на паузе не началась
+    # переподключение OBS на паузе: новый оверлей сразу знает о ней
+    again = tts.overlay()
+    wait_for(lambda: again.settings and again.settings["paused"] is True, 5, "пауза новому оверлею")
+    again.auto_end = True
+    tts.api.ok("/api/pause", dict(on=False))
+    again.played(second)
+    assert tts.event(second)["outcome"] == "played"
+
+
+def test_volume(tts):
+    """Общая громкость: проценты в состоянии и в настройках, оверлею — 0…1, в том числе при подключении."""
+    ov = tts.overlay()
+    tts.api.ok("/api/volume", dict(value=40))
+    wait_for(lambda: ov.settings and ov.settings["volume"] == 0.4, 5, "громкость в оверлее")
+    assert tts.api.state()["engine"]["volume"] == 40
+    late = tts.overlay()   # settings — сразу за active
+    wait_for(lambda: late.settings and late.settings["volume"] == 0.4, 5, "громкость новому оверлею")
+    tts.api.ok("/api/volume", dict(value=150))
+    assert tts.api.state()["engine"]["volume"] == 100
+    for bad in ("громко", None):
+        assert tts.api.post("/api/volume", dict(value=bad)).status == 400
+    assert tts.api.post("/api/volume", {}).status == 400
+
+
+def test_dock_page(tts):
+    r = tts.api.get("/dock")
+    assert r.status == 200 and "/static/dock.js" in r.text
+    assert tts.api.get("/static/dock.js").status == 200
+
+
 # --- оверлей ---
 def test_last_overlay_plays(tts):
     """Играет последний подключившийся оверлей, прежний получает inactive; ушёл новый — прежний снова активен."""

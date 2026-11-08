@@ -40,6 +40,7 @@
         <div class="row between">
           <h2>Сейчас</h2>
           <div class="row">
+            <button id="pause" title="Приостановить звук; следующая фраза ждёт, пока не продолжите"></button>
             <button id="skip" title="Прервать текущую фразу и вернуть баллы">⏭ Пропустить</button>
             <button id="clear" class="danger" title="Очистить очередь и вернуть баллы за всё в ней">Очистить</button>
           </div>
@@ -70,6 +71,13 @@
         <h2>Оверлей для OBS</h2>
         <p id="ovstate"></p>
         <div class="row"><code id="ovurl" class="grow"></code><button data-copy="ovurl">Копировать</button></div>
+        <label class="mt">Громкость на стриме
+          <span class="row"><input type="range" id="volume" min="0" max="100" step="1" class="grow">
+            <span id="volume-val" class="muted"></span></span></label>
+        <h3 class="mt">Док-панель OBS</h3>
+        <p class="muted small" data-t>Пауза, громкость и очередь прямо в окне OBS: <b>Док-панели → Пользовательские
+          док-панели браузера</b>, вставьте адрес. С паролем панель один раз попросит войти.</p>
+        <div class="row"><code id="dockurl" class="grow"></code><button data-copy="dockurl">Копировать</button></div>
       </div>
       <div class="card">
         <h2>Страница голосов для зрителей</h2>

@@ -189,6 +189,21 @@ async def post_enabled(request, ctx, data):
     return ok()
 
 
+async def post_pause(request, ctx, data):
+    """Пауза озвучки: {on}. Звук приостанавливает оверлей, следующая фраза ждёт снятия паузы."""
+    await ctx.engine.set_paused(bool(data.get("on")))
+    return ok()
+
+
+async def post_volume(request, ctx, data):
+    """Общая громкость на стриме: {value} — 0…100 %."""
+    try:
+        await ctx.engine.set_volume(data["value"])
+    except (KeyError, TypeError, ValueError, OverflowError):   # json.loads пропускает NaN и Infinity
+        return fail(tr("громкость — число от 0 до 100"))
+    return ok()
+
+
 async def post_skip(request, ctx, data):
     await ctx.engine.skip()
     return ok()
@@ -286,6 +301,8 @@ POSTS = {
     "/api/reward": post_reward,
     "/api/reward/delete": post_reward_delete,
     "/api/enabled": post_enabled,
+    "/api/pause": post_pause,
+    "/api/volume": post_volume,
     "/api/skip": post_skip,
     "/api/clear": post_clear,
     "/api/remove": post_remove,

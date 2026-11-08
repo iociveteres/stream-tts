@@ -24,22 +24,40 @@
 <script>
 "use strict";
 // Звук приходит по WebSocket кусками PCM16 и ставится в очередь Web Audio.
+// Общая громкость (док-панель) — узел master, пауза — ctx.suspend(): время контекста встаёт, и запланированные
+// куски доиграют с того же места после resume().
 const $status = document.getElementById("status"),
       $unlock = document.getElementById("unlock");
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const master = ctx.createGain();
+master.connect(ctx.destination);
 const PREBUFFER = 0.3;   // запас на неровный поток в начале и после провала
 let ws = null, cur = null, active = false;
+let paused = false, unlocked = false;   // unlocked — звук уже разрешён (контекст хоть раз работал)
 
 function status(text) { $status.textContent = text || ""; $status.classList.toggle("on", !!text); }
 function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 function reportReady() {
-  const running = ctx.state === "running";
-  $unlock.classList.toggle("on", active && !running);
-  send({ type: "ready", ready: running });
+  if (ctx.state === "running") unlocked = true;
+  // на паузе контекст остановлен нами, а не браузером: оверлей готов
+  const ready = ctx.state === "running" || (paused && unlocked);
+  $unlock.classList.toggle("on", active && !ready);
+  send({ type: "ready", ready });
+}
+function unlock() {
+  ctx.resume().then(() => { unlocked = true; return paused ? ctx.suspend() : null; }).then(reportReady);
 }
 ctx.onstatechange = reportReady;
-$unlock.onclick = () => ctx.resume().then(reportReady);
-document.addEventListener("click", () => { if (ctx.state !== "running") ctx.resume(); });
+$unlock.onclick = unlock;
+document.addEventListener("click", () => { if (!unlocked) unlock(); });
+function applySettings(m) {
+  master.gain.setTargetAtTime(Math.max(0, Math.min(1, m.volume)), ctx.currentTime, 0.03);
+  if (m.paused === paused) return;
+  paused = m.paused;
+  if (ctx.state === "running") unlocked = true;
+  if (!unlocked) return reportReady();
+  (paused ? ctx.suspend() : ctx.resume()).then(reportReady);
+}
 
 function stopAll() {
   if (!cur) return;
@@ -60,7 +78,7 @@ function play(buf) {
   for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
   const src = ctx.createBufferSource();
   src.buffer = ab;
-  src.connect(ctx.destination);
+  src.connect(master);
   const now = ctx.currentTime;
   if (cur.next < now + 0.02) cur.next = now + PREBUFFER;
   src.start(cur.next);
@@ -70,7 +88,8 @@ function play(buf) {
   src.onended = () => { c.sources.delete(src); if (c === cur) checkDone(); };
 }
 function onMessage(m) {
-  if (m.type === "active") { active = true; status(""); reportReady(); }
+  if (m.type === "settings") applySettings(m);
+  else if (m.type === "active") { active = true; status(""); reportReady(); }
   else if (m.type === "inactive") { active = false; stopAll(); $unlock.classList.remove("on");
     status(T("Оверлей неактивен: звук играет в другом окне")); }
   else if (m.type === "start") {

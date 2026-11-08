@@ -275,6 +275,7 @@ class Overlay:
         self.active = None
         self.items = []         # Played по порядку начала
         self.auto_end = True
+        self.settings = None    # последнее settings: пауза и громкость 0…1
         self.session = self.ws = self.reader = None
 
     def connect(self, ready=True):
@@ -302,7 +303,9 @@ class Overlay:
                 continue
             d = json.loads(msg.data)
             t = d.get("type")
-            if t in ("active", "inactive"):
+            if t == "settings":
+                self.settings = d
+            elif t in ("active", "inactive"):
                 self.active = t == "active"
             elif t == "start":
                 cur = Played(d["id"])

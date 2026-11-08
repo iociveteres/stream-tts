@@ -37,14 +37,21 @@ class Overlay:
         return dict(count=len(self.clients), active=bool(a), ready=bool(a and a.ready))
 
     async def connect(self, c):
-        """Новый оверлей играет, прежний — «неактивен»."""
+        """Новый оверлей играет, прежний — «неактивен». Пауза и громкость — сразу: OBS перезапустили на паузе."""
         prev = self.active
         self.clients.append(c)
         with contextlib.suppress(Exception):
             if prev:
                 await prev.send({"type": "inactive"})
             await c.send({"type": "active"})
+            await c.send(self.engine.player_settings())   # до ready от оверлея: фраза ещё не начнётся
         await self.engine.poke()
+
+    async def broadcast(self, data):
+        """Всем оверлеям: неактивный тоже держит паузу и громкость — он заиграет, когда уйдёт активный."""
+        for c in list(self.clients):
+            with contextlib.suppress(Exception):
+                await c.send(data)
 
     async def message(self, c, data):
         if data.get("type") == "ready":

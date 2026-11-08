@@ -6,7 +6,7 @@ URL — публичное имя: по ним ходят админка, ове
 from harness import make_app
 
 ROUTES = {
-    "GET /",
+    "GET /", "GET /dock",
     "GET /login", "POST /login", "GET /logout", "POST /api/password",
     "GET /overlay", "GET /overlay/ws",
     "GET /voices", "GET /voices/", "GET /voices/demos/{name}.mp3", "GET /voices.zip",
@@ -17,7 +17,7 @@ ROUTES = {
     "POST /api/settings", "POST /api/source", "POST /api/voice", "POST /api/demos/rebuild",
     "POST /api/twitch/client_id", "POST /api/twitch/mode", "POST /api/twitch/login", "POST /api/twitch/logout",
     "POST /api/reward", "POST /api/reward/delete",
-    "POST /api/enabled", "POST /api/skip", "POST /api/clear", "POST /api/remove", "POST /api/test", "POST /api/ban",
+    "POST /api/enabled", "POST /api/pause", "POST /api/volume", "POST /api/skip", "POST /api/clear", "POST /api/remove", "POST /api/test", "POST /api/ban",
     "POST /api/profanity", "POST /api/tunnel", "POST /api/pages/login", "POST /api/pages/logout",
     "POST /api/pages/publish",
     # модель синтеза и встроенный сервер

@@ -71,6 +71,10 @@ class Engine:
         self.dirty = asyncio.Event()
         self.cd_user, self.cd_global = {}, 0.0   # кулдауны команды: user_id -> время приёма
         self.replied = {}                         # user_id -> время последнего ответа об отказе
+        # Пауза (док-панель OBS): оверлей приостанавливает звук, следующая фраза не начинается. Только до перезапуска:
+        # после него озвучка, молча стоящая на паузе, выглядела бы поломкой. pause_total — сколько длились паузы, с:
+        # ожидание конца фразы их не считает.
+        self.paused, self.pause_t0, self.pause_total = False, 0.0, 0.0
 
     # --- общее ---
     async def poke(self):
@@ -90,6 +94,7 @@ class Engine:
     def snapshot(self):
         cur = self.current
         return dict(queue=[it.public(it is cur) for it in self.queue], enabled=self.s["enabled"],
+                    paused=self.paused, volume=self.s["volume"],
                     overlay=self.overlay.public(), journal=list(self.journal),
                     rtf=round(sum(self.rtf) / len(self.rtf), 2) if self.rtf else None)
 
@@ -251,6 +256,33 @@ class Engine:
             await self.twitch.set_paused(self.twitch.want_paused())
         await self.poke()
 
+    def player_settings(self):
+        """Что применяет оверлей: пауза (приостановить звук) и общая громкость 0…1."""
+        return {"type": "settings", "paused": self.paused, "volume": self.s["volume"] / 100}
+
+    async def set_paused(self, on, by=""):
+        on = bool(on)
+        if on == self.paused:
+            return
+        if on:
+            self.pause_t0 = time.monotonic()
+        else:
+            self.pause_total += time.monotonic() - self.pause_t0
+        self.paused = on
+        self.note(tr("{by}: пауза" if on else "{by}: воспроизведение продолжено", by=by or tr("интерфейс")))
+        await self.overlay.broadcast(self.player_settings())
+        await self.poke()
+
+    def paused_for(self):
+        """Сколько секунд озвучка простояла на паузе с запуска, с текущей паузой."""
+        return self.pause_total + (time.monotonic() - self.pause_t0 if self.paused else 0.0)
+
+    async def set_volume(self, value):
+        """Общая громкость на стриме, 0…100 %: применяет оверлей, к синтезу не относится."""
+        self.s.update(volume=max(0, min(100, round(float(value)))))
+        await self.overlay.broadcast(self.player_settings())
+        self.dirty.set()
+
     async def chat(self, ev):
         """Сообщение чата (EventSub channel.chat.message; его зовут twitch/eventsub.py и chat_irc.py) — commands.py."""
         await commands.chat(self, ev)
@@ -353,7 +385,7 @@ class Engine:
 
     # --- воспроизведение ---
     def _playable(self):
-        if not self.queue or not self.overlay.ready():
+        if self.paused or not self.queue or not self.overlay.ready():
             return False
         it = self.queue[0]
         return bool(it.chunks) or it.synth_done
@@ -403,13 +435,17 @@ class Engine:
                 await self.cond.wait_for(lambda: item.cancelled or sent < len(item.chunks) or item.synth_done
                                          or lost())
         await ov.send({"type": "end", "id": item.id})
-        try:
-            async with self.cond:
-                await asyncio.wait_for(
-                    self.cond.wait_for(lambda: item.id in self.ended or item.cancelled or lost()),
-                    item.samples / SR + 10)
-        except asyncio.TimeoutError:
-            log.warning("оверлей не сообщил о конце %s", item.id)
+        # Конца ждём по длине фразы с запасом. Пауза не считается: на ней оверлей держит звук, и фраза без этого
+        # засчиталась бы сыгранной, а следующая после паузы оборвала бы её недоигранный хвост.
+        limit, t0, p0 = item.samples / SR + 10, time.monotonic(), self.paused_for()
+        async with self.cond:
+            while not (item.id in self.ended or item.cancelled or lost()):
+                left = limit - (time.monotonic() - t0 - (self.paused_for() - p0))
+                if left <= 0:
+                    log.warning("оверлей не сообщил о конце %s", item.id)
+                    break
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(self.cond.wait(), None if self.paused else left)
         if item.cancelled:
             return "cancelled"
         if item.id not in self.ended and lost():

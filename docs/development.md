@@ -96,6 +96,7 @@
 │                          # admin-settings.js, admin-stats.js, admin-downloads.js (модели, CUDA, пакеты и
 │                          # очередь загрузок); editor.js, train.js — редактор и
 │                          # обучение; admin-start.js — старт, последним из всех скриптов; overlay.html, voices.html, login.html;
+│                          # dock.html и dock.js — док-панель OBS (/dock, своя страница без скриптов админки);
 │                          # en.json — английский словарь, i18n.js — перевод страниц; ui-edit.js и ui-edit.css —
 │                          # режим правки строк; samples/ — примеры звучания моделей для вкладки «Загрузки»
 ├── packaging/

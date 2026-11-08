@@ -7,8 +7,15 @@ const SOURCE_TAGS = { test: [T("тест"), ""], command: [T("команда"), 
 function renderQueue() {
   const q = S.engine.queue;
   const playing = q.find(i => i.state === "playing");
-  $("#now").replaceChildren(playing ? h("span", {}, h("b", {}, playing.display + ": "), playing.text,
-    h("span", { class: "muted small" }, `  · ${playing.voice}`)) : T("Ничего не воспроизводится"));
+  const paused = S.engine.paused;
+  $("#now").replaceChildren(playing ? h("span", {}, paused ? h("span", { class: "tag" }, T("пауза")) : null,
+    h("b", {}, playing.display + ": "), playing.text,
+    h("span", { class: "muted small" }, `  · ${playing.voice}`))
+    : paused ? T("Пауза: следующая фраза ждёт") : T("Ничего не воспроизводится"));
+  $("#pause").textContent = paused ? T("▶ Продолжить") : T("⏸ Пауза");
+  $("#pause").classList.toggle("primary", paused);
+  if (Date.now() - volumeDrag > 1500) $("#volume").value = S.engine.volume;
+  $("#volume-val").textContent = $("#volume").value + "%";
   $("#now").classList.toggle("muted", !playing);
   $("#qcount").textContent = q.length ? `(${q.length})` : "";
   $("#qempty").hidden = q.length > 0;
@@ -30,10 +37,20 @@ function renderQueue() {
   $("#journal").replaceChildren(...S.engine.journal.map(j => h("li", {}, h("time", {}, fmtClock(j.ts)), j.text)));
 }
 $("#skip").onclick = () => api("/api/skip");
+$("#pause").onclick = () => api("/api/pause", { on: !S.engine.paused });
+// громкость: пока ползунок тянут, состояние с сервера его не двигает; запросы — не чаще раза в 120 мс
+let volumeDrag = 0, volumeTimer = null;
+$("#volume").oninput = () => {
+  volumeDrag = Date.now();
+  $("#volume-val").textContent = $("#volume").value + "%";
+  volumeTimer = volumeTimer || setTimeout(() => { volumeTimer = null; api("/api/volume", { value: +$("#volume").value }); }, 120);
+};
+$("#volume").onchange = () => { volumeDrag = Date.now(); api("/api/volume", { value: +$("#volume").value }); };
 $("#clear").onclick = async () => {
   if (await ask(T("Очистить очередь и вернуть баллы за всё в ней?"), T("Очистить"), true)) api("/api/clear");
 };
 $("#ovurl").textContent = location.origin + "/overlay";
+$("#dockurl").textContent = location.origin + "/dock";
 $("#vurl").textContent = location.origin + "/voices/";
 $$("[data-copy]").forEach(b => b.onclick = () =>
   navigator.clipboard.writeText($("#" + b.dataset.copy).textContent).then(() => toast(T("Скопировано"))));

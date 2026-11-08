@@ -78,14 +78,21 @@ async def api_state(request):
     return web.json_response(state(request.app["ctx"]))
 
 
+def dock_state(ctx):
+    """Док-панель OBS (/api/ws?dock=1): только очередь и доступность сервера синтеза. Панель открыта весь стрим,
+    а полное состояние каждые 2 с — это ещё и опрос загрузки (nvidia-smi) и проверки пакетов на диске."""
+    return dict(engine=ctx.engine.snapshot(), cosy=dict(ok=ctx.tts.ok, error=ctx.tts.error), ts=time.time())
+
+
 async def admin_ws(request):
     ctx = request.app["ctx"]
     ws = web.WebSocketResponse(heartbeat=20)
     await ws.prepare(request)
-    ctx.admins += 1
+    dock = request.query.get("dock") == "1"
+    ctx.admins += not dock   # открытая админка включает опрос загрузки (__main__.load_monitor)
     try:
         rev = ctx.voices.rev
-        await ws.send_json(state(ctx))
+        await ws.send_json(dock_state(ctx) if dock else state(ctx))
         reader = asyncio.create_task(ws.receive())
         while not ws.closed:
             ctx.engine.dirty.clear()
@@ -94,6 +101,9 @@ async def admin_ws(request):
             await asyncio.sleep(0.15)  # пачка изменений одним сообщением
             if reader.done():
                 break
+            if dock:
+                await ws.send_json(dock_state(ctx))
+                continue
             part = state(ctx, full=False)
             if ctx.voices.rev != rev:  # набор установлен или удалён, готов пример: без этого нужна перезагрузка страницы
                 rev = ctx.voices.rev
@@ -103,7 +113,7 @@ async def admin_ws(request):
     except (ConnectionResetError, RuntimeError):
         pass
     finally:
-        ctx.admins -= 1
+        ctx.admins -= not dock
     return ws
 
 
