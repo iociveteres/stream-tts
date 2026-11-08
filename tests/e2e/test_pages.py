@@ -6,6 +6,7 @@ import asyncio, os, subprocess, sys, types, urllib.request
 
 import pytest
 
+from fake_cosyvoice import FakeCosy
 from fake_github import CLIENT_ID, FakeGitHub
 from harness import STREAM_TTS, Api, wait_for
 
@@ -68,14 +69,22 @@ def get(url):
         return r.read()
 
 
-def test_publish_enable_pages_and_restart(run, gh):
-    """Вход по коду → репозиторий создан, страница с примерами всех включённых голосов — одним коммитом без родителя;
-    до включения Pages адреса нет, есть ссылка на настройки; включили — адрес <ник>.github.io/tts-voices/. После
-    перезапуска программы вход и адрес на месте, а неизменившаяся страница не публикуется заново."""
-    server, cosy, api = run()
+def test_publish_enable_pages_and_restart(run, gh, loop):
+    """Вход по коду → репозиторий создан, страница с примерами всех включённых голосов — одним коммитом без родителя,
+    даже если вошли раньше, чем досинтезировались примеры (без страницы-заглушки и второй сборки Pages); до включения
+    Pages адреса нет, есть ссылка на настройки; включили — адрес <ник>.github.io/tts-voices/. После перезапуска
+    программы вход и адрес на месте, а неизменившаяся страница не публикуется заново."""
+    held = loop.run(FakeCosy().start())
+    held.hold = True   # примеры ждут, пока воркер публикации не увидит репозиторий после входа
+    server, cosy, api = run(cosy=held)
     p = st(api)
     assert p["client"] and p["state"] == "off" and not p["login"] and not p["url"]
-    login(api, gh)
+    try:
+        login(api, gh)
+        wait_for(lambda: (x := st(api))["checked"] and (x["pending"] or gh.commits), 5, "репозитория после входа")
+        assert api.state()["demos"]["todo"] and not gh.commits, "страница опубликована раньше примеров"
+    finally:
+        cosy.hold = False   # иначе висящий синтез не даст закрыть поддельный сервер
     voices = enabled(api)
     files = published(api, gh, voices)
     page = files["index.html"].decode()

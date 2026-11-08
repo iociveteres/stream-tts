@@ -9,7 +9,8 @@ github.com/login/device. Область — public_repo: включить Pages 
 Публикация — один коммит через Git Data API: блобы только изменившихся файлов, дерево целиком (выключенные голоса
 пропадают), коммит без родителя и принудительная перезапись ветки, чтобы история не копила старые mp3. Публикует сама
 после изменений страницы (голоса, примеры, модель, язык): ждёт, пока страница DEBOUNCE с не меняется и примеры
-досинтезированы (но не дольше SETTLE с), — так сборок Pages меньше лимита GitHub (~10 в час).
+досинтезированы (но не дольше SETTLE с), — так сборок Pages меньше лимита GitHub (~10 в час). После входа — без
+DEBOUNCE, но примеры тоже ждёт: иначе первой уходит страница с заглушками «пример ещё готовится», а за ней вторая.
 
 Токен — <данные>/github.json; токены OAuth-приложений GitHub не истекают, отозванный — 401 и выход.
 STREAM_TTS_GITHUB_CLIENT_ID — своё приложение; STREAM_TTS_TEST_GITHUB — поддельный GitHub тестов
@@ -70,6 +71,7 @@ class Pages:
         self.pushed = None     # {путь: sha} на ветке после последней публикации
         self.published, self.pending = 0.0, False
         self.now = False       # «Опубликовать сейчас»: без ожидания
+        self.soon = False      # после входа: без DEBOUNCE, но с готовыми примерами
         self.wake = asyncio.Event()
         self.http = self.task = self.device_task = None
         self._sha = {}         # путь файла -> (mtime_ns, размер, sha)
@@ -168,7 +170,8 @@ class Pages:
         log.info("GitHub: вошли как %s", self.tok["login"])
         self.device, self.state, self.error = None, "idle", ""
         self.repo = self.pushed = None
-        self.publish_now()
+        self.soon = True
+        self.wake.set()
 
     async def logout(self):
         """Забыть токен. Репозиторий и страница остаются на GitHub."""
@@ -199,7 +202,7 @@ class Pages:
                 await asyncio.wait_for(self.wake.wait(), CHECK)
             self.wake.clear()
             if not self.tok:
-                last, self.now = None, False
+                last, self.now, self.soon = None, False, False
                 continue
             token = self.tok["access_token"]
             try:
@@ -207,20 +210,20 @@ class Pages:
                     await self._ensure_repo()
                 elif not self.repo["pages"]:
                     await self._check_pages()
-                files = await asyncio.to_thread(self._files)
+                files, todo = await asyncio.to_thread(self._files)
                 digest = {p: sha for p, (sha, _) in files.items()}
                 now = time.monotonic()
                 if digest != last:
                     last, changed_at = digest, now
                 if digest == self.pushed:
-                    dirty_since, self.now, self.pending = 0.0, False, False
+                    dirty_since, self.now, self.soon, self.pending = 0.0, False, False, False
                     self._set("idle")
                     continue
                 dirty_since = dirty_since or now
                 self.pending = True
-                settled = not self.voices.progress.get("todo") or now - dirty_since >= SETTLE
-                if self.now or (now - changed_at >= DEBOUNCE and settled):
-                    self.now = False
+                settled = not todo or now - dirty_since >= SETTLE
+                if self.now or ((self.soon or now - changed_at >= DEBOUNCE) and settled):
+                    self.now = self.soon = False
                     await self._publish(files, digest)
                     dirty_since, self.pending = 0.0, False
                 self._set("idle")
@@ -244,7 +247,10 @@ class Pages:
             self.changed()
 
     def _files(self):
-        """{путь: (sha, bytes | путь к файлу)} — страница, примеры, метка репозитория; sha файлов — из кэша по mtime."""
+        """→ ({путь: (sha, bytes | путь к файлу)}, сколько примеров не готово): страница, примеры, метка репозитория;
+        sha файлов — из кэша по mtime. Неготовые примеры — тем же снимком, что и страница: progress["todo"] отстаёт от
+        списка голосов (при запуске он 0, пока воркер примеров их не посчитал)."""
+        todo = len(self.voices.missing())
         out = {MARKER: (git_sha(MARKER_BODY), MARKER_BODY), ".nojekyll": (git_sha(b""), b"")}
         for path, src in self.voices.site().items():
             if isinstance(src, bytes):
@@ -258,7 +264,7 @@ class Pages:
                     cached = (*key, git_sha(f.read()))
                 self._sha[src] = cached
             out[path] = (cached[2], src)
-        return out
+        return out, todo
 
     async def _api(self, method, path, body=None, allow=()):
         """→ (код, JSON). 401 — Unauthorized; лимит — пауза и повтор; другой код не 2xx и не из allow — PagesError."""
