@@ -125,9 +125,18 @@ def browser(tmp_path_factory):
                              "--disable-gpu", "--mute-audio", *sandbox, "about:blank"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     port_file = os.path.join(profile, "DevToolsActivePort")
-    wait_for(lambda: os.path.isfile(port_file) and open(port_file).read().strip(), 20, "запуска браузера")
-    with open(port_file) as f:
-        yield f"http://127.0.0.1:{f.readline().strip()}"
+
+    def port():
+        # На Windows браузер держит файл открытым, пока пишет: чтение в этот момент — PermissionError (падало в CI
+        # на windows-latest). Порт — первая строка; перевод строки после него — знак, что она дописана.
+        try:
+            with open(port_file) as f:
+                text = f.read()
+        except OSError:
+            return None
+        return "\n" in text and text.split("\n", 1)[0].strip()
+
+    yield f"http://127.0.0.1:{wait_for(port, 20, 'запуска браузера')}"
     proc.terminate()
     try:
         proc.wait(10)
